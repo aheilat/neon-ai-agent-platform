@@ -16,6 +16,8 @@ import {
   updateTeamMemberRole,
   removeTeamMember,
   updateMemberAvailability,
+  updateMemberActivity,
+  setMemberIdleTimeout,
   getTeamInvites,
   createTeamInvite,
   getTeamAssignments,
@@ -308,6 +310,16 @@ export const appRouter = router({
     setAvailability: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), availability: z.enum(["online", "offline", "busy"]) })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       await updateMemberAvailability(tenant.id, input.memberId, input.availability);
+      return { success: true };
+    }),
+    setIdleTimeout: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), idleTimeoutMinutes: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await setMemberIdleTimeout(tenant.id, input.memberId, input.idleTimeoutMinutes);
+      return { success: true };
+    }),
+    pingActivity: protectedProcedure.mutation(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await updateMemberActivity(tenant.id, ctx.user.id);
       return { success: true };
     }),
     setAssignment: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), targetType: z.enum(["agent", "channel"]), targetId: z.string(), assign: z.boolean() })).mutation(async ({ ctx, input }) => {

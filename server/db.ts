@@ -216,7 +216,29 @@ export async function removeTeamMember(tenantId: number, memberId: number) {
 export async function updateMemberAvailability(tenantId: number, memberId: number, availability: "online" | "offline" | "busy") {
   const db = await getDb();
   if (!db) return;
-  await db.update(teamMembers).set({ availability }).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
+  await db.update(teamMembers).set({ availability, lastActiveAt: new Date() }).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
+}
+
+export async function updateMemberActivity(tenantId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const member = await db.select().from(teamMembers).where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.userId, userId))).limit(1);
+  if (member[0]) {
+    const now = new Date();
+    // Check idle timeout
+    const diffMinutes = (now.getTime() - new Date(member[0].lastActiveAt).getTime()) / (1000 * 60);
+    let availability = member[0].availability;
+    if (availability === "online" && diffMinutes > member[0].idleTimeoutMinutes) {
+      availability = "offline";
+    }
+    await db.update(teamMembers).set({ lastActiveAt: now, availability }).where(eq(teamMembers.id, member[0].id));
+  }
+}
+
+export async function setMemberIdleTimeout(tenantId: number, memberId: number, idleTimeoutMinutes: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teamMembers).set({ idleTimeoutMinutes }).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
 }
 
 export async function getTeamInvites(tenantId: number) {

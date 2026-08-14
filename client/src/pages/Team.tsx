@@ -39,6 +39,14 @@ export default function Team() {
     onError: error => toast.error(error.message),
   });
 
+  const idleTimeoutMutation = trpc.team.setIdleTimeout.useMutation({
+    onSuccess: async () => {
+      await utils.team.list.invalidate();
+      toast.success("تم تحديث مدة الخمول التلقائي");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const removeMutation = trpc.team.remove.useMutation({
     onSuccess: async () => {
       await utils.team.list.invalidate();
@@ -151,7 +159,7 @@ export default function Team() {
                           <p className="text-xs text-slate-400" dir="ltr">{member.email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <Badge className={`border-white/10 text-xs ${member.availability === "online" ? "bg-emerald-500/10 text-emerald-400" : member.availability === "busy" ? "bg-amber-500/10 text-amber-400" : "bg-slate-500/10 text-slate-400"}`}>
                           {member.availability === "online" ? "● متصل (Online)" : member.availability === "busy" ? "● مشغول (Busy)" : "○ غير متصل (Offline)"}
                         </Badge>
@@ -160,6 +168,15 @@ export default function Team() {
                           <option value="busy">مشغول</option>
                           <option value="offline">غير متصل</option>
                         </select>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                          <span>خمول بعد:</span>
+                          <select value={member.idleTimeoutMinutes ?? 15} onChange={e => idleTimeoutMutation.mutate({ memberId: member.id, idleTimeoutMinutes: Number(e.target.value) })} className="h-8 rounded-lg border border-white/10 bg-[#0b1728] px-2 text-xs text-white outline-none">
+                            <option value={5}>5 د</option>
+                            <option value={15}>15 د</option>
+                            <option value={30}>30 د</option>
+                            <option value={60}>60 د</option>
+                          </select>
+                        </div>
                         <Badge className="border-white/10 bg-white/[0.06] text-xs text-cyan-300">
                           {member.role}
                         </Badge>
