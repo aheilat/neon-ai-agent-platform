@@ -26,12 +26,12 @@ describe("website onboarding procedure", () => {
         persona: "You are a professional medical assistant.",
         goals: ["questions", "appointments"],
         suggestedChannels: ["web", "whatsapp"],
-        services: [
-          { name: "Consultation", description: "General health checkup." },
-        ],
-        faqs: [
-          { question: "Working hours?", answer: "Open 24/7." },
-        ],
+      services: [
+        { name: "Consultation", description: "General health checkup.", sourceUrl: "https://example.com/services" },
+      ],
+      faqs: [
+        { question: "Working hours?", answer: "Open 24/7.", sourceUrl: "https://example.com/home" },
+      ],
         guardrails: ["Be polite and safe."],
       },
       sourcePages: [
