@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1786705524911,
+      "tag": "0000_flawless_harry_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1786705766459,
+      "tag": "0001_stormy_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786706462162,
+      "tag": "0002_furry_morlun",
+      "breakpoints": true
+    }
+  ]
 }

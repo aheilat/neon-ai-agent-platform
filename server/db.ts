@@ -1,11 +1,27 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  Agent,
+  InsertAgent,
+  InsertConversation,
+  InsertKnowledgeBaseItem,
+  InsertMessage,
+  InsertTenant,
+  agents,
+  channelIntegrations,
+  conversations,
+  knowledgeBase,
+  leads,
+  messages,
+  tenants,
+  users,
+  User,
+  InsertUser,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -19,74 +35,222 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
+  if (!db) return;
+
+  const values: InsertUser = { openId: user.openId };
+  const updateSet: Record<string, unknown> = {};
+  const textFields = ["name", "email", "loginMethod"] as const;
+  for (const field of textFields) {
+    if (user[field] !== undefined) {
+      values[field] = user[field] ?? null;
+      updateSet[field] = user[field] ?? null;
+    }
   }
-
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
+  if (user.lastSignedIn !== undefined) {
+    values.lastSignedIn = user.lastSignedIn;
+    updateSet.lastSignedIn = user.lastSignedIn;
   }
+  if (user.role !== undefined) {
+    values.role = user.role;
+    updateSet.role = user.role;
+  } else if (user.openId === ENV.ownerOpenId) {
+    values.role = "admin";
+    updateSet.role = "admin";
+  }
+  values.lastSignedIn ??= new Date();
+  updateSet.lastSignedIn ??= new Date();
+  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  return result[0];
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getOrCreateTenant(user: User) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await db.select().from(tenants).where(eq(tenants.ownerId, user.id)).limit(1);
+  if (existing[0]) return existing[0];
+
+  const slugBase = (user.name || "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace";
+  const slug = `${slugBase}-${user.id}`;
+  const values: InsertTenant = {
+    ownerId: user.id,
+    name: user.name ? `${user.name} Workspace` : "My Workspace",
+    slug,
+  };
+  await db.insert(tenants).values(values);
+  const created = await db.select().from(tenants).where(eq(tenants.ownerId, user.id)).limit(1);
+  return created[0];
+}
+
+export async function ensureDefaultAgent(tenantId: number) {
+  const existing = await getTenantAgents(tenantId);
+  if (existing[0]) return existing[0];
+  return createAgentForTenant({
+    tenantId,
+    name: "Neon Concierge",
+    description: "وكيل استقبال ذكي للرد على الاستفسارات وتحويلها إلى فرص.",
+    persona: "مساعد استقبال ذكي، واضح، ودود، ويقود العميل إلى الخطوة العملية التالية.",
+    tone: "friendly",
+    language: "bilingual",
+    decisionRules: "إذا طلب العميل سعراً أو موعداً، اجمع بياناته ووجّهه للخطوة التالية. إذا طلب موظفاً، صعّد المحادثة.",
+    fallbackMessage: "أقدر أساعدك أكثر إذا شاركتني بعض التفاصيل، أو أقدر أحوّلك الآن لأحد أعضاء الفريق.",
+    escalationKeyword: "موظف,موظفة,human,agent",
+    status: "active",
+  });
+}
+
+export async function getTenantAgents(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(agents).where(eq(agents.tenantId, tenantId)).orderBy(desc(agents.updatedAt));
+}
+
+export async function getPublicAgent(agentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
+  return result[0];
+}
+
+export async function getAgentInTenant(tenantId: number, agentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(agents).where(and(eq(agents.id, agentId), eq(agents.tenantId, tenantId))).limit(1);
+  return result[0];
+}
+
+export async function createAgentForTenant(input: InsertAgent) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(agents).values(input);
+  const result = await db.select().from(agents).where(and(eq(agents.tenantId, input.tenantId), eq(agents.name, input.name))).orderBy(desc(agents.id)).limit(1);
+  return result[0];
+}
+
+export async function updateAgentInTenant(tenantId: number, agentId: number, patch: Partial<InsertAgent>) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.update(agents).set(patch).where(and(eq(agents.id, agentId), eq(agents.tenantId, tenantId)));
+  return getAgentInTenant(tenantId, agentId);
+}
+
+export async function getKnowledgeForAgent(tenantId: number, agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(knowledgeBase).where(and(eq(knowledgeBase.tenantId, tenantId), eq(knowledgeBase.agentId, agentId))).orderBy(desc(knowledgeBase.updatedAt));
+}
+
+export async function createKnowledgeItem(input: InsertKnowledgeBaseItem) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(knowledgeBase).values(input);
+  const result = await db.select().from(knowledgeBase).where(and(eq(knowledgeBase.tenantId, input.tenantId), eq(knowledgeBase.agentId, input.agentId), eq(knowledgeBase.title, input.title))).orderBy(desc(knowledgeBase.id)).limit(1);
+  return result[0];
+}
+
+export async function deleteKnowledgeItem(tenantId: number, itemId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(knowledgeBase).where(and(eq(knowledgeBase.id, itemId), eq(knowledgeBase.tenantId, tenantId)));
+}
+
+export async function createLead(input: { tenantId: number; agentId: number; conversationId?: number; name: string; email?: string; phone?: string; notes?: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(leads).values(input);
+  const result = await db.select().from(leads).where(and(eq(leads.tenantId, input.tenantId), eq(leads.agentId, input.agentId))).orderBy(desc(leads.id)).limit(1);
+  return result[0];
+}
+
+export async function getTenantLeads(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(leads).where(eq(leads.tenantId, tenantId)).orderBy(desc(leads.updatedAt));
+}
+
+export async function getTenantConversations(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(conversations).where(eq(conversations.tenantId, tenantId)).orderBy(desc(conversations.updatedAt)).limit(30);
+}
+
+export async function getConversationWithMessages(tenantId: number, conversationId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const conversation = await db.select().from(conversations).where(and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId))).limit(1);
+  if (!conversation[0]) return undefined;
+  const items = await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+  return { conversation: conversation[0], messages: items };
+}
+
+export async function createConversation(input: InsertConversation) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(conversations).values(input);
+  const result = await db.select().from(conversations).where(and(eq(conversations.tenantId, input.tenantId), eq(conversations.agentId, input.agentId))).orderBy(desc(conversations.id)).limit(1);
+  return result[0];
+}
+
+export async function addMessage(input: InsertMessage) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(messages).values(input);
+  const result = await db.select().from(messages).where(eq(messages.conversationId, input.conversationId)).orderBy(desc(messages.id)).limit(1);
+  return result[0];
+}
+
+export async function markConversationStatus(tenantId: number, conversationId: number, status: "active" | "escalated" | "resolved") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(conversations).set({ status }).where(and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId)));
+}
+
+export async function getTenantStats(tenantId: number) {
+  const db = await getDb();
+  if (!db) return { conversations: 0, active: 0, escalated: 0, resolved: 0, messages: 0 };
+  const conversationRows = await db.select({ status: conversations.status, total: count() }).from(conversations).where(eq(conversations.tenantId, tenantId)).groupBy(conversations.status);
+  const messageRows = await db.select({ total: count() }).from(messages).innerJoin(conversations, eq(messages.conversationId, conversations.id)).where(eq(conversations.tenantId, tenantId));
+  const totals = { conversations: 0, active: 0, escalated: 0, resolved: 0, messages: Number(messageRows[0]?.total ?? 0) };
+  for (const row of conversationRows) {
+    const value = Number(row.total);
+    totals.conversations += value;
+    totals[row.status] += value;
+  }
+  return totals;
+}
+
+export async function listChannelIntegrations(tenantId: number, agentId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = agentId ? and(eq(channelIntegrations.tenantId, tenantId), eq(channelIntegrations.agentId, agentId)) : eq(channelIntegrations.tenantId, tenantId);
+  return db.select().from(channelIntegrations).where(conditions).orderBy(desc(channelIntegrations.updatedAt));
+}
+
+export async function upsertChannelIntegration(input: { tenantId: number; agentId: number; channel: string; isActive: number; configJson?: Record<string, unknown> }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await db.select().from(channelIntegrations).where(and(eq(channelIntegrations.tenantId, input.tenantId), eq(channelIntegrations.agentId, input.agentId), eq(channelIntegrations.channel, input.channel))).limit(1);
+  if (existing[0]) {
+    await db.update(channelIntegrations).set({ isActive: input.isActive, configJson: input.configJson }).where(eq(channelIntegrations.id, existing[0].id));
+    return { ...existing[0], isActive: input.isActive, configJson: input.configJson };
+  }
+  await db.insert(channelIntegrations).values(input);
+  const created = await db.select().from(channelIntegrations).where(and(eq(channelIntegrations.tenantId, input.tenantId), eq(channelIntegrations.agentId, input.agentId), eq(channelIntegrations.channel, input.channel))).limit(1);
+  return created[0];
+}
+
+export async function getAgentAndTenant(user: User, agentId: number) {
+  const tenant = await getOrCreateTenant(user);
+  if (!tenant) return undefined;
+  const agent = await getAgentInTenant(tenant.id, agentId);
+  return agent ? { tenant, agent } : undefined;
+}
+
+export type DbAgent = Agent;

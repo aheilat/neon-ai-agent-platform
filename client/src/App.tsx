@@ -3,36 +3,46 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import Agents from "./pages/Agents";
+import Analytics from "./pages/Analytics";
+import Channels from "./pages/Channels";
+import Conversations from "./pages/Conversations";
 import Home from "./pages/Home";
+import Knowledge from "./pages/Knowledge";
+import Settings from "./pages/Settings";
+import Widget from "./pages/Widget";
 
-function Router() {
-  // make sure to consider if you need authentication for certain routes
+function AppRoutes() {
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
+      <Route path="/widget/:agentId" component={Widget} />
+      <Route path="*">
+        <DashboardLayout>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/agents" component={Agents} />
+            <Route path="/knowledge" component={Knowledge} />
+            <Route path="/conversations" component={Conversations} />
+            <Route path="/channels" component={Channels} />
+            <Route path="/analytics" component={Analytics} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </DashboardLayout>
+      </Route>
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <AppRoutes />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
