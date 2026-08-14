@@ -15,6 +15,7 @@ import {
   addTeamMember,
   updateTeamMemberRole,
   removeTeamMember,
+  updateMemberAvailability,
   getTeamInvites,
   createTeamInvite,
   getTeamAssignments,
@@ -302,6 +303,11 @@ export const appRouter = router({
     remove: protectedProcedure.input(z.object({ memberId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       await removeTeamMember(tenant.id, input.memberId);
+      return { success: true };
+    }),
+    setAvailability: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), availability: z.enum(["online", "offline", "busy"]) })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await updateMemberAvailability(tenant.id, input.memberId, input.availability);
       return { success: true };
     }),
     setAssignment: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), targetType: z.enum(["agent", "channel"]), targetId: z.string(), assign: z.boolean() })).mutation(async ({ ctx, input }) => {

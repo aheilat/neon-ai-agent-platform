@@ -1,0 +1,1 @@
+ALTER TABLE `team_members` ADD `availability` enum('online','offline','busy') DEFAULT 'online' NOT NULL;

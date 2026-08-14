@@ -31,6 +31,14 @@ export default function Team() {
     onError: error => toast.error(error.message),
   });
 
+  const availabilityMutation = trpc.team.setAvailability.useMutation({
+    onSuccess: async () => {
+      await utils.team.list.invalidate();
+      toast.success("تم تحديث حالة التواجد بنجاح");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const removeMutation = trpc.team.remove.useMutation({
     onSuccess: async () => {
       await utils.team.list.invalidate();
@@ -144,6 +152,14 @@ export default function Team() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
+                        <Badge className={`border-white/10 text-xs ${member.availability === "online" ? "bg-emerald-500/10 text-emerald-400" : member.availability === "busy" ? "bg-amber-500/10 text-amber-400" : "bg-slate-500/10 text-slate-400"}`}>
+                          {member.availability === "online" ? "● متصل (Online)" : member.availability === "busy" ? "● مشغول (Busy)" : "○ غير متصل (Offline)"}
+                        </Badge>
+                        <select value={member.availability} onChange={e => availabilityMutation.mutate({ memberId: member.id, availability: e.target.value as any })} className="h-8 rounded-lg border border-white/10 bg-[#0b1728] px-2 text-xs text-white outline-none">
+                          <option value="online">متصل</option>
+                          <option value="busy">مشغول</option>
+                          <option value="offline">غير متصل</option>
+                        </select>
                         <Badge className="border-white/10 bg-white/[0.06] text-xs text-cyan-300">
                           {member.role}
                         </Badge>

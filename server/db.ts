@@ -213,6 +213,12 @@ export async function removeTeamMember(tenantId: number, memberId: number) {
   await db.delete(teamMembers).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
 }
 
+export async function updateMemberAvailability(tenantId: number, memberId: number, availability: "online" | "offline" | "busy") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teamMembers).set({ availability }).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
+}
+
 export async function getTeamInvites(tenantId: number) {
   const db = await getDb();
   if (!db) return [];

@@ -88,6 +88,7 @@ export const teamMembers = mysqlTable("team_members", {
   email: varchar("email", { length: 320 }).notNull(),
   role: mysqlEnum("role", ["owner", "admin", "agent", "viewer"]).default("agent").notNull(),
   status: mysqlEnum("status", ["active", "invited", "suspended"]).default("active").notNull(),
+  availability: mysqlEnum("availability", ["online", "offline", "busy"]).default("online").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

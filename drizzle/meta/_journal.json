@@ -57,6 +57,13 @@
       "when": 1786709218880,
       "tag": "0007_majestic_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1786709433982,
+      "tag": "0008_fixed_ronan",
+      "breakpoints": true
     }
   ]
 }
