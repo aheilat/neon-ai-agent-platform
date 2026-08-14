@@ -108,6 +108,18 @@ export const teamInvites = mysqlTable("team_invites", {
 export type TeamInvite = typeof teamInvites.$inferSelect;
 export type InsertTeamInvite = typeof teamInvites.$inferInsert;
 
+export const teamMemberAssignments = mysqlTable("team_member_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  memberId: int("memberId").notNull(),
+  targetType: mysqlEnum("targetType", ["agent", "channel"]).notNull(),
+  targetId: varchar("targetId", { length: 100 }).notNull(), // agentId or channel name (e.g. whatsapp)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TeamMemberAssignment = typeof teamMemberAssignments.$inferSelect;
+export type InsertTeamMemberAssignment = typeof teamMemberAssignments.$inferInsert;
+
 // Conversations
 export const conversations = mysqlTable("conversations", {
   id: int("id").autoincrement().primaryKey(),

@@ -15,6 +15,7 @@ import {
   messages,
   teamMembers,
   teamInvites,
+  teamMemberAssignments,
   tenants,
   users,
   User,
@@ -222,6 +223,25 @@ export async function createTeamInvite(input: { tenantId: number; email: string;
   await db.insert(teamInvites).values({ tenantId: input.tenantId, email: input.email, role: input.role, token, status: "pending" });
   const result = await db.select().from(teamInvites).where(and(eq(teamInvites.tenantId, input.tenantId), eq(teamInvites.token, token))).limit(1);
   return result[0];
+}
+
+export async function getTeamAssignments(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(teamMemberAssignments).where(eq(teamMemberAssignments.tenantId, tenantId));
+}
+
+export async function setTeamAssignment(input: { tenantId: number; memberId: number; targetType: "agent" | "channel"; targetId: string; assign: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  if (input.assign) {
+    const existing = await db.select().from(teamMemberAssignments).where(and(eq(teamMemberAssignments.tenantId, input.tenantId), eq(teamMemberAssignments.memberId, input.memberId), eq(teamMemberAssignments.targetType, input.targetType), eq(teamMemberAssignments.targetId, input.targetId))).limit(1);
+    if (existing.length === 0) {
+      await db.insert(teamMemberAssignments).values({ tenantId: input.tenantId, memberId: input.memberId, targetType: input.targetType, targetId: input.targetId });
+    }
+  } else {
+    await db.delete(teamMemberAssignments).where(and(eq(teamMemberAssignments.tenantId, input.tenantId), eq(teamMemberAssignments.memberId, input.memberId), eq(teamMemberAssignments.targetType, input.targetType), eq(teamMemberAssignments.targetId, input.targetId)));
+  }
 }
 
 export async function getConversationWithMessages(tenantId: number, conversationId: number) {

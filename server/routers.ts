@@ -17,6 +17,8 @@ import {
   removeTeamMember,
   getTeamInvites,
   createTeamInvite,
+  getTeamAssignments,
+  setTeamAssignment,
   ensureDefaultAgent,
   getAgentAndTenant,
   getPublicAgent,
@@ -268,12 +270,12 @@ export const appRouter = router({
       const tenant = await workspaceForUser(ctx.user);
       const members = await getTeamMembers(tenant.id);
       const invites = await getTeamInvites(tenant.id);
-      return { members, invites };
+      const assignments = await getTeamAssignments(tenant.id);
+      return { members, invites, assignments };
     }),
     invite: protectedProcedure.input(z.object({ email: z.string().email(), role: z.enum(["admin", "agent", "viewer"]).default("agent") })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       const invite = await createTeamInvite({ tenantId: tenant.id, email: input.email, role: input.role });
-      // Also add as active team member immediately for smooth UX
       const name = input.email.split("@")[0];
       await addTeamMember({ tenantId: tenant.id, name: name.charAt(0).toUpperCase() + name.slice(1), email: input.email, role: input.role });
       return { success: true, invite };
@@ -286,6 +288,11 @@ export const appRouter = router({
     remove: protectedProcedure.input(z.object({ memberId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       await removeTeamMember(tenant.id, input.memberId);
+      return { success: true };
+    }),
+    setAssignment: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), targetType: z.enum(["agent", "channel"]), targetId: z.string(), assign: z.boolean() })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await setTeamAssignment({ tenantId: tenant.id, memberId: input.memberId, targetType: input.targetType, targetId: input.targetId, assign: input.assign });
       return { success: true };
     }),
   }),
