@@ -46,6 +46,7 @@ import {
   upsertChannelIntegration,
 } from "./db";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
+import { analyzeWebsite, websiteAnalysisSchema } from "./websiteAnalyzer";
 
 const agentInput = z.object({
   name: z.string().min(2).max(255),
@@ -174,6 +175,58 @@ export const appRouter = router({
       const tenant = await workspaceForUser(ctx.user);
       return createAgentForTenant({ tenantId: tenant.id, ...input });
     }),
+    analyzeWebsite: protectedProcedure.input(z.object({
+      websiteUrl: z.string().url().max(2048),
+    })).mutation(async ({ input }) => {
+      const result = await analyzeWebsite(input.websiteUrl);
+      return {
+        websiteUrl: result.websiteUrl,
+        pages: result.pages.map(page => ({ url: page.url, title: page.title, description: page.description, headings: page.headings })),
+        analysis: result.analysis,
+      };
+    }),
+    onboardFromWebsite: protectedProcedure.input(z.object({
+      websiteUrl: z.string().url().max(2048),
+      analysis: websiteAnalysisSchema,
+      sourcePages: z.array(z.object({ url: z.string().url(), title: z.string().max(255) })).min(1).max(5),
+      goals: z.array(onboardingGoal).min(1).max(9),
+      channels: z.array(onboardingChannel).min(1).max(5).optional(),
+      language: z.enum(["ar", "en", "bilingual"]).optional(),
+      tone: z.string().max(80).optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const configuredChannels: Array<z.infer<typeof onboardingChannel>> = input.channels?.length ? input.channels : input.analysis.suggestedChannels;
+      const fallbackMessage = "أقدر أساعدك بمعلومات الخدمات المتاحة على موقعكم، وإذا احتجت حالة خاصة أحوّلك إلى أحد أعضاء الفريق.";
+      const agent = await createAgentForTenant({
+        tenantId: tenant.id,
+        name: input.analysis.businessName,
+        description: input.analysis.businessSummary,
+        persona: input.analysis.persona,
+        tone: input.tone || input.analysis.tone,
+        language: input.language || input.analysis.language,
+        decisionRules: input.analysis.guardrails.join(" "),
+        fallbackMessage,
+        escalationKeyword: "موظف، إنسان، شكوى، عاجل، human, agent",
+        status: "active",
+      });
+      if (!agent) throw new Error("Agent could not be created");
+
+      const defaultSource = input.sourcePages[0] || { url: input.websiteUrl, title: input.analysis.businessName };
+      const selectedGoalKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const knowledgeItems = [
+        ...input.analysis.services.map((service, idx) => ({ title: service.name, content: service.description, category: "Website service", source: input.sourcePages[idx % input.sourcePages.length] || defaultSource })),
+        ...input.analysis.faqs.map((faq, idx) => ({ title: `FAQ: ${faq.question}`.slice(0, 255), content: faq.answer, category: "Website FAQ", source: input.sourcePages[(idx + 1) % input.sourcePages.length] || defaultSource })),
+        ...selectedGoalKnowledge.map(item => ({ title: item.title, content: item.content, category: "Agent goal", source: defaultSource })),
+      ];
+      if (!knowledgeItems.length) knowledgeItems.push({ title: "ملخص النشاط من الموقع", content: input.analysis.businessSummary, category: "Website summary", source: defaultSource });
+      for (const item of knowledgeItems) {
+        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: item.category, sourceUrl: item.source.url, sourceTitle: item.source.title, sourceFetchedAt: new Date() });
+      }
+      for (const channel of configuredChannels) {
+        await upsertChannelIntegration({ tenantId: tenant.id, agentId: agent.id, channel, isActive: channel === "web" ? 1 : 0, configJson: { setupStatus: channel === "web" ? "ready" : "needs_credentials", source: "website_analysis", websiteUrl: input.websiteUrl } });
+      }
+      return { agent: toSafeAgentSettings(agent), knowledgeCount: knowledgeItems.length, channelCount: configuredChannels.length, analysis: { ...input.analysis, goals: input.goals } };
+    }),
     onboard: protectedProcedure.input(z.object({
       language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
       tone: z.string().max(50).default("friendly"),
@@ -215,11 +268,20 @@ export const appRouter = router({
       language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
       tone: z.string().max(50).default("friendly"),
       templateId: industryTemplateSchema.optional(),
+      websiteAnalysis: websiteAnalysisSchema.optional(),
       goals: z.array(onboardingGoal).min(1).max(9),
       message: z.string().min(1).max(1000),
     })).mutation(async ({ input }) => {
-      const template = industryTemplates[input.templateId || "general"];
-      const goalKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const websiteProfile = input.websiteAnalysis;
+      const template = websiteProfile ? {
+        name: websiteProfile.businessName,
+        persona: websiteProfile.persona,
+        knowledge: [
+          ...websiteProfile.services.map(service => ({ title: service.name, content: service.description })),
+          ...websiteProfile.faqs.map(faq => ({ title: `FAQ: ${faq.question}`.slice(0, 255), content: faq.answer })),
+        ],
+      } : industryTemplates[input.templateId || "general"];
+      const goalKnowledge = websiteProfile ? [] : input.goals.map(goal => onboardingKnowledge[goal]);
       const allKnowledge = [...template.knowledge, ...goalKnowledge];
       const uniqueKnowledge = Array.from(new Map(allKnowledge.map(item => [item.title, item])).values());
       const tempAgent = {
@@ -227,11 +289,11 @@ export const appRouter = router({
         persona: template.persona,
         tone: input.tone,
         language: input.language,
-        decisionRules: "أجب بثقة واقترح الخطوة التالية.",
-        fallbackMessage: "أقدر أساعدك أكثر بتفاصيل إضافية أو بتحويلك لأحد الزملاء.",
-        escalationKeyword: "موظف,إنسان,شكوى,human,agent",
+        decisionRules: websiteProfile ? websiteProfile.guardrails.join(" ") : "أجب بثقة واقترح الخطوة التالية.",
+        fallbackMessage: websiteProfile ? "أقدر أساعدك بمعلومات الخدمات المنشورة، وأحوّلك إلى الفريق عند الحاجة." : "أقدر أساعدك أكثر بتفاصيل إضافية أو بتحويلك لأحد الزملاء.",
+        escalationKeyword: "موظف,إنسان,شكوى,human,agent,عاجل",
       };
-      const formattedKnowledge = uniqueKnowledge.map((item: { title: string; content: string }, i: number) => ({ id: i + 1, title: item.title, content: item.content, category: "Template", tenantId: 0, agentId: 0, createdAt: new Date(), updatedAt: new Date() }));
+      const formattedKnowledge = uniqueKnowledge.map((item: { title: string; content: string }, i: number) => ({ id: i + 1, title: item.title, content: item.content, category: "Template", tenantId: 0, agentId: 0, sourceUrl: null, sourceTitle: null, sourceFetchedAt: null, createdAt: new Date(), updatedAt: new Date() }));
       const prompt = buildAgentPrompt(tempAgent as any, formattedKnowledge, input.message);
       const isEscalated = containsEscalationKeyword(input.message, tempAgent.escalationKeyword);
       if (isEscalated) {

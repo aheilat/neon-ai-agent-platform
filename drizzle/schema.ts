@@ -56,6 +56,9 @@ export const knowledgeBase = mysqlTable("knowledge_base", {
   title: varchar("title", { length: 255 }).notNull(),
   content: longtext("content").notNull(),
   category: varchar("category", { length: 100 }).default("FAQ").notNull(),
+  sourceUrl: text("sourceUrl"),
+  sourceTitle: varchar("sourceTitle", { length: 255 }),
+  sourceFetchedAt: timestamp("sourceFetchedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

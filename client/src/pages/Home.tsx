@@ -18,6 +18,29 @@ type Goal = {
   icon: typeof HelpCircle;
 };
 
+type WebsiteService = { name: string; description: string };
+type WebsiteGoal = "questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human";
+type WebsiteChannel = "web" | "whatsapp" | "messenger" | "instagram" | "phone";
+type WebsiteAnalysis = {
+  businessName: string;
+  businessSummary: string;
+  industry: string;
+  audience: string;
+  language: "ar" | "en" | "bilingual";
+  tone: string;
+  persona: string;
+  goals: WebsiteGoal[];
+  suggestedChannels: WebsiteChannel[];
+  services: WebsiteService[];
+  faqs: Array<{ question: string; answer: string }>;
+  guardrails: string[];
+};
+type WebsiteDiscovery = {
+  websiteUrl: string;
+  pages: Array<{ url: string; title: string; description: string; headings: string[] }>;
+  analysis: WebsiteAnalysis;
+};
+
 const goals: Goal[] = [
   { id: "questions", title: "الرد على الأسئلة", subtitle: "Answer questions", icon: HelpCircle },
   { id: "issues", title: "حل المشاكل والشكاوى", subtitle: "Resolve issues & complaints", icon: Headphones },
@@ -42,7 +65,7 @@ const channels = [
   { id: "phone", title: "الهاتف", subtitle: "Phone gateway", icon: Headphones },
 ];
 
-const onboardingSteps = ["ابدأ", "الأهداف", "الشخصية", "القنوات", "جاهز"];
+const onboardingSteps = ["اكتشف", "الأهداف", "الشخصية", "القنوات", "جاهز"];
 
 const industryTemplates = [
   { id: "general" as const, title: "مساعد عام", subtitle: "General support", description: "لأي نشاط يريد بداية مرنة وسريعة.", icon: Bot, goals: ["questions", "human"], channels: ["web"] },
@@ -54,6 +77,8 @@ const industryTemplates = [
 function Onboarding() {
   const [, setLocation] = useLocation();
   const onboardAgent = trpc.agents.onboard.useMutation();
+  const analyzeWebsite = trpc.agents.analyzeWebsite.useMutation();
+  const onboardFromWebsite = trpc.agents.onboardFromWebsite.useMutation();
   const previewChat = trpc.agents.previewChat.useMutation();
   const [step, setStep] = useState(() => {
     if (typeof window === "undefined") return 0;
@@ -61,6 +86,10 @@ function Onboarding() {
     return onboardingMode === "preview" ? 2 : onboardingMode === "templates" ? 1 : 0;
   });
   const [selectedGoals, setSelectedGoals] = useState<string[]>(["questions", "human"]);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteConsent, setWebsiteConsent] = useState(false);
+  const [websiteResult, setWebsiteResult] = useState<WebsiteDiscovery | null>(null);
+  const [websiteServices, setWebsiteServices] = useState<WebsiteService[]>([]);
   const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate" | "healthcare">("general");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["web"]);
   const [language, setLanguage] = useState<"ar" | "en" | "bilingual">("bilingual");
@@ -75,7 +104,35 @@ function Onboarding() {
     setter(current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
   };
 
+  const analyzeSite = async () => {
+    const url = websiteUrl.trim();
+    if (!url) return;
+    if (!websiteConsent) {
+      toast.error("يرجى الموافقة على تحليل المحتوى العام للموقع للمتابعة");
+      return;
+    }
+    if (analyzeWebsite.isPending) return;
+    try {
+      const result = await analyzeWebsite.mutateAsync({ websiteUrl: url });
+      const discovery = result as WebsiteDiscovery;
+      setWebsiteResult(discovery);
+      setWebsiteServices(discovery.analysis.services);
+      setSelectedGoals(discovery.analysis.goals);
+      setSelectedChannels(discovery.analysis.suggestedChannels);
+      setLanguage(discovery.analysis.language);
+      setTone(discovery.analysis.tone);
+      toast.success(`تم تحليل ${discovery.pages.length} صفحات من موقعك`);
+      setStep(1);
+    } catch (error: any) {
+      toast.error(error?.message || "تعذر تحليل الموقع الآن");
+    }
+  };
+
   const next = () => {
+    if (step === 0 && !websiteResult) {
+      toast.error("أدخل رابط موقعك أو اختر المتابعة بدون تحليل الموقع");
+      return;
+    }
     if (step === 1 && selectedGoals.length === 0) {
       toast.error("اختر هدفاً واحداً على الأقل للمتابعة");
       return;
@@ -97,6 +154,7 @@ function Onboarding() {
         language,
         tone,
         templateId,
+        websiteAnalysis: websiteResult ? { ...websiteResult.analysis, services: websiteServices } : undefined,
         goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human">,
         message,
       });
@@ -111,13 +169,25 @@ function Onboarding() {
   const createFirstAgent = async () => {
     setIsCreating(true);
     try {
-      await onboardAgent.mutateAsync({
+      if (websiteResult) {
+        await onboardFromWebsite.mutateAsync({
+          websiteUrl: websiteResult.websiteUrl,
+          analysis: { ...websiteResult.analysis, services: websiteServices },
+          sourcePages: websiteResult.pages.map(page => ({ url: page.url, title: page.title })),
+          goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human">,
+          channels: selectedChannels as Array<"web" | "whatsapp" | "messenger" | "instagram" | "phone">,
+          language,
+          tone,
+        });
+      } else {
+        await onboardAgent.mutateAsync({
         tone,
         language,
         templateId,
         goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human">,
-        channels: selectedChannels as Array<"web" | "whatsapp" | "messenger" | "instagram" | "phone">,
-      });
+          channels: selectedChannels as Array<"web" | "whatsapp" | "messenger" | "instagram" | "phone">,
+        });
+      }
       localStorage.setItem("neon-onboarding-complete", "1");
       toast.success("تم إنشاء وكيلك الذكي بنجاح");
       setStep(4);
@@ -152,12 +222,25 @@ function Onboarding() {
 
         <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center py-8 sm:py-12">
           {step === 0 && (
-            <section className="text-center">
+            <section className="mx-auto w-full max-w-2xl text-center">
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[28px] bg-gradient-to-br from-[#5144ea] to-[#8b7bff] text-white shadow-2xl shadow-indigo-300/50"><Wand2 className="h-9 w-9" /></div>
-              <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Start simple / ابدأ ببساطة</p>
-              <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-black leading-tight tracking-tight text-slate-950 sm:text-6xl">ابنِ أول موظف ذكي لك في دقائق.</h1>
-              <p className="mx-auto mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">بنمشي معك خطوة بخطوة. اختر وش تبغى وكيلك يسوي، واختر القنوات، وNeon يجهز لك إعداداً أولياً جاهزاً للتجربة.</p>
-              <Button onClick={next} className="mt-9 h-14 w-full max-w-md rounded-full bg-gradient-to-l from-[#5144ea] to-[#7b6cff] text-base font-bold text-white shadow-xl shadow-indigo-300/40 hover:from-[#4639dc] hover:to-[#6f60f2]">خلّنا نبدأ <ArrowLeft className="mr-2 h-5 w-5" /></Button>
+              <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Discover first / اكتشف أولاً</p>
+              <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-black leading-tight tracking-tight text-slate-950 sm:text-6xl">خلّ Neon يتعرف على نشاطك.</h1>
+              <p className="mx-auto mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">أرسل رابط موقعك العام، وسنستخرج خدماتك وأسئلتك الشائعة ونبرة علامتك لبناء وكيل أولي قابل للمراجعة.</p>
+              <form onSubmit={event => { event.preventDefault(); void analyzeSite(); }} className="mx-auto mt-8 rounded-[28px] bg-white p-4 text-right shadow-xl shadow-indigo-100/60 sm:p-6">
+                <label htmlFor="website-url" className="text-sm font-bold text-slate-900">رابط موقع العميل / Business website</label>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <input id="website-url" type="url" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)} placeholder="https://example.com" className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" required />
+                  <Button type="submit" disabled={analyzeWebsite.isPending || !websiteUrl.trim() || !websiteConsent} className="h-12 rounded-2xl bg-gradient-to-l from-[#5144ea] to-[#7b6cff] px-6 font-bold text-white shadow-lg shadow-indigo-200">{analyzeWebsite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "حلّل موقعي"}</Button>
+                </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <input type="checkbox" id="website-consent" checked={websiteConsent} onChange={event => setWebsiteConsent(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                  <label htmlFor="website-consent" className="text-xs font-semibold text-slate-700 cursor-pointer">أوافق على قراءة وتحليل محتوى الصفحات العامة لهذا الموقع لبناء إعدادات الوكيل التجريبية.</label>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-400">نحلل الصفحات العامة فقط، ولا ننفذ تسجيل دخول أو شراء أو حجز. يمكنك مراجعة كل شيء قبل حفظ الوكيل.</p>
+              </form>
+              <div className="mt-5 flex items-center gap-3"><span className="h-px flex-1 bg-slate-200" /><span className="text-xs font-semibold text-slate-400">أو</span><span className="h-px flex-1 bg-slate-200" /></div>
+              <Button variant="outline" onClick={() => setStep(1)} className="mt-5 h-12 rounded-full border-slate-200 bg-white px-7 text-sm font-bold text-slate-700 hover:border-indigo-300 hover:text-indigo-700">ابدأ من قالب جاهز <ArrowLeft className="mr-2 h-4 w-4" /></Button>
               <p className="mt-4 text-xs text-slate-400">ما يحتاج خبرة تقنية • تقدر تعدل كل شيء لاحقاً</p>
             </section>
           )}
@@ -169,6 +252,12 @@ function Onboarding() {
                 <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">وش تبغى وكيلك يسوي؟</h1>
                 <p className="mt-3 text-base text-slate-500">اختر قالباً جاهزاً أو ابدأ من الصفر، ثم عدّل الأهداف كما يناسب شغلك.</p>
               </div>
+              {websiteResult && <div className="mx-auto mt-7 max-w-3xl rounded-[28px] border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/70 p-5 text-right shadow-lg shadow-indigo-100/50 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-bold text-indigo-700">Website intelligence · تحليل الموقع</span><h2 className="mt-3 text-xl font-black text-slate-950">{websiteResult.analysis.businessName}</h2><p className="mt-1 text-sm leading-6 text-slate-600">{websiteResult.analysis.businessSummary}</p></div><span className="shrink-0 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm">{websiteResult.pages.length} صفحات عامة</span></div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-white/80 p-3"><span className="block text-[11px] font-bold text-slate-400">القطاع</span><span className="mt-1 block text-sm font-semibold text-slate-800">{websiteResult.analysis.industry}</span></div><div className="rounded-2xl bg-white/80 p-3"><span className="block text-[11px] font-bold text-slate-400">الجمهور</span><span className="mt-1 block text-sm font-semibold text-slate-800">{websiteResult.analysis.audience}</span></div><div className="rounded-2xl bg-white/80 p-3"><span className="block text-[11px] font-bold text-slate-400">النبرة المقترحة</span><span className="mt-1 block text-sm font-semibold text-slate-800">{websiteResult.analysis.tone}</span></div></div>
+                <div className="mt-5"><div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-900">الخدمات المستخرجة</span><span className="text-xs text-slate-400">احذف أي خدمة لا تريد أن يتحدث عنها الوكيل</span></div><div className="mt-3 flex flex-wrap gap-2">{websiteServices.map(service => <button key={service.name} type="button" onClick={() => setWebsiteServices(current => current.filter(item => item.name !== service.name))} className="rounded-full bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700">{service.name} ×</button>)}{websiteServices.length === 0 && <span className="text-xs text-amber-600">لم يتم اعتماد خدمات بعد؛ سيعتمد الوكيل على الملخص والأسئلة الشائعة.</span>}</div></div>
+                <div className="mt-5 border-t border-indigo-100 pt-4"><span className="text-xs font-bold text-slate-500">المصادر التي تمت قراءتها</span><div className="mt-2 flex flex-wrap gap-2">{websiteResult.pages.map(page => <a key={page.url} href={page.url} target="_blank" rel="noreferrer" className="max-w-full truncate rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-indigo-700 shadow-sm hover:bg-indigo-100">{page.title}</a>)}</div></div>
+              </div>}
               <div className="mt-7 grid gap-3 lg:grid-cols-4">
                 {industryTemplates.map(template => {
                   const selected = templateId === template.id;
