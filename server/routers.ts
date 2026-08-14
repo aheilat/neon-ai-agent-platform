@@ -11,6 +11,12 @@ import {
   createKnowledgeItem,
   deleteKnowledgeItem,
   createLead,
+  getTeamMembers,
+  addTeamMember,
+  updateTeamMemberRole,
+  removeTeamMember,
+  getTeamInvites,
+  createTeamInvite,
   ensureDefaultAgent,
   getAgentAndTenant,
   getPublicAgent,
@@ -254,6 +260,33 @@ export const appRouter = router({
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         return { ...reply, conversationId };
       }
+    }),
+  }),
+
+  team: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const members = await getTeamMembers(tenant.id);
+      const invites = await getTeamInvites(tenant.id);
+      return { members, invites };
+    }),
+    invite: protectedProcedure.input(z.object({ email: z.string().email(), role: z.enum(["admin", "agent", "viewer"]).default("agent") })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const invite = await createTeamInvite({ tenantId: tenant.id, email: input.email, role: input.role });
+      // Also add as active team member immediately for smooth UX
+      const name = input.email.split("@")[0];
+      await addTeamMember({ tenantId: tenant.id, name: name.charAt(0).toUpperCase() + name.slice(1), email: input.email, role: input.role });
+      return { success: true, invite };
+    }),
+    updateRole: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), role: z.enum(["admin", "agent", "viewer", "owner"]) })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await updateTeamMemberRole(tenant.id, input.memberId, input.role);
+      return { success: true };
+    }),
+    remove: protectedProcedure.input(z.object({ memberId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await removeTeamMember(tenant.id, input.memberId);
+      return { success: true };
     }),
   }),
 });

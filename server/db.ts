@@ -13,6 +13,8 @@ import {
   knowledgeBase,
   leads,
   messages,
+  teamMembers,
+  teamInvites,
   tenants,
   users,
   User,
@@ -178,7 +180,48 @@ export async function getTenantLeads(tenantId: number) {
 export async function getTenantConversations(tenantId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(conversations).where(eq(conversations.tenantId, tenantId)).orderBy(desc(conversations.updatedAt)).limit(30);
+  return db.select().from(conversations).where(eq(conversations.tenantId, tenantId)).orderBy(desc(conversations.updatedAt));
+}
+
+export async function getTeamMembers(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(teamMembers).where(eq(teamMembers.tenantId, tenantId)).orderBy(desc(teamMembers.createdAt));
+}
+
+export async function addTeamMember(input: { tenantId: number; name: string; email: string; role: "admin" | "agent" | "viewer" }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(teamMembers).values({ tenantId: input.tenantId, name: input.name, email: input.email, role: input.role, status: "active" });
+  const result = await db.select().from(teamMembers).where(and(eq(teamMembers.tenantId, input.tenantId), eq(teamMembers.email, input.email))).orderBy(desc(teamMembers.id)).limit(1);
+  return result[0];
+}
+
+export async function updateTeamMemberRole(tenantId: number, memberId: number, role: "admin" | "agent" | "viewer" | "owner") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(teamMembers).set({ role }).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
+}
+
+export async function removeTeamMember(tenantId: number, memberId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(teamMembers).where(and(eq(teamMembers.id, memberId), eq(teamMembers.tenantId, tenantId)));
+}
+
+export async function getTeamInvites(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(teamInvites).where(eq(teamInvites.tenantId, tenantId)).orderBy(desc(teamInvites.createdAt));
+}
+
+export async function createTeamInvite(input: { tenantId: number; email: string; role: "admin" | "agent" | "viewer" }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  await db.insert(teamInvites).values({ tenantId: input.tenantId, email: input.email, role: input.role, token, status: "pending" });
+  const result = await db.select().from(teamInvites).where(and(eq(teamInvites.tenantId, input.tenantId), eq(teamInvites.token, token))).limit(1);
+  return result[0];
 }
 
 export async function getConversationWithMessages(tenantId: number, conversationId: number) {

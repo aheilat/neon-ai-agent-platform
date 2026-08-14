@@ -10,6 +10,7 @@ import Analytics from "./pages/Analytics";
 import Channels from "./pages/Channels";
 import Conversations from "./pages/Conversations";
 import Home from "./pages/Home";
+import Team from "./pages/Team";
 import Knowledge from "./pages/Knowledge";
 import Settings from "./pages/Settings";
 import Widget from "./pages/Widget";
@@ -21,13 +22,14 @@ function AppRoutes() {
       <Route path="*">
         <DashboardLayout>
           <Switch>
-            <Route path="/" component={Home} />
-            <Route path="/agents" component={Agents} />
-            <Route path="/knowledge" component={Knowledge} />
-            <Route path="/conversations" component={Conversations} />
-            <Route path="/channels" component={Channels} />
-            <Route path="/analytics" component={Analytics} />
-            <Route path="/settings" component={Settings} />
+            <Route path={"/"} component={Home} />
+            <Route path={"/agents"} component={Agents} />
+            <Route path={"/knowledge"} component={Knowledge} />
+            <Route path={"/conversations"} component={Conversations} />
+            <Route path={"/channels"} component={Channels} />
+            <Route path={"/analytics"} component={Analytics} />
+            <Route path={"/team"} component={Team} />
+            <Route path={"/settings"} component={Settings} />
             <Route component={NotFound} />
           </Switch>
         </DashboardLayout>
