@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HeartPulse, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -26,6 +26,10 @@ const goals: Goal[] = [
   { id: "leads", title: "جمع وتأهيل العملاء المحتملين", subtitle: "Capture & qualify leads", icon: ClipboardCheck },
   { id: "appointments", title: "حجز المواعيد", subtitle: "Book appointments", icon: CalendarDays },
   { id: "orders", title: "تتبع الطلبات والحالة", subtitle: "Track orders & status", icon: Package },
+  { id: "symptoms", title: "الاستفسار عن الأعراض", subtitle: "General symptom guidance", icon: HeartPulse },
+  { id: "medications", title: "معلومات الأدوية العامة", subtitle: "Medication information", icon: ClipboardCheck },
+  { id: "insurance", title: "استفسارات التأمين الصحي", subtitle: "Health insurance questions", icon: ClipboardCheck },
+  { id: "emergency", title: "توجيه الحالات الطارئة", subtitle: "Emergency routing", icon: Headphones },
   { id: "route", title: "توجيه العميل للقسم المناسب", subtitle: "Route to the right place", icon: MapPin },
   { id: "human", title: "تحويل المحادثة لموظف", subtitle: "Hand off to a human", icon: UsersRound },
 ];
@@ -44,6 +48,7 @@ const industryTemplates = [
   { id: "general" as const, title: "مساعد عام", subtitle: "General support", description: "لأي نشاط يريد بداية مرنة وسريعة.", icon: Bot, goals: ["questions", "human"], channels: ["web"] },
   { id: "ecommerce" as const, title: "التجارة الإلكترونية", subtitle: "E-commerce", description: "منتجات، شراء، شحن، وتتبع الطلبات.", icon: ShoppingBag, goals: ["recommend", "buy", "orders", "human"], channels: ["web", "whatsapp", "instagram"] },
   { id: "realestate" as const, title: "العقارات", subtitle: "Real estate", description: "تأهيل العملاء وحجز المعاينات.", icon: Building2, goals: ["recommend", "appointments", "leads", "human"], channels: ["web", "whatsapp", "phone"] },
+  { id: "healthcare" as const, title: "الرعاية الصحية", subtitle: "Healthcare", description: "مواعيد، توجيه صحي عام، وتأمين مع تصعيد آمن للحالات الطارئة.", icon: HeartPulse, goals: ["questions", "appointments", "symptoms", "insurance", "emergency", "human"], channels: ["web", "whatsapp", "phone"] },
 ];
 
 function Onboarding() {
@@ -56,7 +61,7 @@ function Onboarding() {
     return onboardingMode === "preview" ? 2 : onboardingMode === "templates" ? 1 : 0;
   });
   const [selectedGoals, setSelectedGoals] = useState<string[]>(["questions", "human"]);
-  const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate">("general");
+  const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate" | "healthcare">("general");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["web"]);
   const [language, setLanguage] = useState<"ar" | "en" | "bilingual">("bilingual");
   const [tone, setTone] = useState("friendly");
@@ -92,7 +97,7 @@ function Onboarding() {
         language,
         tone,
         templateId,
-        goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "human">,
+        goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human">,
         message,
       });
       setPreviewMessages(current => [...current, { role: "agent", content: result.reply }]);
@@ -110,7 +115,7 @@ function Onboarding() {
         tone,
         language,
         templateId,
-        goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "human">,
+        goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human">,
         channels: selectedChannels as Array<"web" | "whatsapp" | "messenger" | "instagram" | "phone">,
       });
       localStorage.setItem("neon-onboarding-complete", "1");
@@ -164,7 +169,7 @@ function Onboarding() {
                 <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">وش تبغى وكيلك يسوي؟</h1>
                 <p className="mt-3 text-base text-slate-500">اختر قالباً جاهزاً أو ابدأ من الصفر، ثم عدّل الأهداف كما يناسب شغلك.</p>
               </div>
-              <div className="mt-7 grid gap-3 lg:grid-cols-3">
+              <div className="mt-7 grid gap-3 lg:grid-cols-4">
                 {industryTemplates.map(template => {
                   const selected = templateId === template.id;
                   return <button key={template.id} onClick={() => { setTemplateId(template.id); setSelectedGoals(template.goals); setSelectedChannels(template.channels); }} className={`rounded-[24px] border-2 bg-white p-4 text-right transition-all ${selected ? "border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-100" : "border-slate-200 hover:border-indigo-200 hover:shadow-md"}`}>

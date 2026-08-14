@@ -59,9 +59,9 @@ const agentInput = z.object({
   status: z.enum(["active", "paused", "draft"]).default("active"),
 });
 
-const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "human"]);
+const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "symptoms", "medications", "insurance", "emergency", "human"]);
 const onboardingChannel = z.enum(["web", "whatsapp", "messenger", "instagram", "phone"]);
-const industryTemplateSchema = z.enum(["ecommerce", "realestate", "general"]).default("general");
+const industryTemplateSchema = z.enum(["ecommerce", "realestate", "healthcare", "general"]).default("general");
 
 const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: string; description: string; persona: string; goals: Array<z.infer<typeof onboardingGoal>>; channels: Array<z.infer<typeof onboardingChannel>>; knowledge: Array<{ title: string; content: string }> }> = {
   ecommerce: {
@@ -86,6 +86,19 @@ const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: 
       { title: "حجز المعاينات", content: "المعاينات متاحة طوال أيام الأسبوع من 4 عصراً وحتى 9 مساءً بحجز مسبق." },
     ],
   },
+  healthcare: {
+    name: "منسق الرعاية الصحية الذكي",
+    description: "مساعد آمن لتوجيه المرضى، حجز المواعيد، وتنظيم الأسئلة الصحية العامة دون تشخيص.",
+    persona: "أنت منسق رعاية صحية متعاطف ومحترف. اجمع المعلومات العامة بهدوء، ساعد في حجز الموعد وتوجيه المريض للقسم المناسب، ولا تشخّص الحالات أو تصف الأدوية أو تغيّر الجرعات. عند وجود أعراض خطيرة أو خطر فوري، وجّه المريض فوراً إلى خدمات الطوارئ المحلية ولا تطلب منه الانتظار.",
+    goals: ["questions", "appointments", "symptoms", "insurance", "emergency", "human"],
+    channels: ["web", "whatsapp", "phone"],
+    knowledge: [
+      { title: "حجز المواعيد الطبية", content: "ساعد المريض في تحديد التخصص والخدمة والوقت المناسب، ثم أكد بيانات التواصل الضرورية فقط قبل إرسال طلب الحجز إلى الفريق المختص." },
+      { title: "الاستفسارات الصحية العامة", content: "قدّم معلومات تثقيفية عامة من قاعدة المعرفة دون تشخيص أو وصف علاج. وضّح أن المعلومات لا تغني عن تقييم طبيب أو مختص مرخّص." },
+      { title: "علامات الخطر والطوارئ", content: "إذا ذكر المريض خطراً فورياً أو أعراضاً شديدة مثل صعوبة التنفس أو فقدان الوعي أو نزيف حاد، اطلب منه التواصل فوراً مع رقم الطوارئ المحلي أو التوجه لأقرب قسم طوارئ، ولا تؤخر طلب المساعدة بأسئلة إضافية." },
+      { title: "الخصوصية والبيانات الحساسة", content: "لا تطلب كلمات مرور أو أرقام بطاقات أو صور هويات أو تفاصيل طبية غير ضرورية. اجمع الحد الأدنى اللازم للتوجيه أو الحجز، وحوّل التفاصيل الحساسة إلى الفريق المختص عبر القناة المعتمدة." },
+    ],
+  },
   general: {
     name: "موظف Neon الذكي",
     description: "وكيل خدمة عملاء عام للرد على الاستفسارات وحل الشكاوى وتوجيه العملاء.",
@@ -107,6 +120,10 @@ const onboardingKnowledge: Record<z.infer<typeof onboardingGoal>, { title: strin
   appointments: { title: "إرشادات حجز المواعيد", content: "اجمع اليوم والوقت المناسب ونوع الخدمة وبيانات التواصل، ثم أكد التفاصيل قبل إرسال الحجز للفريق." },
   orders: { title: "إرشادات تتبع الطلبات", content: "اطلب رقم الطلب أو وسيلة التحقق المناسبة، ثم اعرض الحالة المتاحة ووقت التحديث، وحوّل الاستفسار للفريق عند الحاجة." },
   route: { title: "إرشادات توجيه العميل", content: "حدّد نوع طلب العميل والقسم المناسب، ثم وجّهه بوضوح مع إبقاء خيار التواصل مع موظف متاح." },
+  symptoms: { title: "إرشادات الاستفسارات عن الأعراض", content: "اسأل عن المعلومات العامة اللازمة للتوجيه فقط، ولا تقدّم تشخيصاً أو وصفة علاجية. شجّع على استشارة مختص، وصعّد الحالات المقلقة أو غير الواضحة للفريق الصحي." },
+  medications: { title: "إرشادات الأدوية", content: "قدّم معلومات تنظيمية عامة مثل مواعيد التواصل أو طلب إعادة التعبئة فقط. لا تغيّر الجرعات ولا تقترح بدء أو إيقاف دواء، ووجّه المريض للصيدلي أو الطبيب المختص." },
+  insurance: { title: "إرشادات التأمين الصحي", content: "اشرح خطوات التحقق من التغطية والمستندات المطلوبة بصورة عامة، ولا تطلب بيانات مالية أو هوية كاملة داخل المحادثة. حوّل الحالات الخاصة إلى موظف مختص." },
+  emergency: { title: "إرشادات الحالات الطارئة", content: "عند وجود خطر فوري أو أعراض شديدة، وجّه المريض مباشرة إلى خدمات الطوارئ المحلية أو أقرب قسم طوارئ، ولا تؤخر طلب المساعدة بمحاولة التشخيص أو جمع تفاصيل غير ضرورية." },
   human: { title: "إرشادات التحويل لموظف", content: "عند طلب العميل موظفاً أو وجود شكوى حساسة، اجمع ملخصاً قصيراً وأرسل المحادثة إلى عضو الفريق المتاح." },
 };
 
@@ -170,6 +187,7 @@ export const appRouter = router({
       const allKnowledge = [...template.knowledge, ...goalKnowledge];
       const uniqueKnowledge = Array.from(new Map(allKnowledge.map(item => [item.title, item])).values());
       const configuredChannels: Array<z.infer<typeof onboardingChannel>> = input.channels?.length ? input.channels : template.channels;
+      const isHealthcareTemplate = input.templateId === "healthcare";
 
       const agent = await createAgentForTenant({
         tenantId: tenant.id,
@@ -178,9 +196,9 @@ export const appRouter = router({
         persona: template.persona,
         tone: input.tone,
         language: input.language,
-        decisionRules: input.goals.includes("human") ? "إذا طلب العميل موظفاً أو ظهرت شكوى حساسة، صعّد المحادثة للفريق البشري." : "قدّم إجابة مباشرة، ثم اقترح الخطوة التالية المناسبة.",
-        fallbackMessage: "خلني أتأكد من أحد أعضاء الفريق وأرجع لك بأقرب وقت.",
-        escalationKeyword: "موظف، إنسان، شكوى، عاجل",
+        decisionRules: isHealthcareTemplate ? "قدّم تثقيفاً عاماً فقط، ولا تشخّص أو تصف دواءً أو تغيّر جرعة. لا تجمع بيانات صحية أو شخصية غير ضرورية. عند ذكر خطر فوري أو أعراض شديدة، وجّه المريض فوراً إلى الطوارئ المحلية وصعّد المحادثة للفريق الصحي." : input.goals.includes("human") ? "إذا طلب العميل موظفاً أو ظهرت شكوى حساسة، صعّد المحادثة للفريق البشري." : "قدّم إجابة مباشرة، ثم اقترح الخطوة التالية المناسبة.",
+        fallbackMessage: isHealthcareTemplate ? "أفضّل أن يراجعك مختص صحي. إذا كانت هناك حالة طارئة أو خطر فوري، تواصل الآن مع خدمات الطوارئ المحلية." : "خلني أتأكد من أحد أعضاء الفريق وأرجع لك بأقرب وقت.",
+        escalationKeyword: isHealthcareTemplate ? "طوارئ، إسعاف، ضيق تنفس، فقدان وعي، نزيف، عاجل، طبيب، موظف" : "موظف، إنسان، شكوى، عاجل",
         status: "active",
       });
       if (!agent) throw new Error("Agent could not be created");

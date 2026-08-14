@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import { upsertUser } from "./db";
+import { getAgentInTenant, getOrCreateTenant, upsertUser } from "./db";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -39,6 +39,28 @@ describe("Industry agent templates", () => {
 
     expect(result.agent.name).toBe("خبير التجارة الإلكترونية");
     expect(result.knowledgeCount).toBeGreaterThan(1);
+    expect(result.channelCount).toBe(3);
+  }, 15000);
+
+  it("creates a healthcare agent with safe guidance and default channels", async () => {
+    const ctx = createContext();
+    await upsertUser(ctx.user);
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.agents.onboard({
+      templateId: "healthcare",
+      language: "bilingual",
+      tone: "professional",
+      goals: ["questions", "appointments", "symptoms", "insurance", "emergency", "human"],
+    });
+
+    expect(result.agent.name).toBe("منسق الرعاية الصحية الذكي");
+    expect(result.agent.description).toContain("دون تشخيص");
+    const tenant = await getOrCreateTenant(ctx.user);
+    const persistedAgent = tenant ? await getAgentInTenant(tenant.id, result.agent.id) : undefined;
+    expect(persistedAgent?.decisionRules).toContain("لا تشخّص");
+    expect(persistedAgent?.escalationKeyword).toContain("طوارئ");
+    expect(result.knowledgeCount).toBe(10);
     expect(result.channelCount).toBe(3);
   }, 15000);
 
