@@ -39,13 +39,13 @@ describe("Agent onboarding", () => {
     });
 
     expect(result.agent.name).toBe("موظف Neon الذكي");
-    expect(result.knowledgeCount).toBe(3);
+    expect(result.knowledgeCount).toBe(4);
     expect(result.channelCount).toBe(2);
 
     const tenant = await getOrCreateTenant(ctx.user);
     const knowledge = await getKnowledgeForAgent(tenant!.id, result.agent.id);
     const channels = await listChannelIntegrations(tenant!.id, result.agent.id);
-    expect(knowledge.length).toBeGreaterThanOrEqual(3);
+    expect(knowledge.length).toBeGreaterThanOrEqual(4);
     expect(channels.map(channel => channel.channel)).toEqual(expect.arrayContaining(["web", "whatsapp"]));
   }, 15000);
 });

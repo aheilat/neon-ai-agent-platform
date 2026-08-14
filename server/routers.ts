@@ -61,6 +61,43 @@ const agentInput = z.object({
 
 const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "human"]);
 const onboardingChannel = z.enum(["web", "whatsapp", "messenger", "instagram", "phone"]);
+const industryTemplateSchema = z.enum(["ecommerce", "realestate", "general"]).default("general");
+
+const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: string; description: string; persona: string; goals: Array<z.infer<typeof onboardingGoal>>; channels: Array<z.infer<typeof onboardingChannel>>; knowledge: Array<{ title: string; content: string }> }> = {
+  ecommerce: {
+    name: "خبير التجارة الإلكترونية",
+    description: "متخصص في تتبع الطلبات، اقتراح المنتجات، وتسهيل عمليات الشراء للعملاء.",
+    persona: "أنت مساعد تجارة إلكترونية ودود وخبير بالمنتجات. تساعد العميل في اختيار المقاس، تتبع الشحنة، وإتمام الدفع بثقة.",
+    goals: ["recommend", "buy", "orders", "human"],
+    channels: ["web", "whatsapp", "instagram"],
+    knowledge: [
+      { title: "سياسة الشحن والتوصيل", content: "التوصيل خلال 2 إلى 4 أيام عمل لكافة المدن. الشحن مجاني للطلبات فوق 300 ريال." },
+      { title: "سياسة الاسترجاع والاستبدال", content: "الاسترجاع متاح خلال 7 أيام من استلام الطلب بشرط أن يكون المنتج بحالته الأصلية." },
+    ],
+  },
+  realestate: {
+    name: "مستشار العقارات الذكي",
+    description: "متخصص في عرض الوحدات، حجز المعاينات، وتأهيل العملاء المهتمين بالشراء أو الإيجار.",
+    persona: "أنت مستشار عقاري احترافي وموثوق. تساعد العميل في إيجاد العقار المناسب، معرفة الأسعار، وحجز موعد معاينة.",
+    goals: ["recommend", "appointments", "leads", "human"],
+    channels: ["web", "whatsapp", "phone"],
+    knowledge: [
+      { title: "المشاريع الحالية والأسعار", content: "متوفر فلل وققق فندقية بأسعار تبدأ من 450 ألف ريال مع خطط دفع مرنة حتى 5 سنوات." },
+      { title: "حجز المعاينات", content: "المعاينات متاحة طوال أيام الأسبوع من 4 عصراً وحتى 9 مساءً بحجز مسبق." },
+    ],
+  },
+  general: {
+    name: "موظف Neon الذكي",
+    description: "وكيل خدمة عملاء عام للرد على الاستفسارات وحل الشكاوى وتوجيه العملاء.",
+    persona: "أنت موظف خدمة عملاء ودود وعملي. تساعد العميل في الإجابة على الأسئلة وتقديم الدعم السريع.",
+    goals: ["questions", "human"],
+    channels: ["web"],
+    knowledge: [
+      { title: "الأسئلة الشائعة العامة", content: "نحن متواجدون لخدمتكم على مدار الساعة طوال أيام الأسبوع عبر القنوات الرقمية." },
+    ],
+  },
+};
+
 const onboardingKnowledge: Record<z.infer<typeof onboardingGoal>, { title: string; content: string }> = {
   questions: { title: "إرشادات الرد على الأسئلة", content: "أجب باختصار ووضوح، واذكر المعلومات المتوفرة في قاعدة المعرفة فقط. إذا لم تتأكد من الإجابة، اطلب تفاصيل إضافية أو حوّل العميل لموظف." },
   issues: { title: "إرشادات حل المشاكل والشكاوى", content: "استمع للعميل، لخّص المشكلة، اقترح خطوة عملية، وابقَ هادئاً وودوداً. صعّد الحالات الحساسة أو غير المحلولة للفريق البشري." },
@@ -123,16 +160,22 @@ export const appRouter = router({
     onboard: protectedProcedure.input(z.object({
       language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
       tone: z.string().max(50).default("friendly"),
+      templateId: industryTemplateSchema.optional(),
       goals: z.array(onboardingGoal).min(1).max(9),
-      channels: z.array(onboardingChannel).min(1).max(5),
+      channels: z.array(onboardingChannel).min(1).max(5).optional(),
     })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
-      const selectedKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const template = industryTemplates[input.templateId || "general"];
+      const goalKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const allKnowledge = [...template.knowledge, ...goalKnowledge];
+      const uniqueKnowledge = Array.from(new Map(allKnowledge.map(item => [item.title, item])).values());
+      const configuredChannels: Array<z.infer<typeof onboardingChannel>> = input.channels?.length ? input.channels : template.channels;
+
       const agent = await createAgentForTenant({
         tenantId: tenant.id,
-        name: "موظف Neon الذكي",
-        description: "وكيل خدمة عملاء مبني من إعداد البداية السريع",
-        persona: `أنت موظف خدمة عملاء ودود وعملي. تساعد العميل في: ${selectedKnowledge.map(item => item.title).join("، ")}. اسأل أسئلة قصيرة، قدم خطوة عملية، وحوّل المحادثة لموظف بشري عند الحاجة.`,
+        name: template.name,
+        description: template.description,
+        persona: template.persona,
         tone: input.tone,
         language: input.language,
         decisionRules: input.goals.includes("human") ? "إذا طلب العميل موظفاً أو ظهرت شكوى حساسة، صعّد المحادثة للفريق البشري." : "قدّم إجابة مباشرة، ثم اقترح الخطوة التالية المناسبة.",
@@ -142,31 +185,35 @@ export const appRouter = router({
       });
       if (!agent) throw new Error("Agent could not be created");
 
-      for (const item of selectedKnowledge) {
-        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: "Onboarding" });
+      for (const item of uniqueKnowledge) {
+        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: "Template" });
       }
-      for (const channel of input.channels) {
-        await upsertChannelIntegration({ tenantId: tenant.id, agentId: agent.id, channel, isActive: channel === "web" ? 1 : 0, configJson: { setupStatus: channel === "web" ? "ready" : "needs_credentials", source: "onboarding" } });
+      for (const channel of configuredChannels) {
+        await upsertChannelIntegration({ tenantId: tenant.id, agentId: agent.id, channel, isActive: channel === "web" ? 1 : 0, configJson: { setupStatus: channel === "web" ? "ready" : "needs_credentials", source: "onboarding", templateId: input.templateId || "general" } });
       }
-      return { agent: toSafeAgentSettings(agent), knowledgeCount: selectedKnowledge.length, channelCount: input.channels.length };
+      return { agent: toSafeAgentSettings(agent), knowledgeCount: uniqueKnowledge.length, channelCount: configuredChannels.length };
     }),
     previewChat: protectedProcedure.input(z.object({
       language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
       tone: z.string().max(50).default("friendly"),
+      templateId: industryTemplateSchema.optional(),
       goals: z.array(onboardingGoal).min(1).max(9),
       message: z.string().min(1).max(1000),
     })).mutation(async ({ input }) => {
-      const selectedKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const template = industryTemplates[input.templateId || "general"];
+      const goalKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const allKnowledge = [...template.knowledge, ...goalKnowledge];
+      const uniqueKnowledge = Array.from(new Map(allKnowledge.map(item => [item.title, item])).values());
       const tempAgent = {
-        name: "موظف Neon الذكي",
-        persona: `أنت مساعد خدمة عملاء ودود وعملي. الأهداف: ${selectedKnowledge.map(item => item.title).join("، ")}.`,
+        name: template.name,
+        persona: template.persona,
         tone: input.tone,
         language: input.language,
         decisionRules: "أجب بثقة واقترح الخطوة التالية.",
         fallbackMessage: "أقدر أساعدك أكثر بتفاصيل إضافية أو بتحويلك لأحد الزملاء.",
         escalationKeyword: "موظف,إنسان,شكوى,human,agent",
       };
-      const formattedKnowledge = selectedKnowledge.map((item, i) => ({ id: i + 1, title: item.title, content: item.content, category: "Onboarding", tenantId: 0, agentId: 0, createdAt: new Date(), updatedAt: new Date() }));
+      const formattedKnowledge = uniqueKnowledge.map((item: { title: string; content: string }, i: number) => ({ id: i + 1, title: item.title, content: item.content, category: "Template", tenantId: 0, agentId: 0, createdAt: new Date(), updatedAt: new Date() }));
       const prompt = buildAgentPrompt(tempAgent as any, formattedKnowledge, input.message);
       const isEscalated = containsEscalationKeyword(input.message, tempAgent.escalationKeyword);
       if (isEscalated) {

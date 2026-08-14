@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { ArrowLeft, ArrowRight, Bot, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -40,12 +40,23 @@ const channels = [
 
 const onboardingSteps = ["ابدأ", "الأهداف", "الشخصية", "القنوات", "جاهز"];
 
+const industryTemplates = [
+  { id: "general" as const, title: "مساعد عام", subtitle: "General support", description: "لأي نشاط يريد بداية مرنة وسريعة.", icon: Bot, goals: ["questions", "human"], channels: ["web"] },
+  { id: "ecommerce" as const, title: "التجارة الإلكترونية", subtitle: "E-commerce", description: "منتجات، شراء، شحن، وتتبع الطلبات.", icon: ShoppingBag, goals: ["recommend", "buy", "orders", "human"], channels: ["web", "whatsapp", "instagram"] },
+  { id: "realestate" as const, title: "العقارات", subtitle: "Real estate", description: "تأهيل العملاء وحجز المعاينات.", icon: Building2, goals: ["recommend", "appointments", "leads", "human"], channels: ["web", "whatsapp", "phone"] },
+];
+
 function Onboarding() {
   const [, setLocation] = useLocation();
   const onboardAgent = trpc.agents.onboard.useMutation();
   const previewChat = trpc.agents.previewChat.useMutation();
-  const [step, setStep] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("onboarding") === "preview" ? 2 : 0);
+  const [step, setStep] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const onboardingMode = new URLSearchParams(window.location.search).get("onboarding");
+    return onboardingMode === "preview" ? 2 : onboardingMode === "templates" ? 1 : 0;
+  });
   const [selectedGoals, setSelectedGoals] = useState<string[]>(["questions", "human"]);
+  const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate">("general");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["web"]);
   const [language, setLanguage] = useState<"ar" | "en" | "bilingual">("bilingual");
   const [tone, setTone] = useState("friendly");
@@ -80,6 +91,7 @@ function Onboarding() {
       const result = await previewChat.mutateAsync({
         language,
         tone,
+        templateId,
         goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "human">,
         message,
       });
@@ -97,6 +109,7 @@ function Onboarding() {
       await onboardAgent.mutateAsync({
         tone,
         language,
+        templateId,
         goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "human">,
         channels: selectedChannels as Array<"web" | "whatsapp" | "messenger" | "instagram" | "phone">,
       });
@@ -149,9 +162,19 @@ function Onboarding() {
               <div className="mx-auto max-w-2xl text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600"><Target className="h-6 w-6" /></div>
                 <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">وش تبغى وكيلك يسوي؟</h1>
-                <p className="mt-3 text-base text-slate-500">اختر هدفاً واحداً أو أكثر، وتقدر تغيرها لاحقاً.</p>
+                <p className="mt-3 text-base text-slate-500">اختر قالباً جاهزاً أو ابدأ من الصفر، ثم عدّل الأهداف كما يناسب شغلك.</p>
               </div>
-              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <div className="mt-7 grid gap-3 lg:grid-cols-3">
+                {industryTemplates.map(template => {
+                  const selected = templateId === template.id;
+                  return <button key={template.id} onClick={() => { setTemplateId(template.id); setSelectedGoals(template.goals); setSelectedChannels(template.channels); }} className={`rounded-[24px] border-2 bg-white p-4 text-right transition-all ${selected ? "border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-100" : "border-slate-200 hover:border-indigo-200 hover:shadow-md"}`}>
+                    <div className="flex items-start justify-between gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${selected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}><template.icon className="h-5 w-5" /></span><span className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 text-transparent"}`}><Check className="h-4 w-4" /></span></div>
+                    <span className="mt-4 block text-sm font-bold text-slate-900">{template.title}</span><span className="mt-1 block text-xs text-slate-400" dir="ltr">{template.subtitle}</span><span className="mt-3 block text-xs leading-5 text-slate-500">{template.description}</span>
+                  </button>;
+                })}
+              </div>
+              <div className="mt-8 flex items-center gap-2"><span className="h-px flex-1 bg-slate-200" /><span className="text-xs font-semibold text-slate-400">أو عدّل الأهداف بنفسك</span><span className="h-px flex-1 bg-slate-200" /></div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {goals.map(goal => {
                   const selected = selectedGoals.includes(goal.id);
                   return <button key={goal.id} onClick={() => toggle(goal.id, selectedGoals, setSelectedGoals)} className={`group flex min-h-[76px] items-center gap-4 rounded-[24px] border-2 px-5 text-right transition-all ${selected ? "border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-100" : "border-slate-200 bg-white hover:border-indigo-200 hover:shadow-md"}`}>
