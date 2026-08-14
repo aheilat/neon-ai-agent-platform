@@ -12,6 +12,7 @@ import Conversations from "./pages/Conversations";
 import Home from "./pages/Home";
 import Team from "./pages/Team";
 import Notifications from "./pages/Notifications";
+import NotificationSettings from "./pages/NotificationSettings";
 import Knowledge from "./pages/Knowledge";
 import Settings from "./pages/Settings";
 import Widget from "./pages/Widget";
@@ -31,6 +32,7 @@ function AppRoutes() {
             <Route path={"/analytics"} component={Analytics} />
             <Route path={"/team"} component={Team} />
             <Route path={"/notifications"} component={Notifications} />
+            <Route path={"/notifications/settings"} component={NotificationSettings} />
             <Route path={"/settings"} component={Settings} />
             <Route component={NotFound} />
           </Switch>

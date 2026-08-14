@@ -18,6 +18,7 @@ import {
   teamMemberAssignments,
   workspaceNotifications,
   pushSubscriptions,
+  notificationPreferences,
   tenants,
   users,
   User,
@@ -290,6 +291,33 @@ export async function getTenantPushSubscriptions(tenantId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.tenantId, tenantId));
+}
+
+export async function getUserNotificationPreferences(tenantId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return { escalationPush: 1, assignmentPush: 1, leadPush: 1, generalPush: 1 };
+  const result = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.tenantId, tenantId), eq(notificationPreferences.userId, userId))).limit(1);
+  if (result[0]) return result[0];
+  // default record
+  await db.insert(notificationPreferences).values({ tenantId, userId, escalationPush: 1, assignmentPush: 1, leadPush: 1, generalPush: 1 });
+  const created = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.tenantId, tenantId), eq(notificationPreferences.userId, userId))).limit(1);
+  return created[0] || { escalationPush: 1, assignmentPush: 1, leadPush: 1, generalPush: 1 };
+}
+
+export async function updateUserNotificationPreferences(input: { tenantId: number; userId: number; escalationPush: number; assignmentPush: number; leadPush: number; generalPush: number }) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.tenantId, input.tenantId), eq(notificationPreferences.userId, input.userId))).limit(1);
+  if (existing.length === 0) {
+    await db.insert(notificationPreferences).values(input);
+  } else {
+    await db.update(notificationPreferences).set({
+      escalationPush: input.escalationPush,
+      assignmentPush: input.assignmentPush,
+      leadPush: input.leadPush,
+      generalPush: input.generalPush,
+    }).where(and(eq(notificationPreferences.tenantId, input.tenantId), eq(notificationPreferences.userId, input.userId)));
+  }
 }
 
 export async function getConversationWithMessages(tenantId: number, conversationId: number) {

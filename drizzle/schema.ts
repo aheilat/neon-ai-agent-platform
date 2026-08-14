@@ -147,6 +147,20 @@ export const pushSubscriptions = mysqlTable("push_subscriptions", {
 export type PushSubscriptionRecord = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscriptionRecord = typeof pushSubscriptions.$inferInsert;
 
+export const notificationPreferences = mysqlTable("notification_preferences", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  userId: int("userId").notNull(),
+  escalationPush: int("escalationPush").default(1).notNull(), // 1 on, 0 off
+  assignmentPush: int("assignmentPush").default(1).notNull(),
+  leadPush: int("leadPush").default(1).notNull(),
+  generalPush: int("generalPush").default(1).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type InsertNotificationPreference = typeof notificationPreferences.$inferInsert;
+
 // Conversations
 export const conversations = mysqlTable("conversations", {
   id: int("id").autoincrement().primaryKey(),

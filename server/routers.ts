@@ -25,6 +25,8 @@ import {
   markAllNotificationsRead,
   savePushSubscription,
   getTenantPushSubscriptions,
+  getUserNotificationPreferences,
+  updateUserNotificationPreferences,
   ensureDefaultAgent,
   getAgentAndTenant,
   getPublicAgent,
@@ -337,6 +339,27 @@ export const appRouter = router({
         endpoint: input.endpoint,
         p256dh: input.keys.p256dh,
         auth: input.keys.auth,
+      });
+      return { success: true };
+    }),
+    getPreferences: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      return getUserNotificationPreferences(tenant.id, ctx.user.id);
+    }),
+    updatePreferences: protectedProcedure.input(z.object({
+      escalationPush: z.boolean(),
+      assignmentPush: z.boolean(),
+      leadPush: z.boolean(),
+      generalPush: z.boolean(),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await updateUserNotificationPreferences({
+        tenantId: tenant.id,
+        userId: ctx.user.id,
+        escalationPush: input.escalationPush ? 1 : 0,
+        assignmentPush: input.assignmentPush ? 1 : 0,
+        leadPush: input.leadPush ? 1 : 0,
+        generalPush: input.generalPush ? 1 : 0,
       });
       return { success: true };
     }),

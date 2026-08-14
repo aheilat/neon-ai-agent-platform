@@ -45,6 +45,9 @@ export default function Notifications() {
           <Button variant="outline" onClick={() => markAllReadMutation.mutate()} disabled={unreadCount === 0 || markAllReadMutation.isPending} className="rounded-xl border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
             <CheckCheck className="ml-2 h-4 w-4 text-cyan-300" /> تعليم الكل كمقروء ({unreadCount})
           </Button>
+          <Button variant="outline" onClick={() => window.location.href = "/notifications/settings"} className="rounded-xl border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
+            إعدادات التفضيلات
+          </Button>
           <Button onClick={async () => {
             if (!("Notification" in window) || !("serviceWorker" in navigator)) {
               return toast.error("متصفحك لا يدعم إشعارات الـ Push.");
@@ -55,7 +58,6 @@ export default function Notifications() {
             }
             try {
               const reg = await navigator.serviceWorker.ready;
-              // Simple VAPID public key placeholder for subscription
               const publicVapidKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nxh8uQ";
               const sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
