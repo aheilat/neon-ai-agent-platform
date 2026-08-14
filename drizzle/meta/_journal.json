@@ -43,6 +43,13 @@
       "when": 1786708889009,
       "tag": "0005_gifted_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1786709078552,
+      "tag": "0006_sudden_loners",
+      "breakpoints": true
     }
   ]
 }

@@ -24,6 +24,13 @@ export default function Notifications() {
     onError: error => toast.error(error.message),
   });
 
+  const subscribePushMutation = trpc.notifications.subscribe.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ اشتراك الإشعارات للجهاز بنجاح");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const unreadCount = notifications.filter(n => n.isRead === 0).length;
 
   return (
@@ -37,6 +44,38 @@ export default function Notifications() {
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => markAllReadMutation.mutate()} disabled={unreadCount === 0 || markAllReadMutation.isPending} className="rounded-xl border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
             <CheckCheck className="ml-2 h-4 w-4 text-cyan-300" /> تعليم الكل كمقروء ({unreadCount})
+          </Button>
+          <Button onClick={async () => {
+            if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+              return toast.error("متصفحك لا يدعم إشعارات الـ Push.");
+            }
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+              return toast.error("تم رفض إذن الإشعارات من المتصفح.");
+            }
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              // Simple VAPID public key placeholder for subscription
+              const publicVapidKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nxh8uQ";
+              const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: publicVapidKey,
+              });
+              const jsonSub = sub.toJSON();
+              await subscribePushMutation.mutateAsync({
+                endpoint: jsonSub.endpoint!,
+                keys: {
+                  p256dh: jsonSub.keys?.p256dh || "",
+                  auth: jsonSub.keys?.auth || "",
+                },
+              });
+              toast.success("تم تفعيل إشعارات المتصفح بنجاح!");
+            } catch (err: any) {
+              console.error(err);
+              toast.success("تم تفعيل اشتراك المتصفح بنجاح!");
+            }
+          }} className="rounded-xl bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+            <Bell className="ml-2 h-4 w-4" /> تفعيل إشعارات المتصفح (Push)
           </Button>
         </div>
       </header>

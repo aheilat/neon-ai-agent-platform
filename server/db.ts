@@ -17,6 +17,7 @@ import {
   teamInvites,
   teamMemberAssignments,
   workspaceNotifications,
+  pushSubscriptions,
   tenants,
   users,
   User,
@@ -274,6 +275,21 @@ export async function markAllNotificationsRead(tenantId: number) {
   const db = await getDb();
   if (!db) return;
   await db.update(workspaceNotifications).set({ isRead: 1 }).where(eq(workspaceNotifications.tenantId, tenantId));
+}
+
+export async function savePushSubscription(input: { tenantId: number; endpoint: string; p256dh: string; auth: string }) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(pushSubscriptions).where(and(eq(pushSubscriptions.tenantId, input.tenantId), eq(pushSubscriptions.endpoint, input.endpoint))).limit(1);
+  if (existing.length === 0) {
+    await db.insert(pushSubscriptions).values(input);
+  }
+}
+
+export async function getTenantPushSubscriptions(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.tenantId, tenantId));
 }
 
 export async function getConversationWithMessages(tenantId: number, conversationId: number) {

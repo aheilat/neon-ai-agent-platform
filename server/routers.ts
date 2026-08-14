@@ -23,6 +23,8 @@ import {
   createNotification,
   markNotificationRead,
   markAllNotificationsRead,
+  savePushSubscription,
+  getTenantPushSubscriptions,
   ensureDefaultAgent,
   getAgentAndTenant,
   getPublicAgent,
@@ -320,6 +322,22 @@ export const appRouter = router({
     markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
       const tenant = await workspaceForUser(ctx.user);
       await markAllNotificationsRead(tenant.id);
+      return { success: true };
+    }),
+    subscribe: protectedProcedure.input(z.object({
+      endpoint: z.string(),
+      keys: z.object({
+        p256dh: z.string(),
+        auth: z.string(),
+      }),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await savePushSubscription({
+        tenantId: tenant.id,
+        endpoint: input.endpoint,
+        p256dh: input.keys.p256dh,
+        auth: input.keys.auth,
+      });
       return { success: true };
     }),
   }),

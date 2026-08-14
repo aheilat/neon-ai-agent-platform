@@ -134,6 +134,19 @@ export const workspaceNotifications = mysqlTable("workspace_notifications", {
 export type WorkspaceNotification = typeof workspaceNotifications.$inferSelect;
 export type InsertWorkspaceNotification = typeof workspaceNotifications.$inferInsert;
 
+export const pushSubscriptions = mysqlTable("push_subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  memberId: int("memberId"),
+  endpoint: text("endpoint").notNull(),
+  p256dh: varchar("p256dh", { length: 255 }).notNull(),
+  auth: varchar("auth", { length: 255 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PushSubscriptionRecord = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscriptionRecord = typeof pushSubscriptions.$inferInsert;
+
 // Conversations
 export const conversations = mysqlTable("conversations", {
   id: int("id").autoincrement().primaryKey(),
