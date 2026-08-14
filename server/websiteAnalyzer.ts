@@ -28,18 +28,34 @@ export const websiteAnalysisSchema = z.object({
   services: z.array(z.object({
     name: z.string().min(1).max(255),
     description: z.string().min(1).max(1000),
-    sourceUrl: z.string().url().optional(),
+    sourceUrl: z.string().url(),
   })).max(20),
   faqs: z.array(z.object({
     question: z.string().min(1).max(500),
     answer: z.string().min(1).max(1500),
-    sourceUrl: z.string().url().optional(),
+    sourceUrl: z.string().url(),
   })).max(20),
   guardrails: z.array(z.string().min(1).max(500)).max(12),
 });
 
 export type WebsitePage = z.infer<typeof websitePageSchema>;
 export type WebsiteAnalysis = z.infer<typeof websiteAnalysisSchema>;
+
+function canonicalUrl(value: string) {
+  const parsed = new URL(value);
+  parsed.hash = "";
+  return parsed.toString().replace(/\/$/, "");
+}
+
+export function assertAnalysisSources(analysis: WebsiteAnalysis, pages: Array<Pick<WebsitePage, "url">>) {
+  const allowed = new Set(pages.map(page => canonicalUrl(page.url)));
+  for (const item of [...analysis.services, ...analysis.faqs]) {
+    if (!allowed.has(canonicalUrl(item.sourceUrl))) {
+      throw new Error("تضمن التحليل مصدراً غير موجود ضمن الصفحات التي تمت قراءتها.");
+    }
+  }
+  return analysis;
+}
 
 export type WebsiteSnapshot = {
   websiteUrl: string;
@@ -220,9 +236,9 @@ export async function analyzeWebsiteSnapshot(snapshot: WebsiteSnapshot): Promise
     messages: [
       {
         role: "system",
-        content: "أنت محلل مواقع أعمال لمنصة Neon. استخرج فقط ما تدعمه المصادر المرفقة، ولا تخترع أسعاراً أو خدمات أو وعوداً. أنشئ ملفاً أولياً لوكيل خدمة عملاء. إذا كانت المعلومات ناقصة استخدم صياغة عامة مثل غير محدد. لا تطلب أو تستنتج بيانات شخصية حساسة. اجعل persona مهنية ومناسبة للقطاع، وأضف في guardrails قيوداً تمنع الادعاءات غير المدعومة وتحول الحالات التي تحتاج موظفاً إلى الفريق البشري.",
+        content: "أنت محلل مواقع أعمال لمنصة Neon. استخرج فقط ما تدعمه المصادر المرفقة، ولا تخترع أسعاراً أو خدمات أو وعوداً. أنشئ ملفاً أولياً لوكيل خدمة عملاء. إذا كانت المعلومات ناقصة استخدم صياغة عامة مثل غير محدد. لا تطلب أو تستنتج بيانات شخصية حساسة. اجعل persona مهنية ومناسبة للقطاع، وأضف في guardrails قيوداً تمنع الادعاءات غير المدعومة وتحول الحالات التي تحتاج موظفاً إلى الفريق البشري. يجب أن يضع كل service وfaq قيمة sourceUrl مطابقة حرفياً لأحد SOURCE_URL المرفقة؛ لا تستخدم رابطاً خارجياً أو قيمة فارغة.",
       },
-      { role: "user", content: `حلّل صفحات الموقع التالية وأعد JSON مطابقاً للمخطط.\n\n${sourceText}` },
+      { role: "user", content: `حلّل صفحات الموقع التالية وأعد JSON مطابقاً للمخطط. اربط كل خدمة وسؤال شائع بصفحة المصدر الأصلية عبر sourceUrl.\n\n${sourceText}` },
     ],
     response_format: {
       type: "json_schema",
@@ -255,7 +271,7 @@ export async function analyzeWebsiteSnapshot(snapshot: WebsiteSnapshot): Promise
   const content = textFromLlmContent(response.choices?.[0]?.message?.content);
   if (!content) throw new Error("تعذر الحصول على تحليل منظم للموقع.");
   try {
-    return websiteAnalysisSchema.parse(JSON.parse(content));
+    return assertAnalysisSources(websiteAnalysisSchema.parse(JSON.parse(content)), snapshot.pages);
   } catch {
     throw new Error("تعذر قراءة نتيجة تحليل الموقع. أعد المحاولة أو راجع الرابط.");
   }

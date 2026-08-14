@@ -1,4 +1,4 @@
-import { and, desc, eq, count } from "drizzle-orm";
+import { and, desc, eq, count, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Agent,
@@ -165,6 +165,41 @@ export async function deleteKnowledgeItem(tenantId: number, itemId: number) {
   const db = await getDb();
   if (!db) return;
   await db.delete(knowledgeBase).where(and(eq(knowledgeBase.id, itemId), eq(knowledgeBase.tenantId, tenantId)));
+}
+
+export async function replaceWebsiteKnowledge(input: {
+  tenantId: number;
+  agentId: number;
+  items: Array<Pick<InsertKnowledgeBaseItem, "title" | "content" | "category" | "sourceUrl" | "sourceTitle">>;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const websiteCategories = ["Website service", "Website FAQ", "Website summary"];
+  await db.delete(knowledgeBase).where(and(
+    eq(knowledgeBase.tenantId, input.tenantId),
+    eq(knowledgeBase.agentId, input.agentId),
+    inArray(knowledgeBase.category, websiteCategories),
+  ));
+  const created = [];
+  for (const item of input.items) {
+    await db.insert(knowledgeBase).values({
+      tenantId: input.tenantId,
+      agentId: input.agentId,
+      title: item.title,
+      content: item.content,
+      category: item.category,
+      sourceUrl: item.sourceUrl,
+      sourceTitle: item.sourceTitle,
+      sourceFetchedAt: new Date(),
+    });
+    const row = await db.select().from(knowledgeBase).where(and(
+      eq(knowledgeBase.tenantId, input.tenantId),
+      eq(knowledgeBase.agentId, input.agentId),
+      eq(knowledgeBase.title, item.title),
+    )).orderBy(desc(knowledgeBase.id)).limit(1);
+    if (row[0]) created.push(row[0]);
+  }
+  return created;
 }
 
 export async function createLead(input: { tenantId: number; agentId: number; conversationId?: number; name: string; email?: string; phone?: string; notes?: string }) {

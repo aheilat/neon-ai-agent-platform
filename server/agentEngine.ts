@@ -68,5 +68,7 @@ export function toSafeAgentSettings(agent: Agent) {
     tone: agent.tone,
     language: agent.language,
     status: agent.status,
+    sourceWebsiteUrl: agent.sourceWebsiteUrl,
+    lastWebsiteSyncAt: agent.lastWebsiteSyncAt,
   };
 }

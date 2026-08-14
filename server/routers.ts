@@ -9,6 +9,7 @@ import {
   createAgentForTenant,
   createConversation,
   createKnowledgeItem,
+  replaceWebsiteKnowledge,
   deleteKnowledgeItem,
   createLead,
   getTeamMembers,
@@ -177,6 +178,7 @@ export const appRouter = router({
     }),
     analyzeWebsite: protectedProcedure.input(z.object({
       websiteUrl: z.string().url().max(2048),
+      consent: z.literal(true),
     })).mutation(async ({ input }) => {
       const result = await analyzeWebsite(input.websiteUrl);
       return {
@@ -346,6 +348,46 @@ export const appRouter = router({
     update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: agentInput.partial() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       return updateAgentInTenant(tenant.id, input.id, input.patch);
+    }),
+    syncFromWebsite: protectedProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      websiteUrl: z.string().url().max(2048),
+      consent: z.literal(true),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+
+      const result = await analyzeWebsite(input.websiteUrl);
+      const sourcePages = result.pages.map(page => ({ url: page.url, title: page.title }));
+      const analysis = result.analysis;
+      const sourceMap = new Map(sourcePages.map(page => [page.url.replace(/\/$/, ""), page]));
+      const defaultSource = sourcePages[0];
+      const knowledgeItems = [
+        ...analysis.services.map(service => {
+          const source = sourceMap.get(service.sourceUrl.replace(/\/$/, ""));
+          if (!source) throw new Error("تعذر التحقق من مصدر إحدى الخدمات المستخرجة.");
+          return { title: service.name, content: service.description, category: "Website service", sourceUrl: source.url, sourceTitle: source.title };
+        }),
+        ...analysis.faqs.map(faq => {
+          const source = sourceMap.get(faq.sourceUrl.replace(/\/$/, ""));
+          if (!source) throw new Error("تعذر التحقق من مصدر أحد الأسئلة المستخرجة.");
+          return { title: `FAQ: ${faq.question}`.slice(0, 255), content: faq.answer, category: "Website FAQ", sourceUrl: source.url, sourceTitle: source.title };
+        }),
+      ];
+      if (!knowledgeItems.length && defaultSource) knowledgeItems.push({ title: "ملخص النشاط من الموقع", content: analysis.businessSummary, category: "Website summary", sourceUrl: defaultSource.url, sourceTitle: defaultSource.title });
+
+      const updatedAgent = await updateAgentInTenant(tenant.id, agent.id, {
+        description: analysis.businessSummary,
+        persona: analysis.persona,
+        tone: analysis.tone,
+        language: analysis.language,
+        decisionRules: analysis.guardrails.join(" "),
+        sourceWebsiteUrl: result.websiteUrl,
+        lastWebsiteSyncAt: new Date(),
+      });
+      const knowledge = await replaceWebsiteKnowledge({ tenantId: tenant.id, agentId: agent.id, items: knowledgeItems });
+      return { agent: updatedAgent ? toSafeAgentSettings(updatedAgent) : undefined, analysis, pages: sourcePages, knowledgeCount: knowledge.length, syncedAt: new Date() };
     }),
   }),
 

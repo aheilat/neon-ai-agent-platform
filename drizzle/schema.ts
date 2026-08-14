@@ -40,6 +40,8 @@ export const agents = mysqlTable("agents", {
   decisionRules: longtext("decisionRules"),
   fallbackMessage: text("fallbackMessage"),
   escalationKeyword: varchar("escalationKeyword", { length: 100 }).default("موظف,human,agent").notNull(),
+  sourceWebsiteUrl: text("sourceWebsiteUrl"),
+  lastWebsiteSyncAt: timestamp("lastWebsiteSyncAt"),
   status: mysqlEnum("status", ["active", "paused", "draft"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

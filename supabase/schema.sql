@@ -29,6 +29,7 @@ create table if not exists agents (
   tone text not null default 'professional',
   language text not null default 'bilingual', -- 'ar', 'en', 'bilingual'
   source_website_url text,
+  last_website_sync_at timestamp with time zone,
   business_summary text,
   industry text,
   audience text,

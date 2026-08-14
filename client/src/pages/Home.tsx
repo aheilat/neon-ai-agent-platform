@@ -18,7 +18,7 @@ type Goal = {
   icon: typeof HelpCircle;
 };
 
-type WebsiteService = { name: string; description: string };
+type WebsiteService = { name: string; description: string; sourceUrl: string };
 type WebsiteGoal = "questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "symptoms" | "medications" | "insurance" | "emergency" | "human";
 type WebsiteChannel = "web" | "whatsapp" | "messenger" | "instagram" | "phone";
 type WebsiteAnalysis = {
@@ -32,7 +32,7 @@ type WebsiteAnalysis = {
   goals: WebsiteGoal[];
   suggestedChannels: WebsiteChannel[];
   services: WebsiteService[];
-  faqs: Array<{ question: string; answer: string }>;
+  faqs: Array<{ question: string; answer: string; sourceUrl: string }>;
   guardrails: string[];
 };
 type WebsiteDiscovery = {
@@ -113,7 +113,7 @@ function Onboarding() {
     }
     if (analyzeWebsite.isPending) return;
     try {
-      const result = await analyzeWebsite.mutateAsync({ websiteUrl: url });
+      const result = await analyzeWebsite.mutateAsync({ websiteUrl: url, consent: true });
       const discovery = result as WebsiteDiscovery;
       setWebsiteResult(discovery);
       setWebsiteServices(discovery.analysis.services);
