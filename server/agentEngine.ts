@@ -70,5 +70,7 @@ export function toSafeAgentSettings(agent: Agent) {
     status: agent.status,
     sourceWebsiteUrl: agent.sourceWebsiteUrl,
     lastWebsiteSyncAt: agent.lastWebsiteSyncAt,
+    syncIntervalHours: agent.syncIntervalHours,
+    syncCronTaskUid: agent.syncCronTaskUid,
   };
 }

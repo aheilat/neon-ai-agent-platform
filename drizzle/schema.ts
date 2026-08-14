@@ -42,6 +42,8 @@ export const agents = mysqlTable("agents", {
   escalationKeyword: varchar("escalationKeyword", { length: 100 }).default("موظف,human,agent").notNull(),
   sourceWebsiteUrl: text("sourceWebsiteUrl"),
   lastWebsiteSyncAt: timestamp("lastWebsiteSyncAt"),
+  syncCronTaskUid: varchar("syncCronTaskUid", { length: 65 }),
+  syncIntervalHours: int("syncIntervalHours").default(24).notNull(),
   status: mysqlEnum("status", ["active", "paused", "draft"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -213,3 +215,17 @@ export const channelIntegrations = mysqlTable("channel_integrations", {
 
 export type ChannelIntegration = typeof channelIntegrations.$inferSelect;
 export type InsertChannelIntegration = typeof channelIntegrations.$inferInsert;
+
+export const websiteSnapshots = mysqlTable("website_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  agentId: int("agentId").notNull(),
+  websiteUrl: text("websiteUrl").notNull(),
+  analysisJson: longtext("analysisJson").notNull(),
+  changesDetected: int("changesDetected").default(0).notNull(), // 0 no, 1 yes
+  changesSummary: text("changesSummary"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WebsiteSnapshotRecord = typeof websiteSnapshots.$inferSelect;
+export type InsertWebsiteSnapshotRecord = typeof websiteSnapshots.$inferInsert;

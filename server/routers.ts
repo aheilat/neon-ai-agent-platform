@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
+import { parse as parseCookie } from "cookie";
+import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
+import { getLastWebsiteSnapshot, createWebsiteSnapshot, getAgentBySyncTaskUid } from "./db";
+import { detectAnalysisChanges } from "./websiteAnalyzer";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -377,6 +381,37 @@ export const appRouter = router({
       ];
       if (!knowledgeItems.length && defaultSource) knowledgeItems.push({ title: "ملخص النشاط من الموقع", content: analysis.businessSummary, category: "Website summary", sourceUrl: defaultSource.url, sourceTitle: defaultSource.title });
 
+      const lastSnap = await getLastWebsiteSnapshot(tenant.id, agent.id);
+      let changesDetected = 0;
+      let changesSummary = "مزامنة أولية للموقع.";
+      if (lastSnap) {
+        try {
+          const prevAnalysis = JSON.parse(lastSnap.analysisJson);
+          const diff = detectAnalysisChanges(prevAnalysis, analysis);
+          changesDetected = diff.hasChanges ? 1 : 0;
+          changesSummary = diff.summary;
+        } catch {
+          // Ignore parse error on legacy snapshots
+        }
+      }
+      await createWebsiteSnapshot({
+        tenantId: tenant.id,
+        agentId: agent.id,
+        websiteUrl: result.websiteUrl,
+        analysisJson: JSON.stringify(analysis),
+        changesDetected,
+        changesSummary,
+      });
+
+      if (changesDetected) {
+        await createNotification({
+          tenantId: tenant.id,
+          title: `تحديث مرصود في موقع ${agent.name}`,
+          message: changesSummary,
+          type: "general",
+        });
+      }
+
       const updatedAgent = await updateAgentInTenant(tenant.id, agent.id, {
         description: analysis.businessSummary,
         persona: analysis.persona,
@@ -387,7 +422,59 @@ export const appRouter = router({
         lastWebsiteSyncAt: new Date(),
       });
       const knowledge = await replaceWebsiteKnowledge({ tenantId: tenant.id, agentId: agent.id, items: knowledgeItems });
-      return { agent: updatedAgent ? toSafeAgentSettings(updatedAgent) : undefined, analysis, pages: sourcePages, knowledgeCount: knowledge.length, syncedAt: new Date() };
+      return { agent: updatedAgent ? toSafeAgentSettings(updatedAgent) : undefined, analysis, pages: sourcePages, knowledgeCount: knowledge.length, changesDetected, changesSummary, syncedAt: new Date() };
+    }),
+    configureSyncSchedule: protectedProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      intervalHours: z.number().int().min(1).max(168),
+      enabled: z.boolean(),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      if (!agent.sourceWebsiteUrl) throw new Error("يجب مزامنة الموقع أولاً قبل تفعيل الجدولة.");
+
+      const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+      let taskUid = agent.syncCronTaskUid;
+
+      if (input.enabled) {
+        const cronExpr = input.intervalHours >= 168 ? "0 0 0 * * 0" : `0 0 */${input.intervalHours} * * *`;
+        if (taskUid) {
+          try {
+            await updateHeartbeatJob(taskUid, { cron: cronExpr, enable: true }, sessionToken);
+          } catch {
+            const job = await createHeartbeatJob({
+              name: `website-sync-${agent.id}`,
+              cron: cronExpr,
+              path: "/api/scheduled/websiteSync",
+              payload: { agentId: agent.id },
+              description: `Periodic website sync for agent ${agent.name}`,
+            }, sessionToken);
+            taskUid = job.taskUid;
+          }
+        } else {
+          const job = await createHeartbeatJob({
+            name: `website-sync-${agent.id}`,
+            cron: cronExpr,
+            path: "/api/scheduled/websiteSync",
+            payload: { agentId: agent.id },
+            description: `Periodic website sync for agent ${agent.name}`,
+          }, sessionToken);
+          taskUid = job.taskUid;
+        }
+      } else if (taskUid) {
+        try {
+          await updateHeartbeatJob(taskUid, { enable: false }, sessionToken);
+        } catch {
+          // Ignore if already deleted
+        }
+      }
+
+      const updated = await updateAgentInTenant(tenant.id, agent.id, {
+        syncIntervalHours: input.intervalHours,
+        syncCronTaskUid: taskUid,
+      });
+      return { success: true, agent: updated ? toSafeAgentSettings(updated) : undefined };
     }),
   }),
 

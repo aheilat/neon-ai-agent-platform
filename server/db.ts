@@ -21,6 +21,7 @@ import {
   notificationPreferences,
   tenants,
   users,
+  websiteSnapshots,
   User,
   InsertUser,
 } from "../drizzle/schema";
@@ -200,6 +201,41 @@ export async function replaceWebsiteKnowledge(input: {
     if (row[0]) created.push(row[0]);
   }
   return created;
+}
+
+export async function createWebsiteSnapshot(input: {
+  tenantId: number;
+  agentId: number;
+  websiteUrl: string;
+  analysisJson: string;
+  changesDetected: number;
+  changesSummary?: string;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(websiteSnapshots).values(input);
+  const row = await db.select().from(websiteSnapshots).where(and(
+    eq(websiteSnapshots.tenantId, input.tenantId),
+    eq(websiteSnapshots.agentId, input.agentId),
+  )).orderBy(desc(websiteSnapshots.id)).limit(1);
+  return row[0];
+}
+
+export async function getLastWebsiteSnapshot(tenantId: number, agentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const row = await db.select().from(websiteSnapshots).where(and(
+    eq(websiteSnapshots.tenantId, tenantId),
+    eq(websiteSnapshots.agentId, agentId),
+  )).orderBy(desc(websiteSnapshots.id)).limit(1);
+  return row[0];
+}
+
+export async function getAgentBySyncTaskUid(taskUid: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const row = await db.select().from(agents).where(eq(agents.syncCronTaskUid, taskUid)).limit(1);
+  return row[0];
 }
 
 export async function createLead(input: { tenantId: number; agentId: number; conversationId?: number; name: string; email?: string; phone?: string; notes?: string }) {

@@ -57,6 +57,21 @@ export function assertAnalysisSources(analysis: WebsiteAnalysis, pages: Array<Pi
   return analysis;
 }
 
+export function detectAnalysisChanges(previous: WebsiteAnalysis, current: WebsiteAnalysis) {
+  const oldServices = new Set(previous.services.map(s => `${s.name}|${s.description}`));
+  const newServices = current.services.filter(s => !oldServices.has(`${s.name}|${s.description}`));
+  const oldFaqs = new Set(previous.faqs.map(f => `${f.question}|${f.answer}`));
+  const newFaqs = current.faqs.filter(f => !oldFaqs.has(`${f.question}|${f.answer}`));
+  const changes: string[] = [];
+  if (previous.businessSummary !== current.businessSummary) changes.push("تغيّر ملخص النشاط أو الوصف الرئيسي.");
+  if (newServices.length) changes.push(`تمت إضافة أو تعديل ${newServices.length} خدمات.`);
+  if (newFaqs.length) changes.push(`تمت إضافة أو تعديل ${newFaqs.length} أسئلة شائعة.`);
+  return {
+    hasChanges: changes.length > 0 || previous.businessSummary !== current.businessSummary,
+    summary: changes.join(" ") || "تم رصد تحديث طفيف في محتوى الموقع.",
+  };
+}
+
 export type WebsiteSnapshot = {
   websiteUrl: string;
   pages: WebsitePage[];
