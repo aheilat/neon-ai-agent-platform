@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { ArrowLeft, ArrowRight, Bot, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -43,12 +43,15 @@ const onboardingSteps = ["ابدأ", "الأهداف", "الشخصية", "الق
 function Onboarding() {
   const [, setLocation] = useLocation();
   const onboardAgent = trpc.agents.onboard.useMutation();
-  const [step, setStep] = useState(0);
+  const previewChat = trpc.agents.previewChat.useMutation();
+  const [step, setStep] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("onboarding") === "preview" ? 2 : 0);
   const [selectedGoals, setSelectedGoals] = useState<string[]>(["questions", "human"]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["web"]);
   const [language, setLanguage] = useState<"ar" | "en" | "bilingual">("bilingual");
   const [tone, setTone] = useState("friendly");
   const [isCreating, setIsCreating] = useState(false);
+  const [previewInput, setPreviewInput] = useState("وش تقدر تساعدني فيه؟");
+  const [previewMessages, setPreviewMessages] = useState<Array<{ role: "agent" | "user"; content: string }>>([]);
 
   const selectedGoalObjects = useMemo(() => goals.filter(goal => selectedGoals.includes(goal.id)), [selectedGoals]);
 
@@ -67,6 +70,26 @@ function Onboarding() {
     }
     setStep(current => Math.min(current + 1, onboardingSteps.length - 1));
   };
+
+  const sendPreview = async () => {
+    const message = previewInput.trim();
+    if (!message || previewChat.isPending) return;
+    setPreviewInput("");
+    setPreviewMessages(current => [...current, { role: "user", content: message }]);
+    try {
+      const result = await previewChat.mutateAsync({
+        language,
+        tone,
+        goals: selectedGoals as Array<"questions" | "issues" | "recommend" | "buy" | "leads" | "appointments" | "orders" | "route" | "human">,
+        message,
+      });
+      setPreviewMessages(current => [...current, { role: "agent", content: result.reply }]);
+    } catch {
+      setPreviewMessages(current => [...current, { role: "agent", content: "أقدر أساعدك أكثر بعد ما نكمل إعداد الوكيل. جرّب سؤالاً آخر." }]);
+    }
+  };
+
+  const previewGreeting = language === "en" ? "Hi! I’m your Neon agent. How can I help?" : language === "ar" ? "هلا! أنا موظفك الذكي. كيف أقدر أساعدك؟" : "هلا! أنا موظفك الذكي. أقدر أساعدك بالعربي أو English.";
 
   const createFirstAgent = async () => {
     setIsCreating(true);
@@ -151,6 +174,15 @@ function Onboarding() {
               <div className="mt-8 space-y-7 rounded-[28px] bg-white p-5 shadow-xl shadow-slate-200/60 sm:p-8">
                 <div><p className="mb-3 text-sm font-bold text-slate-900">اللغة / Language</p><div className="grid gap-3 sm:grid-cols-3">{[{ id: "ar", label: "العربية", sub: "Arabic" }, { id: "bilingual", label: "عربي + English", sub: "Bilingual" }, { id: "en", label: "English", sub: "English" }].map(item => <button key={item.id} onClick={() => setLanguage(item.id as any)} className={`rounded-2xl border-2 p-4 text-right transition ${language === item.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200"}`}><span className="block text-sm font-bold text-slate-900">{item.label}</span><span className="mt-1 block text-xs text-slate-400" dir="ltr">{item.sub}</span></button>)}</div></div>
                 <div><p className="mb-3 text-sm font-bold text-slate-900">النبرة / Tone</p><div className="grid gap-3 sm:grid-cols-3">{[{ id: "friendly", label: "ودود", sub: "Friendly" }, { id: "professional", label: "احترافي", sub: "Professional" }, { id: "direct", label: "مباشر", sub: "Direct" }].map(item => <button key={item.id} onClick={() => setTone(item.id)} className={`rounded-2xl border-2 p-4 text-right transition ${tone === item.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-indigo-200"}`}><span className="block text-sm font-bold text-slate-900">{item.label}</span><span className="mt-1 block text-xs text-slate-400" dir="ltr">{item.sub}</span></button>)}</div></div>
+              </div>
+              <div className="mt-5 overflow-hidden rounded-[28px] border border-indigo-100 bg-white shadow-xl shadow-indigo-100/60">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-l from-indigo-50 to-white px-5 py-4"><div><p className="text-sm font-black text-slate-900">جرّب وكيلك الآن</p><p className="mt-1 text-xs text-slate-500">Live preview · يتحدث حسب إعداداتك الحالية</p></div><span className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" /> جاهز للتجربة</span></div>
+                <div className="max-h-64 space-y-3 overflow-y-auto bg-slate-50/80 p-4" aria-live="polite">
+                  <div className="flex items-end gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><Bot className="h-4 w-4" /></span><div className="max-w-[85%] rounded-2xl rounded-br-md bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm">{previewGreeting}</div></div>
+                  {previewMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex items-end gap-2 ${message.role === "user" ? "flex-row-reverse" : ""}`}>{message.role === "agent" && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><Bot className="h-4 w-4" /></span>}<div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "rounded-bl-md bg-indigo-600 text-white" : "rounded-br-md bg-white text-slate-700 shadow-sm"}`}>{message.content}</div></div>)}
+                </div>
+                <form onSubmit={event => { event.preventDefault(); void sendPreview(); }} className="flex gap-2 border-t border-slate-100 p-3"><input value={previewInput} onChange={event => setPreviewInput(event.target.value)} placeholder="اكتب سؤالاً للمعاينة..." className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" aria-label="رسالة المعاينة" /><Button type="submit" disabled={previewChat.isPending || !previewInput.trim()} className="h-12 w-12 shrink-0 rounded-2xl bg-indigo-600 p-0 text-white hover:bg-indigo-700" aria-label="إرسال رسالة المعاينة">{previewChat.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button></form>
+                <p className="px-4 pb-4 text-center text-[11px] text-slate-400">المعاينة لا تنشئ محادثة ولا تحفظ بيانات حتى تضغط «أنشئ وكيلي».</p>
               </div>
             </section>
           )}

@@ -150,6 +150,47 @@ export const appRouter = router({
       }
       return { agent: toSafeAgentSettings(agent), knowledgeCount: selectedKnowledge.length, channelCount: input.channels.length };
     }),
+    previewChat: protectedProcedure.input(z.object({
+      language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
+      tone: z.string().max(50).default("friendly"),
+      goals: z.array(onboardingGoal).min(1).max(9),
+      message: z.string().min(1).max(1000),
+    })).mutation(async ({ input }) => {
+      const selectedKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const tempAgent = {
+        name: "موظف Neon الذكي",
+        persona: `أنت مساعد خدمة عملاء ودود وعملي. الأهداف: ${selectedKnowledge.map(item => item.title).join("، ")}.`,
+        tone: input.tone,
+        language: input.language,
+        decisionRules: "أجب بثقة واقترح الخطوة التالية.",
+        fallbackMessage: "أقدر أساعدك أكثر بتفاصيل إضافية أو بتحويلك لأحد الزملاء.",
+        escalationKeyword: "موظف,إنسان,شكوى,human,agent",
+      };
+      const formattedKnowledge = selectedKnowledge.map((item, i) => ({ id: i + 1, title: item.title, content: item.content, category: "Onboarding", tenantId: 0, agentId: 0, createdAt: new Date(), updatedAt: new Date() }));
+      const prompt = buildAgentPrompt(tempAgent as any, formattedKnowledge, input.message);
+      const isEscalated = containsEscalationKeyword(input.message, tempAgent.escalationKeyword);
+      if (isEscalated) {
+        return {
+          reply: input.language === "ar" ? "أهلاً بك! تم تحويل طلبك لأحد أعضاء الفريق المختصين للمتابعة الفورية." : "Hello! Your request has been handed over to our support team for immediate follow-up.",
+          escalated: true,
+        };
+      }
+      try {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "أنت مساعد ذكي لخدمة العملاء. أجب بلغة طبيعية ومختصرة تتناسب مع طلب العميل." },
+            { role: "user", content: prompt },
+          ],
+        });
+        const reply = normalizeLlmContent(response.choices[0]?.message?.content) || "أهلاً بك! كيف أقدر أساعدك اليوم؟";
+        return { reply, escalated: false };
+      } catch (err) {
+        return {
+          reply: input.language === "ar" ? "أهلاً بك! استلمت استفسارك، وأنا جاهز لمساعدتك بالخطوة التالية." : "Hello! I received your inquiry and I am ready to help you with the next step.",
+          escalated: false,
+        };
+      }
+    }),
     update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: agentInput.partial() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       return updateAgentInTenant(tenant.id, input.id, input.patch);
