@@ -19,6 +19,10 @@ import {
   createTeamInvite,
   getTeamAssignments,
   setTeamAssignment,
+  getTenantNotifications,
+  createNotification,
+  markNotificationRead,
+  markAllNotificationsRead,
   ensureDefaultAgent,
   getAgentAndTenant,
   getPublicAgent,
@@ -248,6 +252,12 @@ export const appRouter = router({
         const reply = fallbackReply(agent);
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         await markConversationStatus(agent.tenantId, conversationId, "escalated");
+        await createNotification({
+          tenantId: agent.tenantId,
+          title: `تصعيد محادثة جديدة (${agent.name})`,
+          message: `طلب العميل التحدث لموظف في المحادثة #${conversationId}. يرجى المراجعة والتدخل.`,
+          type: "escalation",
+        });
         return { ...reply, conversationId };
       }
       try {
@@ -293,6 +303,23 @@ export const appRouter = router({
     setAssignment: protectedProcedure.input(z.object({ memberId: z.number().int().positive(), targetType: z.enum(["agent", "channel"]), targetId: z.string(), assign: z.boolean() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       await setTeamAssignment({ tenantId: tenant.id, memberId: input.memberId, targetType: input.targetType, targetId: input.targetId, assign: input.assign });
+      return { success: true };
+    }),
+  }),
+
+  notifications: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      return getTenantNotifications(tenant.id);
+    }),
+    markRead: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await markNotificationRead(tenant.id, input.id);
+      return { success: true };
+    }),
+    markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await markAllNotificationsRead(tenant.id);
       return { success: true };
     }),
   }),

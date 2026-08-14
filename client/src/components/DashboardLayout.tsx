@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Bot, BrainCircuit, ChartNoAxesCombined, LayoutDashboard, LogOut, MessageSquareText, PanelLeft, Radio, Settings2, Users } from "lucide-react";
+import { Bell, Bot, BrainCircuit, ChartNoAxesCombined, LayoutDashboard, LogOut, MessageSquareText, PanelLeft, Radio, Settings2, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -35,6 +35,7 @@ const menuItems = [
   { icon: Radio, label: "القنوات / Channels", path: "/channels" },
   { icon: ChartNoAxesCombined, label: "التحليلات / Analytics", path: "/analytics" },
   { icon: Users, label: "الفريق / Team", path: "/team" },
+  { icon: Bell, label: "الإشعارات / Alerts", path: "/notifications" },
   { icon: Settings2, label: "الإعدادات / Settings", path: "/settings" },
 ];
 

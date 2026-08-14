@@ -11,6 +11,7 @@ import Channels from "./pages/Channels";
 import Conversations from "./pages/Conversations";
 import Home from "./pages/Home";
 import Team from "./pages/Team";
+import Notifications from "./pages/Notifications";
 import Knowledge from "./pages/Knowledge";
 import Settings from "./pages/Settings";
 import Widget from "./pages/Widget";
@@ -29,6 +30,7 @@ function AppRoutes() {
             <Route path={"/channels"} component={Channels} />
             <Route path={"/analytics"} component={Analytics} />
             <Route path={"/team"} component={Team} />
+            <Route path={"/notifications"} component={Notifications} />
             <Route path={"/settings"} component={Settings} />
             <Route component={NotFound} />
           </Switch>

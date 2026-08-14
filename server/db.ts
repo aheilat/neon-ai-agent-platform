@@ -16,6 +16,7 @@ import {
   teamMembers,
   teamInvites,
   teamMemberAssignments,
+  workspaceNotifications,
   tenants,
   users,
   User,
@@ -242,6 +243,37 @@ export async function setTeamAssignment(input: { tenantId: number; memberId: num
   } else {
     await db.delete(teamMemberAssignments).where(and(eq(teamMemberAssignments.tenantId, input.tenantId), eq(teamMemberAssignments.memberId, input.memberId), eq(teamMemberAssignments.targetType, input.targetType), eq(teamMemberAssignments.targetId, input.targetId)));
   }
+}
+
+export async function getTenantNotifications(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(workspaceNotifications).where(eq(workspaceNotifications.tenantId, tenantId)).orderBy(desc(workspaceNotifications.createdAt)).limit(50);
+}
+
+export async function createNotification(input: { tenantId: number; memberId?: number; title: string; message: string; type?: "escalation" | "assignment" | "lead" | "general" }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(workspaceNotifications).values({
+    tenantId: input.tenantId,
+    memberId: input.memberId ?? null,
+    title: input.title,
+    message: input.message,
+    type: input.type || "escalation",
+    isRead: 0,
+  });
+}
+
+export async function markNotificationRead(tenantId: number, notificationId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(workspaceNotifications).set({ isRead: 1 }).where(and(eq(workspaceNotifications.id, notificationId), eq(workspaceNotifications.tenantId, tenantId)));
+}
+
+export async function markAllNotificationsRead(tenantId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(workspaceNotifications).set({ isRead: 1 }).where(eq(workspaceNotifications.tenantId, tenantId));
 }
 
 export async function getConversationWithMessages(tenantId: number, conversationId: number) {

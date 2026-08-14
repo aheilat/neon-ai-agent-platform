@@ -120,6 +120,20 @@ export const teamMemberAssignments = mysqlTable("team_member_assignments", {
 export type TeamMemberAssignment = typeof teamMemberAssignments.$inferSelect;
 export type InsertTeamMemberAssignment = typeof teamMemberAssignments.$inferInsert;
 
+export const workspaceNotifications = mysqlTable("workspace_notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  memberId: int("memberId"), // optional target team member
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  type: mysqlEnum("type", ["escalation", "assignment", "lead", "general"]).default("escalation").notNull(),
+  isRead: int("isRead").default(0).notNull(), // 0 unread, 1 read
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WorkspaceNotification = typeof workspaceNotifications.$inferSelect;
+export type InsertWorkspaceNotification = typeof workspaceNotifications.$inferInsert;
+
 // Conversations
 export const conversations = mysqlTable("conversations", {
   id: int("id").autoincrement().primaryKey(),
