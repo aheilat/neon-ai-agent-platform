@@ -231,6 +231,25 @@ export async function getLastWebsiteSnapshot(tenantId: number, agentId: number) 
   return row[0];
 }
 
+export async function getWebsiteSnapshotsHistory(tenantId: number, agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(websiteSnapshots).where(and(
+    eq(websiteSnapshots.tenantId, tenantId),
+    eq(websiteSnapshots.agentId, agentId),
+  )).orderBy(desc(websiteSnapshots.createdAt)).limit(20);
+}
+
+export async function getSnapshotById(tenantId: number, snapshotId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const row = await db.select().from(websiteSnapshots).where(and(
+    eq(websiteSnapshots.id, snapshotId),
+    eq(websiteSnapshots.tenantId, tenantId),
+  )).limit(1);
+  return row[0];
+}
+
 export async function getAgentBySyncTaskUid(taskUid: string) {
   const db = await getDb();
   if (!db) return undefined;

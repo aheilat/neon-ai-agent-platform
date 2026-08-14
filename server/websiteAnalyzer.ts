@@ -72,6 +72,42 @@ export function detectAnalysisChanges(previous: WebsiteAnalysis, current: Websit
   };
 }
 
+export type AnalysisChangeEntry = {
+  type: "added" | "removed" | "modified";
+  category: "service" | "faq" | "summary" | "persona";
+  label: string;
+  before?: string;
+  after?: string;
+};
+
+export function compareWebsiteAnalyses(previous: WebsiteAnalysis | null, current: WebsiteAnalysis): AnalysisChangeEntry[] {
+  if (!previous) return [{ type: "added", category: "summary", label: "تم إنشاء أول لقطة تحليل للموقع." }];
+  const changes: AnalysisChangeEntry[] = [];
+  const oldServices = new Map(previous.services.map(service => [service.name.trim().toLowerCase(), service]));
+  const currentServices = new Map(current.services.map(service => [service.name.trim().toLowerCase(), service]));
+  for (const [key, service] of Array.from(currentServices.entries())) {
+    const old = oldServices.get(key);
+    if (!old) changes.push({ type: "added", category: "service", label: service.name, after: service.description });
+    else if (old.description !== service.description) changes.push({ type: "modified", category: "service", label: service.name, before: old.description, after: service.description });
+  }
+  for (const [key, service] of Array.from(oldServices.entries())) {
+    if (!currentServices.has(key)) changes.push({ type: "removed", category: "service", label: service.name, before: service.description });
+  }
+  const oldFaqs = new Map(previous.faqs.map(faq => [faq.question.trim().toLowerCase(), faq]));
+  const currentFaqs = new Map(current.faqs.map(faq => [faq.question.trim().toLowerCase(), faq]));
+  for (const [key, faq] of Array.from(currentFaqs.entries())) {
+    const old = oldFaqs.get(key);
+    if (!old) changes.push({ type: "added", category: "faq", label: faq.question, after: faq.answer });
+    else if (old.answer !== faq.answer) changes.push({ type: "modified", category: "faq", label: faq.question, before: old.answer, after: faq.answer });
+  }
+  for (const [key, faq] of Array.from(oldFaqs.entries())) {
+    if (!currentFaqs.has(key)) changes.push({ type: "removed", category: "faq", label: faq.question, before: faq.answer });
+  }
+  if (previous.businessSummary !== current.businessSummary) changes.push({ type: "modified", category: "summary", label: "ملخص النشاط", before: previous.businessSummary, after: current.businessSummary });
+  if (previous.persona !== current.persona) changes.push({ type: "modified", category: "persona", label: "شخصية الوكيل", before: previous.persona, after: current.persona });
+  return changes;
+}
+
 export type WebsiteSnapshot = {
   websiteUrl: string;
   pages: WebsitePage[];

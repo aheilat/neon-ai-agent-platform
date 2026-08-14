@@ -2,8 +2,8 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
-import { getLastWebsiteSnapshot, createWebsiteSnapshot, getAgentBySyncTaskUid } from "./db";
-import { detectAnalysisChanges } from "./websiteAnalyzer";
+import { getLastWebsiteSnapshot, createWebsiteSnapshot, getAgentBySyncTaskUid, getWebsiteSnapshotsHistory, getSnapshotById } from "./db";
+import { detectAnalysisChanges, compareWebsiteAnalyses } from "./websiteAnalyzer";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -475,6 +475,55 @@ export const appRouter = router({
         syncCronTaskUid: taskUid,
       });
       return { success: true, agent: updated ? toSafeAgentSettings(updated) : undefined };
+    }),
+    timeline: protectedProcedure.input(z.object({ agentId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      const snapshots = await getWebsiteSnapshotsHistory(tenant.id, input.agentId);
+      return snapshots.map((snapshot, index) => {
+        let analysis: any = null;
+        try { analysis = JSON.parse(snapshot.analysisJson); } catch { /* legacy snapshot */ }
+        return {
+          id: snapshot.id,
+          websiteUrl: snapshot.websiteUrl,
+          createdAt: snapshot.createdAt,
+          changesDetected: Boolean(snapshot.changesDetected),
+          changesSummary: snapshot.changesSummary,
+          serviceCount: analysis?.services?.length ?? 0,
+          faqCount: analysis?.faqs?.length ?? 0,
+          businessName: analysis?.businessName ?? agent.name,
+          isLatest: index === 0,
+        };
+      });
+    }),
+    compareSnapshots: protectedProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      fromSnapshotId: z.number().int().positive(),
+      toSnapshotId: z.number().int().positive(),
+    })).query(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      const [fromSnapshot, toSnapshot] = await Promise.all([
+        getSnapshotById(tenant.id, input.fromSnapshotId),
+        getSnapshotById(tenant.id, input.toSnapshotId),
+      ]);
+      if (!fromSnapshot || !toSnapshot || fromSnapshot.agentId !== input.agentId || toSnapshot.agentId !== input.agentId) {
+        throw new Error("Snapshot not found in workspace");
+      }
+      let fromAnalysis: any = null;
+      let toAnalysis: any = null;
+      try { fromAnalysis = JSON.parse(fromSnapshot.analysisJson); } catch { /* legacy snapshot */ }
+      try { toAnalysis = JSON.parse(toSnapshot.analysisJson); } catch { /* legacy snapshot */ }
+      if (!toAnalysis) throw new Error("لا يمكن مقارنة لقطة غير صالحة.");
+      const changes = compareWebsiteAnalyses(fromAnalysis, toAnalysis);
+      return {
+        from: { id: fromSnapshot.id, createdAt: fromSnapshot.createdAt, websiteUrl: fromSnapshot.websiteUrl },
+        to: { id: toSnapshot.id, createdAt: toSnapshot.createdAt, websiteUrl: toSnapshot.websiteUrl },
+        changes,
+        summary: changes.length ? `تم رصد ${changes.length} تغييرات بين اللقطتين.` : "لا توجد تغييرات بين اللقطتين.",
+      };
     }),
   }),
 
