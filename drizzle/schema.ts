@@ -158,6 +158,7 @@ export const notificationPreferences = mysqlTable("notification_preferences", {
   assignmentPush: int("assignmentPush").default(1).notNull(),
   leadPush: int("leadPush").default(1).notNull(),
   generalPush: int("generalPush").default(1).notNull(),
+  soundAlerts: int("soundAlerts").default(1).notNull(), // 1 on, 0 off
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

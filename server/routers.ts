@@ -369,6 +369,7 @@ export const appRouter = router({
       assignmentPush: z.boolean(),
       leadPush: z.boolean(),
       generalPush: z.boolean(),
+      soundAlerts: z.boolean().optional(),
     })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       await updateUserNotificationPreferences({
@@ -378,6 +379,7 @@ export const appRouter = router({
         assignmentPush: input.assignmentPush ? 1 : 0,
         leadPush: input.leadPush ? 1 : 0,
         generalPush: input.generalPush ? 1 : 0,
+        soundAlerts: input.soundAlerts !== undefined ? (input.soundAlerts ? 1 : 0) : 1,
       });
       return { success: true };
     }),

@@ -13,6 +13,7 @@ export default function NotificationSettings() {
   const [assignmentPush, setAssignmentPush] = useState(true);
   const [leadPush, setLeadPush] = useState(true);
   const [generalPush, setGeneralPush] = useState(true);
+  const [soundAlerts, setSoundAlerts] = useState(true);
 
   useEffect(() => {
     if (prefs) {
@@ -20,8 +21,29 @@ export default function NotificationSettings() {
       setAssignmentPush(prefs.assignmentPush === 1);
       setLeadPush(prefs.leadPush === 1);
       setGeneralPush(prefs.generalPush === 1);
+      setSoundAlerts(prefs.soundAlerts === 1);
     }
   }, [prefs]);
+
+  const playTestSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+      toast.success("تم تشغيل نغمة التنبيه التجريبية بنجاح");
+    } catch (e) {
+      toast.error("تعذر تشغيل الصوت في متصفحك");
+    }
+  };
 
   const updateMutation = trpc.notifications.updatePreferences.useMutation({
     onSuccess: async () => {
@@ -38,6 +60,7 @@ export default function NotificationSettings() {
       assignmentPush,
       leadPush,
       generalPush,
+      soundAlerts,
     });
   };
 
@@ -99,6 +122,19 @@ export default function NotificationSettings() {
                   </div>
                   <input type="checkbox" checked={generalPush} onChange={e => setGeneralPush(e.target.checked)} className="h-5 w-5 rounded border-white/20 bg-transparent text-cyan-400 focus:ring-0" />
                 </label>
+
+                <div className="flex items-center justify-between rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4">
+                  <div className="space-y-1">
+                    <span className="text-sm font-semibold text-white">التنبيه الصوتي المخصص عند التصعيد (Sound Alerts)</span>
+                    <p className="text-xs text-slate-400">تشغيل نغمة Neon فورية عند تحويل محادثة جديدة إليك أثناء تواجدك ونشاطك.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="outline" size="sm" onClick={playTestSound} className="h-8 border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20">
+                      معاينة الصوت
+                    </Button>
+                    <input type="checkbox" checked={soundAlerts} onChange={e => setSoundAlerts(e.target.checked)} className="h-5 w-5 rounded border-white/20 bg-transparent text-cyan-400 focus:ring-0 cursor-pointer" />
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-white/10">

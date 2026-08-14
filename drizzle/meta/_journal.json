@@ -71,6 +71,13 @@
       "when": 1786709640050,
       "tag": "0009_cynical_shen",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1786709811570,
+      "tag": "0010_medical_mole_man",
+      "breakpoints": true
     }
   ]
 }
