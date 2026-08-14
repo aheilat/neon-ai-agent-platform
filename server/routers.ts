@@ -59,6 +59,20 @@ const agentInput = z.object({
   status: z.enum(["active", "paused", "draft"]).default("active"),
 });
 
+const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "human"]);
+const onboardingChannel = z.enum(["web", "whatsapp", "messenger", "instagram", "phone"]);
+const onboardingKnowledge: Record<z.infer<typeof onboardingGoal>, { title: string; content: string }> = {
+  questions: { title: "إرشادات الرد على الأسئلة", content: "أجب باختصار ووضوح، واذكر المعلومات المتوفرة في قاعدة المعرفة فقط. إذا لم تتأكد من الإجابة، اطلب تفاصيل إضافية أو حوّل العميل لموظف." },
+  issues: { title: "إرشادات حل المشاكل والشكاوى", content: "استمع للعميل، لخّص المشكلة، اقترح خطوة عملية، وابقَ هادئاً وودوداً. صعّد الحالات الحساسة أو غير المحلولة للفريق البشري." },
+  recommend: { title: "إرشادات اقتراح المنتجات", content: "اسأل عن احتياج العميل وميزانيته وتفضيلاته قبل الاقتراح. اعرض خيارين أو ثلاثة مع سبب واضح لكل خيار." },
+  buy: { title: "إرشادات مساعدة العميل على الشراء", content: "وجّه العميل إلى الخطوة التالية في الشراء، وتحقق من المنتج والكمية وبيانات التواصل قبل تحويله للدفع أو للفريق." },
+  leads: { title: "إرشادات جمع العملاء المحتملين", content: "اطلب الاسم ووسيلة التواصل بإذن العميل، ثم صنّف اهتمامه ودوّن احتياجه الرئيسي دون طلب بيانات حساسة." },
+  appointments: { title: "إرشادات حجز المواعيد", content: "اجمع اليوم والوقت المناسب ونوع الخدمة وبيانات التواصل، ثم أكد التفاصيل قبل إرسال الحجز للفريق." },
+  orders: { title: "إرشادات تتبع الطلبات", content: "اطلب رقم الطلب أو وسيلة التحقق المناسبة، ثم اعرض الحالة المتاحة ووقت التحديث، وحوّل الاستفسار للفريق عند الحاجة." },
+  route: { title: "إرشادات توجيه العميل", content: "حدّد نوع طلب العميل والقسم المناسب، ثم وجّهه بوضوح مع إبقاء خيار التواصل مع موظف متاح." },
+  human: { title: "إرشادات التحويل لموظف", content: "عند طلب العميل موظفاً أو وجود شكوى حساسة، اجمع ملخصاً قصيراً وأرسل المحادثة إلى عضو الفريق المتاح." },
+};
+
 async function workspaceForUser(user: NonNullable<Parameters<typeof getOrCreateTenant>[0]>) {
   const tenant = await getOrCreateTenant(user);
   if (!tenant) throw new Error("Workspace is not available yet");
@@ -105,6 +119,36 @@ export const appRouter = router({
     create: protectedProcedure.input(agentInput).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       return createAgentForTenant({ tenantId: tenant.id, ...input });
+    }),
+    onboard: protectedProcedure.input(z.object({
+      language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
+      tone: z.string().max(50).default("friendly"),
+      goals: z.array(onboardingGoal).min(1).max(9),
+      channels: z.array(onboardingChannel).min(1).max(5),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const selectedKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
+      const agent = await createAgentForTenant({
+        tenantId: tenant.id,
+        name: "موظف Neon الذكي",
+        description: "وكيل خدمة عملاء مبني من إعداد البداية السريع",
+        persona: `أنت موظف خدمة عملاء ودود وعملي. تساعد العميل في: ${selectedKnowledge.map(item => item.title).join("، ")}. اسأل أسئلة قصيرة، قدم خطوة عملية، وحوّل المحادثة لموظف بشري عند الحاجة.`,
+        tone: input.tone,
+        language: input.language,
+        decisionRules: input.goals.includes("human") ? "إذا طلب العميل موظفاً أو ظهرت شكوى حساسة، صعّد المحادثة للفريق البشري." : "قدّم إجابة مباشرة، ثم اقترح الخطوة التالية المناسبة.",
+        fallbackMessage: "خلني أتأكد من أحد أعضاء الفريق وأرجع لك بأقرب وقت.",
+        escalationKeyword: "موظف، إنسان، شكوى، عاجل",
+        status: "active",
+      });
+      if (!agent) throw new Error("Agent could not be created");
+
+      for (const item of selectedKnowledge) {
+        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: "Onboarding" });
+      }
+      for (const channel of input.channels) {
+        await upsertChannelIntegration({ tenantId: tenant.id, agentId: agent.id, channel, isActive: channel === "web" ? 1 : 0, configJson: { setupStatus: channel === "web" ? "ready" : "needs_credentials", source: "onboarding" } });
+      }
+      return { agent: toSafeAgentSettings(agent), knowledgeCount: selectedKnowledge.length, channelCount: input.channels.length };
     }),
     update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: agentInput.partial() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);

@@ -21,10 +21,10 @@ function AppRoutes() {
   return (
     <Switch>
       <Route path="/widget/:agentId" component={Widget} />
+      <Route path="/" component={Home} />
       <Route path="*">
         <DashboardLayout>
           <Switch>
-            <Route path={"/"} component={Home} />
             <Route path={"/agents"} component={Agents} />
             <Route path={"/knowledge"} component={Knowledge} />
             <Route path={"/conversations"} component={Conversations} />
