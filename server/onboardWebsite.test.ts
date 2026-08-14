@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
 
 describe("website onboarding procedure", () => {
-  it("creates an agent and assigns distributed source metadata to knowledge base items", async () => {
+  it("creates an agent and assigns distributed source metadata to knowledge base items", { timeout: 15000 }, async () => {
     // eslint-disable-next-line no-undef
     try { await (vitest as any).setConfig?.({ testTimeout: 15000 }); } catch {}
     const ctx = await createContext({

@@ -28,10 +28,12 @@ export const websiteAnalysisSchema = z.object({
   services: z.array(z.object({
     name: z.string().min(1).max(255),
     description: z.string().min(1).max(1000),
+    sourceUrl: z.string().url().optional(),
   })).max(20),
   faqs: z.array(z.object({
     question: z.string().min(1).max(500),
     answer: z.string().min(1).max(1500),
+    sourceUrl: z.string().url().optional(),
   })).max(20),
   guardrails: z.array(z.string().min(1).max(500)).max(12),
 });
@@ -227,25 +229,25 @@ export async function analyzeWebsiteSnapshot(snapshot: WebsiteSnapshot): Promise
       json_schema: {
         name: "website_agent_profile",
         strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            businessName: { type: "string" },
-            businessSummary: { type: "string" },
-            industry: { type: "string" },
-            audience: { type: "string" },
-            language: { type: "string", enum: ["ar", "en", "bilingual"] },
-            tone: { type: "string" },
-            persona: { type: "string" },
-            goals: { type: "array", items: { type: "string", enum: onboardingGoals } },
-            suggestedChannels: { type: "array", items: { type: "string", enum: onboardingChannels } },
-            services: { type: "array", items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } }, required: ["name", "description"], additionalProperties: false } },
-            faqs: { type: "array", items: { type: "object", properties: { question: { type: "string" }, answer: { type: "string" } }, required: ["question", "answer"], additionalProperties: false } },
-            guardrails: { type: "array", items: { type: "string" } },
+          schema: {
+            type: "object",
+            properties: {
+              businessName: { type: "string" },
+              businessSummary: { type: "string" },
+              industry: { type: "string" },
+              audience: { type: "string" },
+              language: { type: "string", enum: ["ar", "en", "bilingual"] },
+              tone: { type: "string" },
+              persona: { type: "string" },
+              goals: { type: "array", items: { type: "string", enum: onboardingGoals } },
+              suggestedChannels: { type: "array", items: { type: "string", enum: onboardingChannels } },
+              services: { type: "array", items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, sourceUrl: { type: "string" } }, required: ["name", "description"], additionalProperties: false } },
+              faqs: { type: "array", items: { type: "object", properties: { question: { type: "string" }, answer: { type: "string" }, sourceUrl: { type: "string" } }, required: ["question", "answer"], additionalProperties: false } },
+              guardrails: { type: "array", items: { type: "string" } },
+            },
+            required: ["businessName", "businessSummary", "industry", "audience", "language", "tone", "persona", "goals", "suggestedChannels", "services", "faqs", "guardrails"],
+            additionalProperties: false,
           },
-          required: ["businessName", "businessSummary", "industry", "audience", "language", "tone", "persona", "goals", "suggestedChannels", "services", "faqs", "guardrails"],
-          additionalProperties: false,
-        },
       },
     },
   });

@@ -212,15 +212,40 @@ export const appRouter = router({
       if (!agent) throw new Error("Agent could not be created");
 
       const defaultSource = input.sourcePages[0] || { url: input.websiteUrl, title: input.analysis.businessName };
+      const pageMap = new Map(input.sourcePages.map(p => [p.url, p]));
       const selectedGoalKnowledge = input.goals.map(goal => onboardingKnowledge[goal]);
       const knowledgeItems = [
-        ...input.analysis.services.map((service, idx) => ({ title: service.name, content: service.description, category: "Website service", source: input.sourcePages[idx % input.sourcePages.length] || defaultSource })),
-        ...input.analysis.faqs.map((faq, idx) => ({ title: `FAQ: ${faq.question}`.slice(0, 255), content: faq.answer, category: "Website FAQ", source: input.sourcePages[(idx + 1) % input.sourcePages.length] || defaultSource })),
-        ...selectedGoalKnowledge.map(item => ({ title: item.title, content: item.content, category: "Agent goal", source: defaultSource })),
+        ...input.analysis.services.map(service => {
+          const matchedPage = service.sourceUrl ? pageMap.get(service.sourceUrl) : undefined;
+          return {
+            title: service.name,
+            content: service.description,
+            category: "Website service",
+            sourceUrl: service.sourceUrl || matchedPage?.url || defaultSource.url,
+            sourceTitle: matchedPage?.title || defaultSource.title,
+          };
+        }),
+        ...input.analysis.faqs.map(faq => {
+          const matchedPage = faq.sourceUrl ? pageMap.get(faq.sourceUrl) : undefined;
+          return {
+            title: `FAQ: ${faq.question}`.slice(0, 255),
+            content: faq.answer,
+            category: "Website FAQ",
+            sourceUrl: faq.sourceUrl || matchedPage?.url || defaultSource.url,
+            sourceTitle: matchedPage?.title || defaultSource.title,
+          };
+        }),
+        ...selectedGoalKnowledge.map(item => ({
+          title: item.title,
+          content: item.content,
+          category: "Agent goal",
+          sourceUrl: defaultSource.url,
+          sourceTitle: defaultSource.title,
+        })),
       ];
-      if (!knowledgeItems.length) knowledgeItems.push({ title: "ملخص النشاط من الموقع", content: input.analysis.businessSummary, category: "Website summary", source: defaultSource });
+      if (!knowledgeItems.length) knowledgeItems.push({ title: "ملخص النشاط من الموقع", content: input.analysis.businessSummary, category: "Website summary", sourceUrl: defaultSource.url, sourceTitle: defaultSource.title });
       for (const item of knowledgeItems) {
-        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: item.category, sourceUrl: item.source.url, sourceTitle: item.source.title, sourceFetchedAt: new Date() });
+        await createKnowledgeItem({ tenantId: tenant.id, agentId: agent.id, title: item.title, content: item.content, category: item.category, sourceUrl: item.sourceUrl, sourceTitle: item.sourceTitle, sourceFetchedAt: new Date() });
       }
       for (const channel of configuredChannels) {
         await upsertChannelIntegration({ tenantId: tenant.id, agentId: agent.id, channel, isActive: channel === "web" ? 1 : 0, configJson: { setupStatus: channel === "web" ? "ready" : "needs_credentials", source: "website_analysis", websiteUrl: input.websiteUrl } });
