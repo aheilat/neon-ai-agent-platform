@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Loader2, Send, User, Sparkles, Image as ImageIcon, X } from "lucide-react";
+import { Loader2, Send, User, Sparkles, Image as ImageIcon, X, Paperclip, Mic, Square } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 
@@ -165,31 +165,78 @@ export function AIChatBox({
     }
   };
 
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<{ name: string; url: string; type: string } | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      setSelectedImage(event.target?.result as string);
+      setSelectedAttachment({
+        name: file.name,
+        url: event.target?.result as string,
+        type: file.type.startsWith("image/") ? "image" : "file"
+      });
     };
     reader.readAsDataURL(file);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setSelectedAttachment({
+          name: "voice_message.webm",
+          url: audioUrl,
+          type: "audio"
+        });
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("الرجاء السماح بالوصول إلى الميكروفون لتسجيل الصوت.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = input.trim();
-    if ((!trimmedInput && !selectedImage) || isLoading) return;
+    if ((!trimmedInput && !selectedAttachment) || isLoading) return;
 
-    if (selectedImage) {
-      // Send message with image and text
-      onSendMessage(trimmedInput ? `${trimmedInput} [مرفق صورة خدمة]` : "[مرفق صورة خدمة]");
-      setSelectedImage(null);
-    } else {
-      onSendMessage(trimmedInput);
+    let messageContent = trimmedInput;
+    if (selectedAttachment) {
+      const label = selectedAttachment.type === "image" ? "[مرفق صورة]" : selectedAttachment.type === "audio" ? "[مرفق رسالة صوتية]" : "[مرفق ملف]";
+      messageContent = trimmedInput ? `${trimmedInput} ${label} (${selectedAttachment.name})` : `${label} (${selectedAttachment.name})`;
+      setSelectedAttachment(null);
     }
+
+    onSendMessage(messageContent);
     setInput("");
     scrollToBottom();
     textareaRef.current?.focus();
@@ -317,56 +364,68 @@ export function AIChatBox({
         )}
       </div>
 
-      {/* Input Area */}
+      {/* Input Area - Fin Style */}
       <form
         ref={inputAreaRef}
         onSubmit={handleSubmit}
-        className="flex flex-col gap-2 p-4 border-t bg-background/50"
+        className="flex flex-col gap-2 p-3 border-t bg-card/80 backdrop-blur"
       >
-        {selectedImage && (
-          <div className="relative inline-block w-20 h-20 rounded-md overflow-hidden border border-border">
-            <img src={selectedImage} alt="مرفق المعاينة" className="w-full h-full object-cover" />
+        {selectedAttachment && (
+          <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border text-xs w-fit">
+            {selectedAttachment.type === "image" ? (
+              <img src={selectedAttachment.url} alt="معاينة" className="w-10 h-10 rounded object-cover" />
+            ) : selectedAttachment.type === "audio" ? (
+              <Mic className="size-4 text-primary animate-pulse" />
+            ) : (
+              <Paperclip className="size-4 text-muted-foreground" />
+            )}
+            <span className="truncate max-w-[200px] font-medium">{selectedAttachment.name}</span>
             <button
               type="button"
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-0.5 hover:bg-black"
+              onClick={() => setSelectedAttachment(null)}
+              className="text-muted-foreground hover:text-destructive p-1"
             >
-              <X className="size-3" />
+              <X className="size-3.5" />
             </button>
           </div>
         )}
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-center rounded-xl bg-background border border-border px-3 py-2 shadow-sm focus-within:ring-1 focus-within:ring-primary">
           <input
             type="file"
             ref={fileInputRef}
-            onChange={handleImageSelect}
-            accept="image/*"
+            onChange={handleFileSelect}
             className="hidden"
           />
-          <Button
+          <button
             type="button"
-            variant="outline"
-            size="icon"
             onClick={() => fileInputRef.current?.click()}
-            title="رفع صورة خدمة"
-            className="shrink-0 h-[38px] w-[38px]"
+            title="إرفاق ملف أو مستند أو صورة"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1"
           >
-            <ImageIcon className="size-4 text-neon-cyan" />
-          </Button>
+            <Paperclip className="size-5" />
+          </button>
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            title={isRecording ? "إيقاف التسجيل الصوتي" : "بدء تسجيل رسالة صوتية"}
+            className={`transition-colors p-1 ${isRecording ? "text-destructive animate-bounce" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {isRecording ? <Square className="size-5" /> : <Mic className="size-5" />}
+          </button>
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            className="flex-1 max-h-32 resize-none min-h-9"
+            placeholder={isRecording ? "جاري التسجيل الصوتي..." : placeholder}
+            className="flex-1 max-h-32 resize-none min-h-8 border-0 bg-transparent focus-visible:ring-0 px-0 py-1 text-sm shadow-none"
             rows={1}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={(!input.trim() && !selectedImage) || isLoading}
-            className="shrink-0 h-[38px] w-[38px]"
+            disabled={(!input.trim() && !selectedAttachment) || isLoading}
+            className="shrink-0 h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {isLoading ? (
               <Loader2 className="size-4 animate-spin" />
