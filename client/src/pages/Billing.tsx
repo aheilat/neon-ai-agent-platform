@@ -415,9 +415,18 @@ export default function Billing() {
                 <Button
                   onClick={() => handleSubscribe(plan.id as any, plan.price)}
                   disabled={isProcessing}
-                  className={`w-full gap-2 font-bold ${plan.popular ? "bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 shadow-lg shadow-neon-cyan/20" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+                  className={`w-full gap-2 font-bold transition-all transform active:scale-95 disabled:opacity-50 ${plan.popular ? "bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 shadow-lg shadow-neon-cyan/20" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
                 >
-                  <Zap className="w-4 h-4" /> الاشتراك الآن عبر HyperPay
+                  {isProcessing && selectedPlan === plan.id ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      جاري معالجة الطلب...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Zap className="w-4 h-4" /> الاشتراك الآن عبر HyperPay
+                    </span>
+                  )}
                 </Button>
               </CardContent>
             </Card>
