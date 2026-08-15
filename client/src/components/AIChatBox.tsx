@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Loader2, Send, User, Sparkles } from "lucide-react";
+import { Loader2, Send, User, Sparkles, Image as ImageIcon, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 
@@ -165,18 +165,33 @@ export function AIChatBox({
     }
   };
 
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSelectedImage(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading) return;
+    if ((!trimmedInput && !selectedImage) || isLoading) return;
 
-    onSendMessage(trimmedInput);
+    if (selectedImage) {
+      // Send message with image and text
+      onSendMessage(trimmedInput ? `${trimmedInput} [مرفق صورة خدمة]` : "[مرفق صورة خدمة]");
+      setSelectedImage(null);
+    } else {
+      onSendMessage(trimmedInput);
+    }
     setInput("");
-
-    // Scroll immediately after sending
     scrollToBottom();
-
-    // Keep focus on input
     textareaRef.current?.focus();
   };
 
@@ -306,29 +321,60 @@ export function AIChatBox({
       <form
         ref={inputAreaRef}
         onSubmit={handleSubmit}
-        className="flex gap-2 p-4 border-t bg-background/50 items-end"
+        className="flex flex-col gap-2 p-4 border-t bg-background/50"
       >
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className="flex-1 max-h-32 resize-none min-h-9"
-          rows={1}
-        />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={!input.trim() || isLoading}
-          className="shrink-0 h-[38px] w-[38px]"
-        >
-          {isLoading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Send className="size-4" />
-          )}
-        </Button>
+        {selectedImage && (
+          <div className="relative inline-block w-20 h-20 rounded-md overflow-hidden border border-border">
+            <img src={selectedImage} alt="مرفق المعاينة" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-0.5 hover:bg-black"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            accept="image/*"
+            className="hidden"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            title="رفع صورة خدمة"
+            className="shrink-0 h-[38px] w-[38px]"
+          >
+            <ImageIcon className="size-4 text-neon-cyan" />
+          </Button>
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            className="flex-1 max-h-32 resize-none min-h-9"
+            rows={1}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={(!input.trim() && !selectedImage) || isLoading}
+            className="shrink-0 h-[38px] w-[38px]"
+          >
+            {isLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </div>
       </form>
     </div>
   );
