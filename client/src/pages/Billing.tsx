@@ -73,11 +73,16 @@ export default function Billing() {
   const handleSubscribe = (planId: "starter" | "professional" | "enterprise", price: number) => {
     setSelectedPlan(planId);
     setIsProcessing(true);
-    checkoutMutation.mutate({
-      planName: planId,
-      amount: price,
-      currency: "SAR",
+    toast.info("جاري تجهيز بوابة دفع HyperPay الآمنة للباقة المختارة...", {
+      icon: <Sparkles className="w-4 h-4 text-neon-cyan animate-spin" />,
     });
+    setTimeout(() => {
+      checkoutMutation.mutate({
+        planName: planId,
+        amount: price,
+        currency: "SAR",
+      });
+    }, 600);
   };
 
   const handleSimulateSuccess = () => {
@@ -310,13 +315,23 @@ export default function Billing() {
                   </li>
                 </ul>
                 <Button
+                  disabled={isProcessing}
                   onClick={() => {
                     setShowUpgradeModal(false);
                     handleSubscribe("professional", billingCycle === "yearly" ? 2870 : 299);
                   }}
-                  className="w-full bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 font-bold gap-2"
+                  className="w-full bg-gradient-to-r from-neon-cyan to-indigo-500 text-slate-950 font-bold gap-2 shadow-lg shadow-neon-cyan/20 hover:opacity-90 transition-all transform active:scale-95 disabled:opacity-50"
                 >
-                  <ArrowUpRight className="w-4 h-4" /> الانتقال للباقة المحترفة ({billingCycle === "yearly" ? "سنوي" : "شهري"})
+                  {isProcessing ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      جاري معالجة الدفع...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <ArrowUpRight className="w-4 h-4" /> الانتقال للباقة المحترفة ({billingCycle === "yearly" ? "سنوي" : "شهري"})
+                    </span>
+                  )}
                 </Button>
               </div>
             </div>
