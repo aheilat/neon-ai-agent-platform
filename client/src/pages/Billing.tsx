@@ -333,6 +333,17 @@ export default function Billing() {
                     </span>
                   )}
                 </Button>
+
+                {/* Supported Payment Methods Badges */}
+                <div className="pt-3 border-t border-border/40 space-y-2">
+                  <p className="text-[11px] text-center text-muted-foreground">طرق الدفع الآمنة المعتمدة عبر HyperPay</p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-md bg-muted/50 border border-border/40 text-[10px] font-bold text-neon-cyan tracking-wider">MADA</span>
+                    <span className="px-2.5 py-1 rounded-md bg-muted/50 border border-border/40 text-[10px] font-bold text-indigo-400 tracking-wider">VISA</span>
+                    <span className="px-2.5 py-1 rounded-md bg-muted/50 border border-border/40 text-[10px] font-bold text-amber-400 tracking-wider">MASTERCARD</span>
+                    <span className="px-2.5 py-1 rounded-md bg-muted/50 border border-border/40 text-[10px] font-bold text-emerald-400 tracking-wider">APPLE PAY</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
