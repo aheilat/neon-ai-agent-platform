@@ -164,13 +164,24 @@ export default function Billing() {
 
       {/* Real-time Usage & Quotas Dashboard */}
       <Card className="border-border/60 bg-gradient-to-br from-card/90 to-card/40 backdrop-blur shadow-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Sparkles className="w-5 h-5 text-neon-cyan" /> استهلاك الحصص الحالية (Real-Time Usage Quotas)
-          </CardTitle>
-          <CardDescription>
-            متابعة فورية لعدد الوكلاء النشطين، المحادثات، ومعلومات قاعدة المعرفة مقارنة بحدود باقتك الحالية.
-          </CardDescription>
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Sparkles className="w-5 h-5 text-neon-cyan" /> استهلاك الحصص الحالية (Real-Time Usage Quotas)
+            </CardTitle>
+            <CardDescription className="mt-1">
+              متابعة فورية لعدد الوكلاء النشطين، المحادثات، ومعلومات قاعدة المعرفة مقارنة بحدود باقتك الحالية.
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => {
+              const el = document.getElementById("pricing-plans-section");
+              el?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="bg-gradient-to-r from-neon-cyan to-indigo-500 text-slate-950 font-bold gap-2 shadow-lg shadow-neon-cyan/20 hover:opacity-90 shrink-0"
+          >
+            <Zap className="w-4 h-4" /> ترقية الباقة (Upgrade Plan)
+          </Button>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Agents Quota */}
@@ -239,8 +250,15 @@ export default function Billing() {
       )}
 
       {/* Pricing Plans Grid */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold tracking-tight">اختر خطة العمل المناسبة</h2>
+      <div id="pricing-plans-section" className="space-y-4 pt-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold tracking-tight">اختر خطة العمل المناسبة</h2>
+          {(agentPct >= 80 || convPct >= 80 || kbPct >= 80) && (
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 gap-1.5 animate-pulse">
+              <AlertCircle className="w-3.5 h-3.5" /> اقتربت من استنفاد حصتك، يُنصح بالترقية
+            </Badge>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan) => (
             <Card key={plan.id} className={`relative flex flex-col justify-between border transition-all duration-300 hover:border-neon-cyan/50 ${plan.popular ? "border-neon-cyan/60 bg-gradient-to-b from-neon-cyan/10 via-card to-card shadow-2xl scale-[1.02]" : "border-border/60 bg-card/50"}`}>
