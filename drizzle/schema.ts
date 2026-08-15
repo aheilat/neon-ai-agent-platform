@@ -37,6 +37,7 @@ export const agents = mysqlTable("agents", {
   persona: longtext("persona"),
   tone: varchar("tone", { length: 50 }).default("professional").notNull(), // professional, friendly, formal, casual
   language: varchar("language", { length: 10 }).default("ar").notNull(), // ar, en, bilingual
+  llmModel: varchar("llmModel", { length: 100 }).default("gpt-4o").notNull(), // gpt-4o, claude-3-5-sonnet, gpt-5
   decisionRules: longtext("decisionRules"),
   fallbackMessage: text("fallbackMessage"),
   escalationKeyword: varchar("escalationKeyword", { length: 100 }).default("موظف,human,agent").notNull(),

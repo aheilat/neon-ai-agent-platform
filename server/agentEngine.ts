@@ -3,7 +3,7 @@ import type { Agent, KnowledgeBaseItem } from "../drizzle/schema";
 export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], userMessage: string) {
   const knowledgeContext = knowledge.length
     ? knowledge
-        .map(item => `### ${item.title}\n${item.content}`)
+        .map(item => `### ${item.title}\n${item.content}${item.sourceUrl ? `\nالمصدر: ${item.sourceUrl}` : ""}`)
         .join("\n\n")
     : "لا توجد مواد معرفة إضافية متاحة حالياً.";
 
@@ -72,5 +72,6 @@ export function toSafeAgentSettings(agent: Agent) {
     lastWebsiteSyncAt: agent.lastWebsiteSyncAt,
     syncIntervalHours: agent.syncIntervalHours,
     syncCronTaskUid: agent.syncCronTaskUid,
+    llmModel: agent.llmModel,
   };
 }

@@ -59,6 +59,7 @@ const agentInput = z.object({
   persona: z.string().max(5000).optional(),
   tone: z.string().max(50).default("professional"),
   language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
+  llmModel: z.string().max(100).default("gpt-4o"),
   decisionRules: z.string().max(5000).optional(),
   fallbackMessage: z.string().max(1000).optional(),
   escalationKeyword: z.string().max(200).optional(),
@@ -629,8 +630,9 @@ export const appRouter = router({
       const prompt = buildAgentPrompt(agent, knowledge, input.message);
       try {
         const response = await invokeLLM({
+          model: agent.llmModel || "gpt-4o",
           messages: [
-            { role: "system", content: "أنت وكيل خدمة عملاء متعدد اللغات. كن دقيقاً، لا تختلق معلومات، ووجّه العميل إلى خطوة عملية." },
+            { role: "system", content: `أنت وكيل خدمة عملاء احترافي مدعوم بقاعدة معرفة موثقة ومصادر رسمية لموقع النشاط. اعتمد حصراً على المعلومات والمصادر المرفقة ولا تخترع أي تفاصيل غير موجودة.` },
             ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []),
             { role: "user", content: prompt },
           ],
@@ -684,7 +686,7 @@ export const appRouter = router({
       }
       try {
         const knowledge = await getKnowledgeForAgent(agent.tenantId, agent.id);
-        const response = await invokeLLM({ messages: [{ role: "system", content: "أنت وكيل خدمة عملاء متعدد اللغات. لا تخترع معلومات، واكتب رداً مفيداً." }, ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []), { role: "user", content: buildAgentPrompt(agent, knowledge, input.message) }] });
+        const response = await invokeLLM({ model: agent.llmModel || "gpt-4o", messages: [{ role: "system", content: `أنت وكيل خدمة عملاء احترافي مدعوم بقاعدة معرفة موثقة ومصادر رسمية لموقع النشاط. اعتمد حصراً على المعلومات والمصادر المرفقة ولا تخترع أي تفاصيل غير موجودة.` }, ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []), { role: "user", content: buildAgentPrompt(agent, knowledge, input.message) }] });
         const reply = createAssistantReply(normalizeLlmContent(response.choices?.[0]?.message?.content));
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         return { ...reply, conversationId };

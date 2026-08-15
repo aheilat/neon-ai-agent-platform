@@ -77,3 +77,8 @@
 - [x] تصميم دالة تصدير بيانات سجل التغييرات (Timeline) بصيغة CSV مع دعم الترميز العربي UTF-8 وبادئة BOM
 - [x] إضافة زر تصدير التقرير (Download CSV Report) داخل بطاقة Website Timeline في Agent Studio
 - [x] إضافة اختبار وحدة برمجية لتوليد محتوى التقرير والتحقق من صحة الأعمدة والترميز وحفظ checkpoint
+
+## Advanced LLM Routing (OpenAI, Claude) & Enhanced Knowledge Retrieval
+- [x] تشخيص مسار المحادثة الحالي وتطوير طبقة اختيار بين النماذج (OpenAI GPT-4o / Claude Sonnet)
+- [x] تحسين حقن قاعدة المعرفة ومصادر الموقع داخل System Prompt للوكيل لضمان دقة الإجابات
+- [x] إضافة اختبار حقيقي يستدعي راوتر chat.reply ويتحقق من انتقال llmModel من الوكيل إلى invokeLLM

@@ -1,0 +1,1 @@
+ALTER TABLE `agents` ADD `llmModel` varchar(100) DEFAULT 'gpt-4o' NOT NULL;
