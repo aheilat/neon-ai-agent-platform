@@ -230,3 +230,39 @@ export const websiteSnapshots = mysqlTable("website_snapshots", {
 
 export type WebsiteSnapshotRecord = typeof websiteSnapshots.$inferSelect;
 export type InsertWebsiteSnapshotRecord = typeof websiteSnapshots.$inferInsert;
+
+// Subscriptions & HyperPay Payments
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  planName: varchar("planName", { length: 50 }).default("starter").notNull(), // starter, professional, enterprise
+  status: mysqlEnum("status", ["active", "trialing", "past_due", "canceled", "incomplete"]).default("incomplete").notNull(),
+  amount: int("amount").notNull(), // in SAR/USD cents or minor units (e.g., 29900 for $299)
+  currency: varchar("currency", { length: 10 }).default("SAR").notNull(),
+  hyperPayCheckoutId: varchar("hyperPayCheckoutId", { length: 255 }),
+  currentPeriodStart: timestamp("currentPeriodStart"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+export const paymentTransactions = mysqlTable("payment_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  subscriptionId: int("subscriptionId"),
+  checkoutId: varchar("checkoutId", { length: 255 }).notNull(),
+  paymentId: varchar("paymentId", { length: 255 }),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 10 }).default("SAR").notNull(),
+  status: mysqlEnum("status", ["pending", "success", "failed", "refunded"]).default("pending").notNull(),
+  responseCode: varchar("responseCode", { length: 50 }),
+  responseMessage: text("responseMessage"),
+  gatewayResponseJson: longtext("gatewayResponseJson"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PaymentTransaction = typeof paymentTransactions.$inferSelect;
+export type InsertPaymentTransaction = typeof paymentTransactions.$inferInsert;

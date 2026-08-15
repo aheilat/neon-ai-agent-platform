@@ -49,7 +49,12 @@ import {
   markConversationStatus,
   updateAgentInTenant,
   upsertChannelIntegration,
+  getSubscriptionByTenant,
+  upsertSubscription,
+  createPaymentTransaction,
+  getTenantTransactions,
 } from "./db";
+import { hyperPayService } from "./hyperpayService";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
 import { analyzeWebsite, websiteAnalysisSchema } from "./websiteAnalyzer";
 
@@ -799,6 +804,114 @@ export const appRouter = router({
         soundAlerts: input.soundAlerts !== undefined ? (input.soundAlerts ? 1 : 0) : 1,
       });
       return { success: true };
+    }),
+  }),
+
+  billing: router({
+    getSubscription: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const sub = await getSubscriptionByTenant(tenant.id);
+      const txs = await getTenantTransactions(tenant.id);
+      return {
+        subscription: sub || { planName: "starter", status: "active", amount: 0, currency: "SAR" },
+        transactions: txs,
+      };
+    }),
+    createCheckout: protectedProcedure.input(z.object({
+      planName: z.enum(["starter", "professional", "enterprise"]),
+      amount: z.number().positive(),
+      currency: z.string().default("SAR"),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const transactionId = "TX_" + tenant.id + "_" + Date.now();
+      const res = await hyperPayService.createCheckoutSession({
+        amount: input.amount,
+        currency: input.currency,
+        paymentType: "DB",
+        merchantTransactionId: transactionId,
+        customerEmail: ctx.user.email || "customer@neon.ai",
+        customerName: ctx.user.name || tenant.name,
+        planName: input.planName,
+        tenantId: tenant.id,
+      });
+
+      if (res.success && res.checkoutId) {
+        // Record pending transaction & subscription intent
+        await upsertSubscription({
+          tenantId: tenant.id,
+          planName: input.planName,
+          status: "incomplete",
+          amount: Math.round(input.amount * 100), // convert to minor units
+          currency: input.currency,
+          hyperPayCheckoutId: res.checkoutId,
+        });
+
+        const sub = await getSubscriptionByTenant(tenant.id);
+        await createPaymentTransaction({
+          tenantId: tenant.id,
+          subscriptionId: sub?.id,
+          checkoutId: res.checkoutId,
+          amount: Math.round(input.amount * 100),
+          currency: input.currency,
+          status: "pending",
+          responseMessage: res.resultMessage || "Checkout session created",
+        });
+
+        return { success: true, checkoutId: res.checkoutId, message: res.resultMessage };
+      } else {
+        throw new Error(res.error || "Failed to initialize HyperPay checkout session");
+      }
+    }),
+    verifyPayment: protectedProcedure.input(z.object({
+      checkoutId: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const verification = await hyperPayService.verifyPaymentStatus(input.checkoutId);
+
+      if (verification.success) {
+        const sub = await getSubscriptionByTenant(tenant.id);
+        const amountMinor = verification.amount ? Math.round(verification.amount * 100) : (sub?.amount || 29900);
+        
+        // Update subscription to active
+        const now = new Date();
+        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        await upsertSubscription({
+          tenantId: tenant.id,
+          planName: sub?.planName || "professional",
+          status: "active",
+          amount: amountMinor,
+          currency: verification.currency || "SAR",
+          hyperPayCheckoutId: input.checkoutId,
+          currentPeriodStart: now,
+          currentPeriodEnd: nextMonth,
+        });
+
+        await createPaymentTransaction({
+          tenantId: tenant.id,
+          subscriptionId: sub?.id,
+          checkoutId: input.checkoutId,
+          paymentId: verification.paymentId,
+          amount: amountMinor,
+          currency: verification.currency || "SAR",
+          status: "success",
+          responseCode: verification.responseCode,
+          responseMessage: verification.responseMessage,
+          gatewayResponseJson: JSON.stringify(verification.rawJson || {}),
+        });
+
+        return { success: true, message: "تمت عملية الدفع بنجاح وتفعيل الاشتراك!" };
+      } else {
+        await createPaymentTransaction({
+          tenantId: tenant.id,
+          checkoutId: input.checkoutId,
+          amount: 0,
+          status: "failed",
+          responseCode: verification.responseCode,
+          responseMessage: verification.responseMessage,
+          gatewayResponseJson: JSON.stringify(verification.rawJson || {}),
+        });
+        throw new Error(verification.responseMessage || "فشلت عملية الدفع عبر HyperPay");
+      }
     }),
   }),
 });

@@ -512,3 +512,89 @@ export async function getAgentAndTenant(user: User, agentId: number) {
 }
 
 export type DbAgent = Agent;
+
+// Subscriptions & HyperPay Database Helpers
+import { subscriptions, paymentTransactions } from "../drizzle/schema";
+
+export async function getSubscriptionByTenant(tenantId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
+  return sub || null;
+}
+
+export async function upsertSubscription(data: {
+  tenantId: number;
+  planName: string;
+  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete";
+  amount: number;
+  currency?: string;
+  hyperPayCheckoutId?: string;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  const existing = await getSubscriptionByTenant(data.tenantId);
+  if (existing) {
+    await db.update(subscriptions)
+      .set({
+        planName: data.planName,
+        status: data.status,
+        amount: data.amount,
+        currency: data.currency || "SAR",
+        hyperPayCheckoutId: data.hyperPayCheckoutId,
+        currentPeriodStart: data.currentPeriodStart,
+        currentPeriodEnd: data.currentPeriodEnd,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.tenantId, data.tenantId));
+    return getSubscriptionByTenant(data.tenantId);
+  } else {
+    await db.insert(subscriptions).values({
+      tenantId: data.tenantId,
+      planName: data.planName,
+      status: data.status,
+      amount: data.amount,
+      currency: data.currency || "SAR",
+      hyperPayCheckoutId: data.hyperPayCheckoutId,
+      currentPeriodStart: data.currentPeriodStart,
+      currentPeriodEnd: data.currentPeriodEnd,
+    });
+    return getSubscriptionByTenant(data.tenantId);
+  }
+}
+
+export async function createPaymentTransaction(data: {
+  tenantId: number;
+  subscriptionId?: number;
+  checkoutId: string;
+  paymentId?: string;
+  amount: number;
+  currency?: string;
+  status: "pending" | "success" | "failed" | "refunded";
+  responseCode?: string;
+  responseMessage?: string;
+  gatewayResponseJson?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  await db.insert(paymentTransactions).values({
+    tenantId: data.tenantId,
+    subscriptionId: data.subscriptionId,
+    checkoutId: data.checkoutId,
+    paymentId: data.paymentId,
+    amount: data.amount,
+    currency: data.currency || "SAR",
+    status: data.status,
+    responseCode: data.responseCode,
+    responseMessage: data.responseMessage,
+    gatewayResponseJson: data.gatewayResponseJson,
+  });
+}
+
+export async function getTenantTransactions(tenantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(paymentTransactions).where(eq(paymentTransactions.tenantId, tenantId)).orderBy(desc(paymentTransactions.createdAt));
+}
