@@ -14,6 +14,7 @@ export default function Billing() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly");
 
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
@@ -233,66 +234,91 @@ export default function Billing() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            {/* Current Plan Card */}
-            <div className="bg-muted/30 p-5 rounded-xl border border-border/40 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground uppercase">الباقة الحالية</span>
-                <span className="text-sm font-bold capitalize text-muted-foreground">{currentSub?.planName || "Starter"}</span>
-              </div>
-              <div className="space-y-2">
-                <p className="text-2xl font-black">
-                  {currentSub?.amount ? (currentSub.amount / 100).toFixed(2) : "0"} {currentSub?.currency || "SAR"}
-                  <span className="text-xs font-normal text-muted-foreground"> / شهر</span>
-                </p>
-                <p className="text-xs text-muted-foreground">خطة العمل الفاعلة حالياً على مساحتك.</p>
-              </div>
-              <ul className="space-y-2 text-xs text-muted-foreground">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> حدود الحصص القياسية
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> دعم قنوات الويب والواتساب
-                </li>
-              </ul>
+          <div className="space-y-6 py-2">
+            {/* Billing Cycle Toggle */}
+            <div className="flex items-center justify-center gap-3 bg-muted/40 p-2 rounded-xl border border-border/40">
+              <button
+                type="button"
+                onClick={() => setBillingCycle("monthly")}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${billingCycle === "monthly" ? "bg-neon-cyan text-slate-950 shadow" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                الفوترة الشهرية (Monthly)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle("yearly")}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${billingCycle === "yearly" ? "bg-neon-cyan text-slate-950 shadow" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                الفوترة السنوية (Yearly)
+                <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  وفر 20%
+                </span>
+              </button>
             </div>
 
-            {/* Recommended Upgrade Plan Card */}
-            <div className="bg-gradient-to-br from-neon-cyan/10 via-card to-card p-5 rounded-xl border border-neon-cyan/60 shadow-xl space-y-4 relative overflow-hidden">
-              <div className="absolute top-2 left-2 bg-neon-cyan text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase">
-                موصى بها للأعمال
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Current Plan Card */}
+              <div className="bg-muted/30 p-5 rounded-xl border border-border/40 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground uppercase">الباقة الحالية</span>
+                  <span className="text-sm font-bold capitalize text-muted-foreground">{currentSub?.planName || "Starter"}</span>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-black">
+                    {currentSub?.amount ? (currentSub.amount / 100).toFixed(2) : "0"} {currentSub?.currency || "SAR"}
+                    <span className="text-xs font-normal text-muted-foreground"> / شهر</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">خطة العمل الفاعلة حالياً على مساحتك.</p>
+                </div>
+                <ul className="space-y-2 text-xs text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> حدود الحصص القياسية
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> دعم قنوات الويب والواتساب
+                  </li>
+                </ul>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neon-cyan/20 text-neon-cyan uppercase">الباقة الأعلى</span>
-                <span className="text-sm font-bold text-neon-cyan">Professional / Enterprise</span>
+
+              {/* Recommended Upgrade Plan Card */}
+              <div className="bg-gradient-to-br from-neon-cyan/10 via-card to-card p-5 rounded-xl border border-neon-cyan/60 shadow-xl space-y-4 relative overflow-hidden">
+                <div className="absolute top-2 left-2 bg-neon-cyan text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase">
+                  {billingCycle === "yearly" ? "خصم سنوي 20%" : "موصى بها للأعمال"}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neon-cyan/20 text-neon-cyan uppercase">الباقة الأعلى</span>
+                  <span className="text-sm font-bold text-neon-cyan">Professional</span>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-2xl font-black text-neon-cyan">
+                    {billingCycle === "yearly" ? "2,870" : "299"} <span className="text-sm font-semibold">SAR</span>
+                    <span className="text-xs font-normal text-muted-foreground"> {billingCycle === "yearly" ? "/ سنوياً" : "/ شهر"}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {billingCycle === "yearly" ? "تعادل تقريباً 239 ريال شهرياً مع توفير 600 ريال سنويّاً." : "وكلاء غير محدودين، نماذج GPT-4o و Claude 3.5، وإدارة فريق."}
+                  </p>
+                </div>
+                <ul className="space-y-2 text-xs">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> حتى 5 وكلاء ذكيين متقدمين
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> إشعارات المتصفح والتنبيهات الصوتية
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> جدول مزامنة الموقع وتصدير التقارير
+                  </li>
+                </ul>
+                <Button
+                  onClick={() => {
+                    setShowUpgradeModal(false);
+                    handleSubscribe("professional", billingCycle === "yearly" ? 2870 : 299);
+                  }}
+                  className="w-full bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 font-bold gap-2"
+                >
+                  <ArrowUpRight className="w-4 h-4" /> الانتقال للباقة المحترفة ({billingCycle === "yearly" ? "سنوي" : "شهري"})
+                </Button>
               </div>
-              <div className="space-y-2">
-                <p className="text-2xl font-black text-neon-cyan">
-                  299 <span className="text-sm font-semibold">SAR</span>
-                  <span className="text-xs font-normal text-muted-foreground"> / شهر</span>
-                </p>
-                <p className="text-xs text-muted-foreground">وكلاء غير محدودين، نماذج GPT-4o و Claude 3.5، وإدارة فريق.</p>
-              </div>
-              <ul className="space-y-2 text-xs">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> حتى 5 وكلاء ذكيين متقدمين
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> إشعارات المتصفح والتنبيهات الصوتية
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-neon-cyan" /> جدول مزامنة الموقع وتصدير التقارير
-                </li>
-              </ul>
-              <Button
-                onClick={() => {
-                  setShowUpgradeModal(false);
-                  handleSubscribe("professional", 299);
-                }}
-                className="w-full bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 font-bold gap-2"
-              >
-                <ArrowUpRight className="w-4 h-4" /> الانتقال للباقة المحترفة الآن
-              </Button>
             </div>
           </div>
         </DialogContent>
