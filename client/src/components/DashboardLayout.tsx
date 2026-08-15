@@ -27,18 +27,42 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "نظرة عامة / Overview", path: "/" },
-  { icon: Bot, label: "الوكلاء / Agents", path: "/agents" },
-  { icon: BrainCircuit, label: "قاعدة المعرفة / Knowledge", path: "/knowledge" },
-  { icon: MessageSquareText, label: "المحادثات / Inbox", path: "/conversations" },
-  { icon: Radio, label: "القنوات / Channels", path: "/channels" },
-  { icon: ChartNoAxesCombined, label: "التحليلات / Analytics", path: "/analytics" },
-  { icon: Users, label: "الفريق / Team", path: "/team" },
-  { icon: CreditCard, label: "الاشتراكات والفوترة / Billing", path: "/billing" },
-  { icon: Bell, label: "الإشعارات / Alerts", path: "/notifications" },
-  { icon: Settings2, label: "الإعدادات / Settings", path: "/settings" },
+const gabsterCategories = [
+  {
+    category: "COMMUNICATE",
+    items: [
+      { icon: MessageSquareText, label: "Omnichannel Inbox", path: "/conversations" },
+      { icon: Bot, label: "AI Chatbot", path: "/agents" },
+      { icon: Radio, label: "Voice & Calling", path: "/channels" },
+      { icon: Users, label: "Instagram Automation", path: "/channels" },
+    ]
+  },
+  {
+    category: "OPERATE",
+    items: [
+      { icon: LayoutDashboard, label: "Appointments", path: "/" },
+      { icon: BrainCircuit, label: "Admissions & Intake", path: "/knowledge" },
+      { icon: Settings2, label: "Workflow Automation", path: "/settings" },
+      { icon: CreditCard, label: "Sales Automation", path: "/billing" },
+    ]
+  },
+  {
+    category: "ANALYZE",
+    items: [
+      { icon: ChartNoAxesCombined, label: "Analytics & Dashboards", path: "/analytics" },
+      { icon: BrainCircuit, label: "GABSTER Vision", path: "/knowledge" },
+      { icon: Bot, label: "AI Engine", path: "/agents" },
+    ]
+  },
+  {
+    category: "ACT",
+    items: [
+      { icon: Users, label: "Business Agent", path: "/team" },
+    ]
+  }
 ];
+
+const menuItems = gabsterCategories.flatMap(c => c.items);
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -182,27 +206,34 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+          <SidebarContent className="gap-0 px-3 py-2">
+            {gabsterCategories.map((cat, idx) => (
+              <div key={idx} className="mb-4">
+                <div className="text-[10px] font-bold tracking-wider text-muted-foreground/70 uppercase mb-1 px-2">
+                  {cat.category}
+                </div>
+                <div className="space-y-1">
+                  {cat.items.map((item, i) => {
+                    const Icon = item.icon;
+                    const isActive = location === item.path;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setLocation(item.path)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                          isActive
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Icon className="size-3.5 opacity-80 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="p-3">
