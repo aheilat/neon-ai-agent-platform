@@ -53,6 +53,7 @@ import {
   upsertSubscription,
   createPaymentTransaction,
   getTenantTransactions,
+  getTenantUsage,
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
@@ -812,9 +813,11 @@ export const appRouter = router({
       const tenant = await workspaceForUser(ctx.user);
       const sub = await getSubscriptionByTenant(tenant.id);
       const txs = await getTenantTransactions(tenant.id);
+      const usage = await getTenantUsage(tenant.id);
       return {
         subscription: sub || { planName: "starter", status: "active", amount: 0, currency: "SAR" },
         transactions: txs,
+        usage,
       };
     }),
     createCheckout: protectedProcedure.input(z.object({

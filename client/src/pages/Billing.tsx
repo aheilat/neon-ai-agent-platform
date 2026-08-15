@@ -93,6 +93,19 @@ export default function Billing() {
 
   const currentSub = data?.subscription;
   const transactions = data?.transactions || [];
+  const usage = data?.usage || { agentsCount: 0, conversationsCount: 0, knowledgeCount: 0 };
+
+  // Determine limits based on plan name
+  const planName = currentSub?.planName || "starter";
+  const limits = planName === "enterprise" 
+    ? { agents: 999, conversations: 50000, knowledge: 10000 }
+    : planName === "professional"
+    ? { agents: 5, conversations: 5000, knowledge: 2000 }
+    : { agents: 1, conversations: 500, knowledge: 500 };
+
+  const agentPct = Math.min(100, Math.round((usage.agentsCount / limits.agents) * 100));
+  const convPct = Math.min(100, Math.round((usage.conversationsCount / limits.conversations) * 100));
+  const kbPct = Math.min(100, Math.round((usage.knowledgeCount / limits.knowledge) * 100));
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -145,6 +158,55 @@ export default function Billing() {
             <p className="text-sm font-medium mt-1">
               {currentSub && "currentPeriodEnd" in currentSub && currentSub.currentPeriodEnd ? new Date(currentSub.currentPeriodEnd).toLocaleDateString("ar-SA") : "غير متوفر"}
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Real-time Usage & Quotas Dashboard */}
+      <Card className="border-border/60 bg-gradient-to-br from-card/90 to-card/40 backdrop-blur shadow-xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Sparkles className="w-5 h-5 text-neon-cyan" /> استهلاك الحصص الحالية (Real-Time Usage Quotas)
+          </CardTitle>
+          <CardDescription>
+            متابعة فورية لعدد الوكلاء النشطين، المحادثات، ومعلومات قاعدة المعرفة مقارنة بحدود باقتك الحالية.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Agents Quota */}
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/40 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-muted-foreground">الوكلاء النشطون (AI Agents)</span>
+              <span className="text-sm font-bold text-neon-cyan">{usage.agentsCount} / {limits.agents === 999 ? "غير محدود" : limits.agents}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+              <div className="bg-neon-cyan h-2.5 rounded-full transition-all duration-500" style={{ width: `${agentPct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground">الوكلاء المتاحون للعمل الفوري واستقبال العملاء.</p>
+          </div>
+
+          {/* Conversations Quota */}
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/40 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-muted-foreground">المحادثات الشهرية (Conversations)</span>
+              <span className="text-sm font-bold text-indigo-400">{usage.conversationsCount} / {limits.conversations}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+              <div className="bg-indigo-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${convPct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground">عدد المحادثات الإجمالية عبر الويب وقنوات التواصل.</p>
+          </div>
+
+          {/* Knowledge Items Quota */}
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/40 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-muted-foreground">عناصر قاعدة المعرفة (Knowledge Items)</span>
+              <span className="text-sm font-bold text-purple-400">{usage.knowledgeCount} / {limits.knowledge}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+              <div className="bg-purple-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${kbPct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground">الأسئلة الشائعة والخدمات المستخرجة من موقعك.</p>
           </div>
         </CardContent>
       </Card>

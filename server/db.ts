@@ -598,3 +598,19 @@ export async function getTenantTransactions(tenantId: number) {
   if (!db) return [];
   return db.select().from(paymentTransactions).where(eq(paymentTransactions.tenantId, tenantId)).orderBy(desc(paymentTransactions.createdAt));
 }
+
+// Usage metrics helper for billing & quota dashboard
+export async function getTenantUsage(tenantId: number) {
+  const db = await getDb();
+  if (!db) return { agentsCount: 0, conversationsCount: 0, knowledgeCount: 0 };
+  
+  const agentRows = await db.select({ total: count() }).from(agents).where(eq(agents.tenantId, tenantId));
+  const convRows = await db.select({ total: count() }).from(conversations).where(eq(conversations.tenantId, tenantId));
+  const kbRows = await db.select({ total: count() }).from(knowledgeBase).where(eq(knowledgeBase.tenantId, tenantId));
+
+  return {
+    agentsCount: Number(agentRows[0]?.total ?? 0),
+    conversationsCount: Number(convRows[0]?.total ?? 0),
+    knowledgeCount: Number(kbRows[0]?.total ?? 0),
+  };
+}
