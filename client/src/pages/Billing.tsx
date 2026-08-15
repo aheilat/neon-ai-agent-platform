@@ -34,9 +34,18 @@ export default function Billing() {
     },
   });
 
+  const [successReceipt, setSuccessReceipt] = useState<{ planName: string; amount: number; currency: string; transactionId: string; date: string } | null>(null);
+
   const verifyMutation = trpc.billing.verifyPayment.useMutation({
     onSuccess: (res) => {
       toast.success(res.message);
+      setSuccessReceipt({
+        planName: selectedPlan,
+        amount: billingCycle === "yearly" ? Math.round(2870 * (1 - discountPercent / 100)) : Math.round(299 * (1 - discountPercent / 100)),
+        currency: "SAR",
+        transactionId: checkoutUrl || "TX_" + Date.now(),
+        date: new Date().toLocaleString("ar-SA"),
+      });
       setCheckoutUrl(null);
       utils.billing.getSubscription.invalidate();
     },
@@ -44,6 +53,36 @@ export default function Billing() {
       toast.error(err.message || "فشلت عملية التحقق من الدفع");
     },
   });
+
+  const downloadPdfInvoice = () => {
+    if (!successReceipt) return;
+    const invoiceContent = `
+========================================
+       NEON AI AGENT PLATFORM
+       فاتورة ضريبية رسمية (Tax Invoice)
+========================================
+رقم المعاملة: ${successReceipt.transactionId}
+تاريخ الإصدار: ${successReceipt.date}
+----------------------------------------
+اسم الباقة: ${successReceipt.planName.toUpperCase()}
+دورة الفوترة: ${billingCycle === "yearly" ? "سنوية (Yearly)" : "شهرية (Monthly)"}
+الخصم المطبق: ${discountPercent}%
+المبلغ المدفوع: ${successReceipt.amount} ${successReceipt.currency}
+حالة الدفع: مكتمل بنجاح (Paid via HyperPay)
+========================================
+شكراً لاختياركم منصة Neon AI!
+`;
+    const blob = new Blob([invoiceContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Neon_Invoice_${successReceipt.transactionId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("تم تنزيل الفاتورة الضريبية بنجاح!");
+  };
 
   const plans = [
     {
@@ -411,6 +450,50 @@ export default function Billing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Success Receipt Modal / Card */}
+      {successReceipt && (
+        <Card className="border-emerald-500/60 bg-emerald-500/5 shadow-2xl animate-fade-in relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-emerald-400 text-2xl">
+              <CheckCircle2 className="w-7 h-7" /> تمت عملية الدفع بنجاح!
+            </CardTitle>
+            <CardDescription>
+              شكراً لاشتراكك في منصة Neon AI. تم تفعيل باقتك بنجاح عبر بوابة HyperPay الآمنة.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-card/80 p-5 rounded-xl border border-border/60 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">رقم المعاملة (Transaction ID):</span>
+                <span className="font-mono font-bold text-foreground">{successReceipt.transactionId}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">الباقة المشتركة:</span>
+                <span className="font-bold capitalize text-neon-cyan">{successReceipt.planName}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">تاريخ ووقت المعاملة:</span>
+                <span className="font-medium">{successReceipt.date}</span>
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-border/40">
+                <span className="font-bold text-foreground">إجمالي المدفوع:</span>
+                <span className="font-black text-emerald-400 text-lg">{successReceipt.amount} {successReceipt.currency}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <Button onClick={downloadPdfInvoice} className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-bold gap-2 shadow-lg shadow-emerald-500/20">
+                <ShieldCheck className="w-4 h-4" /> تنزيل الفاتورة الضريبية (Tax Invoice PDF)
+              </Button>
+              <Button variant="outline" onClick={() => setSuccessReceipt(null)} className="border-border/60">
+                إغلاق
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* HyperPay Checkout Modal / Simulator Box if checkout is active */}
       {checkoutUrl && (
