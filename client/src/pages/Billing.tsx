@@ -15,6 +15,9 @@ export default function Billing() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly");
+  const [promoCode, setPromoCode] = useState("");
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [promoAppliedMsg, setPromoAppliedMsg] = useState("");
 
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: (res) => {
@@ -70,19 +73,41 @@ export default function Billing() {
     },
   ];
 
-  const handleSubscribe = (planId: "starter" | "professional" | "enterprise", price: number) => {
+  const applyPromoCode = () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code) {
+      toast.error("الرجاء إدخال رمز ترويجي صالح");
+      return;
+    }
+    if (code === "NEON20" || code === "AI2026") {
+      setDiscountPercent(20);
+      setPromoAppliedMsg("تم تطبيق خصم 20% بنجاح!");
+      toast.success("تم تطبيق الرمز الترويجي بنجاح!");
+    } else if (code === "VIP50") {
+      setDiscountPercent(50);
+      setPromoAppliedMsg("تم تطبيق خصم 50% بنجاح!");
+      toast.success("تم تطبيق الرمز الترويجي بنجاح!");
+    } else {
+      setDiscountPercent(0);
+      setPromoAppliedMsg("");
+      toast.error("الرمز الترويجي غير صالح أو منتهي الصلاحية");
+    }
+  };
+
+  const handleSubscribe = (planId: "starter" | "professional" | "enterprise", basePrice: number) => {
     setSelectedPlan(planId);
     setIsProcessing(true);
-    toast.info("جاري تجهيز بوابة دفع HyperPay الآمنة للباقة المختارة...", {
+    const finalAmount = discountPercent > 0 ? Math.round(basePrice * (1 - discountPercent / 100)) : basePrice;
+    toast.info(`جاري التواصل مع بوابة دفع HyperPay (الإجمالي: ${finalAmount} SAR)...`, {
       icon: <Sparkles className="w-4 h-4 text-neon-cyan animate-spin" />,
     });
     setTimeout(() => {
       checkoutMutation.mutate({
         planName: planId,
-        amount: price,
+        amount: finalAmount,
         currency: "SAR",
       });
-    }, 600);
+    }, 800);
   };
 
   const handleSimulateSuccess = () => {
@@ -296,12 +321,49 @@ export default function Billing() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-2xl font-black text-neon-cyan">
-                    {billingCycle === "yearly" ? "2,870" : "299"} <span className="text-sm font-semibold">SAR</span>
+                    {discountPercent > 0 ? (
+                      <span className="flex items-center gap-2">
+                        <span className="line-through text-muted-foreground text-lg">{billingCycle === "yearly" ? "2,870" : "299"}</span>
+                        <span>{billingCycle === "yearly" ? Math.round(2870 * (1 - discountPercent / 100)) : Math.round(299 * (1 - discountPercent / 100))}</span>
+                      </span>
+                    ) : (
+                      <span>{billingCycle === "yearly" ? "2,870" : "299"}</span>
+                    )}
+                    <span className="text-sm font-semibold"> SAR</span>
                     <span className="text-xs font-normal text-muted-foreground"> {billingCycle === "yearly" ? "/ سنوياً" : "/ شهر"}</span>
                   </p>
+                  {discountPercent > 0 && (
+                    <p className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> تم خصم {discountPercent}% ({promoAppliedMsg})
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {billingCycle === "yearly" ? "تعادل تقريباً 239 ريال شهرياً مع توفير 600 ريال سنويّاً." : "وكلاء غير محدودين، نماذج GPT-4o و Claude 3.5، وإدارة فريق."}
                   </p>
+                </div>
+
+                {/* Promo Code Input Box */}
+                <div className="space-y-2 bg-muted/40 p-3 rounded-lg border border-border/40">
+                  <label className="text-[11px] font-bold text-muted-foreground">هل لديك رمز ترويجي؟ (Promo Code)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="مثال: NEON20"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                      className="flex-1 bg-background border border-border/60 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:border-neon-cyan text-foreground font-mono uppercase"
+                    />
+                    <Button
+                      type="button"
+                      onClick={applyPromoCode}
+                      className="bg-secondary hover:bg-secondary/80 text-secondary-foreground text-xs font-bold px-3 py-1.5 h-auto"
+                    >
+                      تطبيق
+                    </Button>
+                  </div>
+                  {discountPercent > 0 && (
+                    <p className="text-[10px] text-emerald-400">{promoAppliedMsg}</p>
+                  )}
                 </div>
                 <ul className="space-y-2 text-xs">
                   <li className="flex items-center gap-2">
