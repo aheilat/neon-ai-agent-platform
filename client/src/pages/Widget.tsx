@@ -67,6 +67,16 @@ export default function Widget() {
     }
   };
 
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+    setSelectedAttachment(null);
+  };
+
   const togglePreviewPlay = () => {
     if (!selectedAttachment?.url) return;
     if (isPlayingPreview) {
@@ -144,9 +154,22 @@ export default function Widget() {
     <button type="button" onClick={() => fileInputRef.current?.click()} className="text-slate-400 hover:text-cyan-300 transition-colors p-1" title="إرفاق ملف أو صورة">
       <Paperclip className="h-4 w-4" />
     </button>
-    <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`transition-colors p-1 ${isRecording ? "text-red-400 animate-bounce" : "text-slate-400 hover:text-lime-300"}`} title={isRecording ? "إيقاف التسجيل" : "تسجيل رسالة صوتية"}>
-      {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-    </button>
+    {isRecording ? (
+      <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-xl">
+        <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+        <span className="text-[11px] text-red-200">جاري التسجيل...</span>
+        <button type="button" onClick={stopRecording} className="text-lime-300 hover:text-lime-200 p-0.5 ml-1" title="إنهاء وإرسال التسجيل">
+          <Square className="h-3.5 w-3.5 fill-current" />
+        </button>
+        <button type="button" onClick={cancelRecording} className="text-slate-400 hover:text-red-300 p-0.5" title="إلغاء التسجيل">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    ) : (
+      <button type="button" onClick={startRecording} className="text-slate-400 hover:text-lime-300 transition-colors p-1" title="تسجيل رسالة صوتية">
+        <Mic className="h-4 w-4" />
+      </button>
+    )}
     <Input value={message} onChange={e => setMessage(e.target.value)} placeholder={isRecording ? "جاري التسجيل الصوتي..." : "اكتب استفسارك هنا..."} className="h-9 border-0 bg-transparent text-sm text-white placeholder:text-slate-500 focus-visible:ring-0 px-1 shadow-none" />
     <Button type="submit" disabled={(!message.trim() && !selectedAttachment) || replyMutation.isPending} className="h-9 w-9 shrink-0 rounded-xl bg-lime-300 p-0 text-slate-950 hover:bg-lime-200">
       {replyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
