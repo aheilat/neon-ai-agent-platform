@@ -29,6 +29,8 @@ describe("agentEngine", () => {
   it("detects Arabic and English escalation keywords", () => {
     expect(containsEscalationKeyword("أحتاج موظف يساعدني", agent.escalationKeyword)).toBe(true);
     expect(containsEscalationKeyword("I need a human", agent.escalationKeyword)).toBe(true);
+    expect(containsEscalationKeyword("نعم حولني إلى الفريق", agent.escalationKeyword)).toBe(true);
+    expect(containsEscalationKeyword("Please transfer me", agent.escalationKeyword)).toBe(true);
     expect(containsEscalationKeyword("What are your hours?", agent.escalationKeyword)).toBe(false);
   });
 

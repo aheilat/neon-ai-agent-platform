@@ -647,12 +647,27 @@ export const appRouter = router({
       }
 
       await addMessage({ conversationId, sender: "customer", content: input.message });
+      if (history?.conversation.status === "escalated") {
+        await createNotification({
+          tenantId: tenant.id,
+          title: `متابعة محادثة مصعّدة (${agent.name})`,
+          message: `وصلت رسالة متابعة من العميل في المحادثة #${conversationId}. الرد الآلي متوقف بانتظار الفريق.`,
+          type: "escalation",
+        });
+        return { content: "", escalated: true, handoff: true, conversationId };
+      }
       const escalated = containsEscalationKeyword(input.message, agent.escalationKeyword);
       if (escalated) {
         const reply = fallbackReply(agent);
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         await markConversationStatus(tenant.id, conversationId, "escalated");
-        return { ...reply, conversationId };
+        await createNotification({
+          tenantId: tenant.id,
+          title: `تصعيد محادثة جديد (${agent.name})`,
+          message: `طلب العميل التحدث مع الفريق في المحادثة #${conversationId}.`,
+          type: "escalation",
+        });
+        return { ...reply, handoff: true, conversationId };
       }
 
       const knowledge = await getKnowledgeForAgent(tenant.id, agent.id);
@@ -698,6 +713,15 @@ export const appRouter = router({
         history = { conversation, messages: [] };
       }
       await addMessage({ conversationId, sender: "customer", content: input.message });
+      if (history?.conversation.status === "escalated") {
+        await createNotification({
+          tenantId: agent.tenantId,
+          title: `متابعة محادثة مصعّدة (${agent.name})`,
+          message: `وصلت رسالة متابعة من العميل في المحادثة #${conversationId}. الرد الآلي متوقف بانتظار الفريق.`,
+          type: "escalation",
+        });
+        return { content: "", escalated: true, handoff: true, conversationId };
+      }
       if (input.customerName || input.customerEmail || input.customerPhone) {
         await createLead({ tenantId: agent.tenantId, agentId: agent.id, conversationId, name: input.customerName || "زائر مهتم", email: input.customerEmail, phone: input.customerPhone, notes: input.message });
       }
@@ -711,7 +735,7 @@ export const appRouter = router({
           message: `طلب العميل التحدث لموظف في المحادثة #${conversationId}. يرجى المراجعة والتدخل.`,
           type: "escalation",
         });
-        return { ...reply, conversationId };
+        return { ...reply, handoff: true, conversationId };
       }
       try {
         const knowledge = await getKnowledgeForAgent(agent.tenantId, agent.id);
@@ -723,7 +747,14 @@ export const appRouter = router({
         console.error("[Public Widget] LLM request failed", error);
         const reply = createAssistantReply(agent.fallbackMessage || "أقدر أساعدك أكثر إذا شاركتني تفاصيل إضافية.", true);
         await addMessage({ conversationId, sender: "agent", content: reply.content });
-        return { ...reply, conversationId };
+        await markConversationStatus(agent.tenantId, conversationId, "escalated");
+        await createNotification({
+          tenantId: agent.tenantId,
+          title: `تصعيد تلقائي (${agent.name})`,
+          message: `تعذر على الوكيل إكمال الرد في المحادثة #${conversationId}. يرجى متابعة العميل.`,
+          type: "escalation",
+        });
+        return { ...reply, handoff: true, conversationId };
       }
     }),
   }),

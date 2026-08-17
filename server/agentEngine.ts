@@ -37,7 +37,15 @@ export function normalizeLlmContent(content: unknown): string {
 }
 
 export function containsEscalationKeyword(message: string, keywords: string | null | undefined) {
-  const normalizedMessage = message.toLocaleLowerCase();
+  const normalizedMessage = message.toLocaleLowerCase().replace(/[ًٌٍَُِّْـ]/g, "").trim();
+  const explicitTransferRequest = [
+    /(^|\s)(نعم\s+)?حو[لّ]ني(\s|$)/,
+    /(?:اريد|أريد)\s+(?:ال)?تحويل/,
+    /(?:نعم|yes)[,،\s]+(?:حو[لّ]ني|transfer)/,
+    /\btransfer me\b/i,
+    /\bconnect me to (?:a )?(?:human|agent|team)\b/i,
+  ].some(pattern => pattern.test(normalizedMessage));
+  if (explicitTransferRequest) return true;
   return (keywords || "human,موظف,موظفة").split(",").some(keyword => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
     return normalizedKeyword.length > 0 && normalizedMessage.includes(normalizedKeyword);

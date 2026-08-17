@@ -29,4 +29,9 @@
       loaded = true;
     }
   });
+  window.addEventListener("message", event => {
+    if (event.origin === origin && event.data?.type === "neon-agent-widget-close") {
+      frame.classList.remove("is-open");
+    }
+  });
 })();

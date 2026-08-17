@@ -48,7 +48,8 @@ export default function Agents() {
   const save = () => { if (selected) updateMutation.mutate({ id: selected.id, patch: draft }); };
   const syncFromWebsite = () => { if (!selected || !syncWebsiteUrl.trim() || !syncConsent) return; syncMutation.mutate({ agentId: selected.id, websiteUrl: syncWebsiteUrl.trim(), consent: true }); };
   const toggleSchedule = (enabled: boolean) => { if (!selected) return; scheduleMutation.mutate({ agentId: selected.id, intervalHours: syncIntervalHours, enabled }); };
-  const widgetCode = selected ? `<script src="${window.location.origin}/neon-agent-widget.js" data-agent-id="${selected.id}"></script>` : "";
+  const widgetOrigin = "https://neonaiagent-nu42grqa.manus.space";
+  const widgetCode = selected ? `<script src="${widgetOrigin}/neon-agent-widget.js" data-agent-id="${selected.id}"></script>` : "";
   const copyWidget = async () => { if (!widgetCode) return; await navigator.clipboard?.writeText(widgetCode); toast.success("تم نسخ كود الودجت"); };
   const exportTimelineCsv = () => {
     if (!selected || !timelineQuery.data?.length) {
