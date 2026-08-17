@@ -1,9 +1,10 @@
 import type { Agent, KnowledgeBaseItem } from "../drizzle/schema";
 
 export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], userMessage: string) {
-  const knowledgeContext = knowledge.length
-    ? knowledge
-        .map(item => `### ${item.title}\n${item.content}${item.sourceUrl ? `\nالمصدر: ${item.sourceUrl}` : ""}`)
+  const relevantKnowledge = selectRelevantKnowledge(knowledge, userMessage);
+  const knowledgeContext = relevantKnowledge.length
+    ? relevantKnowledge
+        .map(item => `### ${item.title}\n${item.content.slice(0, 1200)}${item.sourceUrl ? `\nالمصدر: ${item.sourceUrl}` : ""}`)
         .join("\n\n")
     : "لا توجد مواد معرفة إضافية متاحة حالياً.";
 
@@ -17,8 +18,21 @@ export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], u
     "اعتمد على قاعدة المعرفة أدناه فقط عند ذكر معلومات خاصة بالعمل، ولا تخترع أسعاراً أو وعوداً غير مذكورة.",
     `قاعدة المعرفة:\n${knowledgeContext}`,
     `رسالة العميل:\n${userMessage}`,
-    "اكتب رداً واضحاً ومختصراً وقابلاً للتنفيذ. إذا كان السؤال غامضاً، اسأل سؤال متابعة واحداً فقط.",
+    "اكتب رداً واضحاً ومختصراً وقابلاً للتنفيذ في 3 فقرات قصيرة كحد أقصى. لا تكرر السؤال ولا تضف مقدمات عامة. إذا كان السؤال غامضاً، اسأل سؤال متابعة واحداً فقط.",
   ].join("\n\n");
+}
+
+export function selectRelevantKnowledge(knowledge: KnowledgeBaseItem[], userMessage: string, limit = 6) {
+  const terms = userMessage.toLocaleLowerCase().replace(/[ًٌٍَُِّْـ]/g, "").split(/\s+/).filter(term => term.length >= 3);
+  return [...knowledge]
+    .map((item, index) => {
+      const searchable = `${item.title} ${item.content}`.toLocaleLowerCase().replace(/[ًٌٍَُِّْـ]/g, "");
+      const score = terms.reduce((total, term) => total + (searchable.includes(term) ? 1 : 0), 0);
+      return { item, index, score };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, limit)
+    .map(result => result.item);
 }
 
 export function normalizeLlmContent(content: unknown): string {

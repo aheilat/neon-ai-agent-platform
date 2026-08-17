@@ -7,7 +7,6 @@ import { detectAnalysisChanges, compareWebsiteAnalyses } from "./websiteAnalyzer
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { invokeLLM } from "./_core/llm";
 import {
   addMessage,
   createAgentForTenant,
@@ -58,6 +57,7 @@ import {
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
+import { generateFastChatReply, type ChatLlmMessage } from "./chatService";
 import { analyzeWebsite, websiteAnalysisSchema } from "./websiteAnalyzer";
 
 const agentInput = z.object({
@@ -66,7 +66,7 @@ const agentInput = z.object({
   persona: z.string().max(5000).optional(),
   tone: z.string().max(50).default("professional"),
   language: z.enum(["ar", "en", "bilingual"]).default("bilingual"),
-  llmModel: z.string().max(100).default("gpt-4o"),
+  llmModel: z.string().max(100).default("auto"),
   decisionRules: z.string().max(5000).optional(),
   fallbackMessage: z.string().max(1000).optional(),
   escalationKeyword: z.string().max(200).optional(),
@@ -342,13 +342,11 @@ export const appRouter = router({
         };
       }
       try {
-        const response = await invokeLLM({
-          messages: [
+        const generated = await generateFastChatReply("auto", [
             { role: "system", content: "أنت مساعد ذكي لخدمة العملاء. أجب بلغة طبيعية ومختصرة تتناسب مع طلب العميل." },
             { role: "user", content: prompt },
-          ],
-        });
-        const reply = normalizeLlmContent(response.choices[0]?.message?.content) || "أهلاً بك! كيف أقدر أساعدك اليوم؟";
+          ]);
+        const reply = generated.content || "أهلاً بك! كيف أقدر أساعدك اليوم؟";
         return { reply, escalated: false };
       } catch (err) {
         return {
@@ -674,16 +672,12 @@ export const appRouter = router({
       const knowledge = await getKnowledgeForAgent(tenant.id, agent.id);
       const prompt = buildAgentPrompt(agent, knowledge, input.message);
       try {
-        const response = await invokeLLM({
-          model: agent.llmModel || "gpt-4o",
-          messages: [
+        const generated = await generateFastChatReply(agent.llmModel, [
             { role: "system", content: `أنت وكيل خدمة عملاء احترافي مدعوم بقاعدة معرفة موثقة ومصادر رسمية لموقع النشاط. اعتمد حصراً على المعلومات والمصادر المرفقة ولا تخترع أي تفاصيل غير موجودة.` },
             ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []),
             { role: "user", content: prompt },
-          ],
-        });
-        const content = normalizeLlmContent(response.choices?.[0]?.message?.content);
-        const reply = createAssistantReply(content);
+          ]);
+        const reply = createAssistantReply(generated.content);
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         return { ...reply, conversationId };
       } catch (error) {
@@ -740,8 +734,8 @@ export const appRouter = router({
       }
       try {
         const knowledge = await getKnowledgeForAgent(agent.tenantId, agent.id);
-        const response = await invokeLLM({ model: agent.llmModel || "gpt-4o", messages: [{ role: "system", content: `أنت وكيل خدمة عملاء احترافي مدعوم بقاعدة معرفة موثقة ومصادر رسمية لموقع النشاط. اعتمد حصراً على المعلومات والمصادر المرفقة ولا تخترع أي تفاصيل غير موجودة.` }, ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []), { role: "user", content: buildAgentPrompt(agent, knowledge, input.message) }] });
-        const reply = createAssistantReply(normalizeLlmContent(response.choices?.[0]?.message?.content));
+        const generated = await generateFastChatReply(agent.llmModel, [{ role: "system", content: `أنت وكيل خدمة عملاء احترافي مدعوم بقاعدة معرفة موثقة ومصادر رسمية لموقع النشاط. اعتمد حصراً على المعلومات والمصادر المرفقة ولا تخترع أي تفاصيل غير موجودة.` }, ...(history?.messages.slice(-8).map(item => ({ role: item.sender === "customer" ? "user" as const : "assistant" as const, content: item.content })) ?? []), { role: "user", content: buildAgentPrompt(agent, knowledge, input.message) }]);
+        const reply = createAssistantReply(generated.content);
         await addMessage({ conversationId, sender: "agent", content: reply.content });
         return { ...reply, conversationId };
       } catch (error) {

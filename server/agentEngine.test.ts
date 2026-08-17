@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, normalizeLlmContent } from "./agentEngine";
+import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, normalizeLlmContent, selectRelevantKnowledge } from "./agentEngine";
 import type { Agent } from "../drizzle/schema";
 
 const agent = {
@@ -38,5 +38,13 @@ describe("agentEngine", () => {
     expect(normalizeLlmContent("  hello  ")).toBe("hello");
     expect(normalizeLlmContent([{ type: "text", text: "hello" }])).toBe("hello");
     expect(createAssistantReply("")).toEqual({ content: "أحتاج إلى تفاصيل أكثر حتى أساعدك بشكل دقيق.", escalated: false });
+  });
+
+  it("prioritizes matching knowledge and keeps the prompt context compact", () => {
+    const knowledge = [
+      { id: 1, tenantId: 7, agentId: 1, title: "تمويل السيارات", content: "نقدم خيارات تمويل للسيارات الجديدة والمستعملة.", category: "FAQ", createdAt: new Date(), updatedAt: new Date() },
+      { id: 2, tenantId: 7, agentId: 1, title: "سياسة الإرجاع", content: "الإرجاع متاح خلال 14 يوماً.", category: "FAQ", createdAt: new Date(), updatedAt: new Date() },
+    ];
+    expect(selectRelevantKnowledge(knowledge, "أريد تمويل سيارة")[0]?.title).toBe("تمويل السيارات");
   });
 });

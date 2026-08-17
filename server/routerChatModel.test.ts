@@ -45,7 +45,7 @@ vi.mock("./db", async (importOriginal) => {
 import { appRouter } from "./routers";
 
 describe("Router chat.reply LLM Model Routing", () => {
-  it("calls invokeLLM using agent.llmModel when chat.reply is executed", async () => {
+  it("migrates a legacy Claude model name to the supported routing model", async () => {
     const caller = appRouter.createCaller({
       user: { id: 1, openId: "test-user", name: "Tester", role: "admin" },
       req: { headers: { cookie: "" } } as any,
@@ -60,9 +60,9 @@ describe("Router chat.reply LLM Model Routing", () => {
 
     expect(mockInvokeLLM).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "claude-3-5-sonnet",
+        model: "claude-sonnet-4-6",
       })
     );
-    expect(res.content).toContain("claude-3-5-sonnet");
+    expect(res.content).toContain("claude-sonnet-4-6");
   });
 });
