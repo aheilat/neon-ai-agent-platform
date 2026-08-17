@@ -11,6 +11,8 @@ import { getAgentBySyncTaskUid, getLastWebsiteSnapshot, createWebsiteSnapshot, u
 import { analyzeWebsite, detectAnalysisChanges } from "../websiteAnalyzer";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { extractWhatsAppInboundMessages, sendWhatsAppText, verifyWhatsAppSignature, verifyWhatsAppWebhook } from "../whatsappService";
+import { processWhatsAppInboundMessage } from "../whatsappInbound";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,6 +36,32 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  app.get("/api/webhooks/whatsapp", (req, res) => {
+    const challenge = verifyWhatsAppWebhook(req.query as Record<string, string | string[] | undefined>, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
+    if (!challenge) return res.status(403).json({ error: "Webhook verification failed" });
+    return res.status(200).send(challenge);
+  });
+  app.post("/api/webhooks/whatsapp", express.raw({ type: "application/json", limit: "3mb" }), (req, res) => {
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+    if (!verifyWhatsAppSignature(rawBody, req.get("x-hub-signature-256") || undefined, process.env.WHATSAPP_APP_SECRET)) {
+      return res.status(401).json({ error: "Invalid WhatsApp signature" });
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody.toString("utf8"));
+    } catch {
+      return res.status(400).json({ error: "Invalid JSON payload" });
+    }
+    const incomingMessages = extractWhatsAppInboundMessages(payload);
+    res.status(200).send("EVENT_RECEIVED");
+    for (const message of incomingMessages) {
+      void processWhatsAppInboundMessage(message).then(async result => {
+        if (result.accepted && result.reply) {
+          await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply });
+        }
+      }).catch(error => console.error("[WhatsApp Webhook] Failed to process message", error));
+    }
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

@@ -504,6 +504,38 @@ export async function upsertChannelIntegration(input: { tenantId: number; agentI
   return created[0];
 }
 
+export async function getWhatsAppIntegrationByPhoneNumberId(phoneNumberId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(channelIntegrations).where(eq(channelIntegrations.channel, "whatsapp"));
+  return rows.find(row => {
+    const config = row.configJson as { phoneNumberId?: string } | null;
+    return config?.phoneNumberId === phoneNumberId;
+  });
+}
+
+export async function markWhatsAppIntegrationLive(integrationId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const rows = await db.select().from(channelIntegrations).where(eq(channelIntegrations.id, integrationId)).limit(1);
+  const integration = rows[0];
+  if (!integration) return;
+  const config = { ...((integration.configJson as Record<string, unknown> | null) || {}), setupStatus: "connected", lastWebhookAt: new Date().toISOString() };
+  await db.update(channelIntegrations).set({ isActive: 1, configJson: config }).where(eq(channelIntegrations.id, integrationId));
+}
+
+export async function findLatestChannelConversation(input: { tenantId: number; agentId: number; channel: string; customerPhone: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(conversations).where(and(
+    eq(conversations.tenantId, input.tenantId),
+    eq(conversations.agentId, input.agentId),
+    eq(conversations.channel, input.channel),
+    eq(conversations.customerPhone, input.customerPhone),
+  )).orderBy(desc(conversations.id)).limit(1);
+  return rows[0];
+}
+
 export async function getAgentAndTenant(user: User, agentId: number) {
   const tenant = await getOrCreateTenant(user);
   if (!tenant) return undefined;

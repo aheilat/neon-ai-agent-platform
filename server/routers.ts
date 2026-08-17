@@ -582,6 +582,29 @@ export const appRouter = router({
       const tenant = await workspaceForUser(ctx.user);
       return listChannelIntegrations(tenant.id, input?.agentId);
     }),
+    configureWhatsApp: protectedProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      phoneNumberId: z.string().min(5).max(100),
+      whatsappBusinessAccountId: z.string().min(5).max(100),
+      displayPhoneNumber: z.string().min(6).max(50),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      return upsertChannelIntegration({
+        tenantId: tenant.id,
+        agentId: agent.id,
+        channel: "whatsapp",
+        isActive: 0,
+        configJson: {
+          phoneNumberId: input.phoneNumberId.trim(),
+          whatsappBusinessAccountId: input.whatsappBusinessAccountId.trim(),
+          displayPhoneNumber: input.displayPhoneNumber.trim(),
+          setupStatus: "pending_webhook_verification",
+          configuredAt: new Date().toISOString(),
+        },
+      });
+    }),
     configure: protectedProcedure.input(z.object({ agentId: z.number().int().positive(), channel: z.enum(["whatsapp", "messenger", "instagram", "phone", "web"]), isActive: z.boolean(), configJson: z.record(z.string(), z.unknown()).optional() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       const agent = await getAgentInTenant(tenant.id, input.agentId);
