@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+const externalCredentialsIt = process.env.VERIFY_WHATSAPP_CREDENTIALS === "true" ? it : it.skip;
+
 describe("WhatsApp Cloud API credentials", () => {
-  it("accepts the configured access token without exposing it", async () => {
+  externalCredentialsIt("accepts the configured access token without exposing it", async () => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     expect(token, "WHATSAPP_ACCESS_TOKEN must be configured").toBeTruthy();
 
@@ -15,7 +17,7 @@ describe("WhatsApp Cloud API credentials", () => {
     expect(payload.id, "Meta response did not identify the authorized account").toBeTruthy();
   });
 
-  it("accepts the configured app secret when inspecting the access token", async () => {
+  externalCredentialsIt("accepts the configured app secret when inspecting the access token", async () => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const appSecret = process.env.WHATSAPP_APP_SECRET;
     const appId = "1150600540201785";

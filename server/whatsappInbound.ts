@@ -1,4 +1,3 @@
-import { invokeLLM } from "./_core/llm";
 import {
   addMessage,
   createConversation,
@@ -11,7 +10,8 @@ import {
   markConversationStatus,
   markWhatsAppIntegrationLive,
 } from "./db";
-import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent } from "./agentEngine";
+import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply } from "./agentEngine";
+import { generateFastChatReply } from "./chatService";
 import type { WhatsAppInboundMessage } from "./whatsappService";
 
 export async function processWhatsAppInboundMessage(input: WhatsAppInboundMessage) {
@@ -77,11 +77,11 @@ export async function processWhatsAppInboundMessage(input: WhatsAppInboundMessag
 
   try {
     const knowledge = await getKnowledgeForAgent(integration.tenantId, agent.id);
-    const response = await invokeLLM({
-      model: agent.llmModel || "gpt-4o",
-      messages: [{ role: "system", content: "أنت وكيل خدمة عملاء عبر واتساب. استخدم فقط المعرفة الرسمية المتاحة، واكتب جواباً واضحاً ومختصراً." }, { role: "user", content: buildAgentPrompt(agent, knowledge, input.content) }],
-    });
-    const reply = createAssistantReply(normalizeLlmContent(response.choices?.[0]?.message?.content));
+    const generated = await generateFastChatReply(agent.llmModel, [
+      { role: "system", content: "أنت وكيل خدمة عملاء عبر واتساب. استخدم فقط المعرفة الرسمية المتاحة، واكتب جواباً واضحاً ومختصراً." },
+      { role: "user", content: buildAgentPrompt(agent, knowledge, input.content) },
+    ]);
+    const reply = createAssistantReply(generated.content);
     await addMessage({ conversationId: conversation.id, sender: "agent", content: reply.content });
     return { accepted: true as const, conversationId: conversation.id, reply: reply.content };
   } catch (error) {

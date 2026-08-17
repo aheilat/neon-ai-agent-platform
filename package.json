@@ -10,6 +10,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:whatsapp-credentials": "VERIFY_WHATSAPP_CREDENTIALS=true vitest run server/whatsappCredentials.test.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
