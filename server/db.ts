@@ -470,6 +470,16 @@ export async function markConversationStatus(tenantId: number, conversationId: n
   await db.update(conversations).set({ status }).where(and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId)));
 }
 
+export async function updateConversationContact(input: { tenantId: number; conversationId: number; customerName: string; customerEmail?: string; customerPhone: string }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(conversations).set({
+    customerName: input.customerName,
+    customerEmail: input.customerEmail || null,
+    customerPhone: input.customerPhone,
+  }).where(and(eq(conversations.id, input.conversationId), eq(conversations.tenantId, input.tenantId)));
+}
+
 export async function getTenantStats(tenantId: number) {
   const db = await getDb();
   if (!db) return { conversations: 0, active: 0, escalated: 0, resolved: 0, messages: 0 };

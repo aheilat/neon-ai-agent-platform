@@ -47,6 +47,7 @@ import {
   getTenantStats,
   listChannelIntegrations,
   markConversationStatus,
+  updateConversationContact,
   updateAgentInTenant,
   upsertChannelIntegration,
   getSubscriptionByTenant,
@@ -756,6 +757,72 @@ export const appRouter = router({
         });
         return { ...reply, handoff: true, conversationId };
       }
+    }),
+    publicHandoffContact: publicProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      conversationId: z.number().int().positive(),
+      name: z.string().trim().min(2).max(255),
+      phone: z.string().trim().min(6).max(50),
+      email: z.string().trim().email().max(320),
+    })).mutation(async ({ input }) => {
+      const agent = await getPublicAgent(input.agentId);
+      if (!agent) throw new Error("Agent not found");
+      const history = await getConversationWithMessages(agent.tenantId, input.conversationId);
+      if (!history || history.conversation.agentId !== agent.id || history.conversation.status !== "escalated") {
+        throw new Error("Conversation is not awaiting human support");
+      }
+      await updateConversationContact({
+        tenantId: agent.tenantId,
+        conversationId: input.conversationId,
+        customerName: input.name,
+        customerEmail: input.email,
+        customerPhone: input.phone,
+      });
+      await createLead({
+        tenantId: agent.tenantId,
+        agentId: agent.id,
+        conversationId: input.conversationId,
+        name: input.name,
+        email: input.email,
+        phone: input.phone,
+        notes: "بيانات تواصل تم جمعها بعد طلب التحويل البشري.",
+      });
+      await addMessage({ conversationId: input.conversationId, sender: "system", content: "تم استلام بيانات التواصل وإرسالها إلى الفريق." });
+      await createNotification({
+        tenantId: agent.tenantId,
+        title: `بيانات تواصل جديدة (${agent.name})`,
+        message: `أرسل العميل بيانات التواصل للمحادثة المصعّدة #${input.conversationId}.`,
+        type: "lead",
+      });
+      return { success: true };
+    }),
+    publicCloseConversation: publicProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      conversationId: z.number().int().positive(),
+    })).mutation(async ({ input }) => {
+      const agent = await getPublicAgent(input.agentId);
+      if (!agent) throw new Error("Agent not found");
+      const history = await getConversationWithMessages(agent.tenantId, input.conversationId);
+      if (!history || history.conversation.agentId !== agent.id || history.conversation.status === "escalated") {
+        throw new Error("Conversation cannot be closed by the widget");
+      }
+      await addMessage({ conversationId: input.conversationId, sender: "system", content: "أغلق العميل المحادثة بعد تأكيد الإنهاء." });
+      await markConversationStatus(agent.tenantId, input.conversationId, "resolved");
+      return { success: true };
+    }),
+    publicRateConversation: publicProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      conversationId: z.number().int().positive(),
+      rating: z.number().int().min(1).max(5),
+    })).mutation(async ({ input }) => {
+      const agent = await getPublicAgent(input.agentId);
+      if (!agent) throw new Error("Agent not found");
+      const history = await getConversationWithMessages(agent.tenantId, input.conversationId);
+      if (!history || history.conversation.agentId !== agent.id || history.conversation.status !== "resolved") {
+        throw new Error("Conversation is not ready for rating");
+      }
+      await addMessage({ conversationId: input.conversationId, sender: "system", content: `تقييم العميل للمحادثة: ${input.rating} من 5 نجوم.` });
+      return { success: true };
     }),
   }),
 
