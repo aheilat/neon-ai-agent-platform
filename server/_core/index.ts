@@ -44,6 +44,7 @@ async function startServer() {
   app.post("/api/webhooks/whatsapp", express.raw({ type: "application/json", limit: "3mb" }), (req, res) => {
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
     if (!verifyWhatsAppSignature(rawBody, req.get("x-hub-signature-256") || undefined, process.env.WHATSAPP_APP_SECRET)) {
+      console.warn("[WhatsApp Webhook] Rejected event with an invalid signature");
       return res.status(401).json({ error: "Invalid WhatsApp signature" });
     }
     let payload: unknown;
@@ -53,11 +54,23 @@ async function startServer() {
       return res.status(400).json({ error: "Invalid JSON payload" });
     }
     const incomingMessages = extractWhatsAppInboundMessages(payload);
+    console.info("[WhatsApp Webhook] Accepted event", { incomingMessageCount: incomingMessages.length });
     res.status(200).send("EVENT_RECEIVED");
     for (const message of incomingMessages) {
       void processWhatsAppInboundMessage(message).then(async result => {
+        console.info("[WhatsApp Webhook] Processing result", {
+          accepted: result.accepted,
+          reason: "reason" in result ? result.reason : undefined,
+          hasReply: "reply" in result && Boolean(result.reply),
+          handoff: "handoff" in result && Boolean(result.handoff),
+        });
         if (result.accepted && result.reply) {
-          await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply });
+          try {
+            await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply });
+            console.info("[WhatsApp Webhook] Automated reply sent");
+          } catch (error) {
+            console.error("[WhatsApp Webhook] Failed to send automated reply", error);
+          }
         }
       }).catch(error => console.error("[WhatsApp Webhook] Failed to process message", error));
     }
