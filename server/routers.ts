@@ -55,6 +55,9 @@ import {
   createPaymentTransaction,
   getTenantTransactions,
   getTenantUsage,
+  getOnboardingDraft,
+  saveOnboardingDraft,
+  clearOnboardingDraft,
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
 import { completeMetaEmbeddedSignup, getEmbeddedSignupPublicConfig } from "./metaEmbeddedSignup";
@@ -178,6 +181,21 @@ export const appRouter = router({
         conversations,
         integrations,
       };
+    }),
+    onboardingDraft: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const draft = await getOnboardingDraft(tenant.id);
+      return draft ? { payload: draft.payloadJson, updatedAt: draft.updatedAt } : null;
+    }),
+    saveOnboardingDraft: protectedProcedure.input(z.object({ payload: z.record(z.string(), z.unknown()) })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await saveOnboardingDraft(tenant.id, input.payload);
+      return { success: true };
+    }),
+    clearOnboardingDraft: protectedProcedure.mutation(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      await clearOnboardingDraft(tenant.id);
+      return { success: true };
     }),
   }),
 

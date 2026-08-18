@@ -236,6 +236,16 @@ export const whatsappEmbeddedCredentials = mysqlTable("whatsapp_embedded_credent
 export type WhatsAppEmbeddedCredential = typeof whatsappEmbeddedCredentials.$inferSelect;
 export type InsertWhatsAppEmbeddedCredential = typeof whatsappEmbeddedCredentials.$inferInsert;
 
+export const onboardingDrafts = mysqlTable("onboarding_drafts", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  payloadJson: json("payloadJson").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type OnboardingDraft = typeof onboardingDrafts.$inferSelect;
+export type InsertOnboardingDraft = typeof onboardingDrafts.$inferInsert;
+
 export const websiteSnapshots = mysqlTable("website_snapshots", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),

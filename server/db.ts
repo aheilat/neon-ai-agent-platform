@@ -20,6 +20,7 @@ import {
   workspaceNotifications,
   pushSubscriptions,
   notificationPreferences,
+  onboardingDrafts,
   tenants,
   users,
   websiteSnapshots,
@@ -41,6 +42,31 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function getOnboardingDraft(tenantId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const drafts = await db.select().from(onboardingDrafts).where(eq(onboardingDrafts.tenantId, tenantId)).limit(1);
+  return drafts[0];
+}
+
+export async function saveOnboardingDraft(tenantId: number, payloadJson: Record<string, unknown>) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await getOnboardingDraft(tenantId);
+  if (existing) {
+    await db.update(onboardingDrafts).set({ payloadJson }).where(eq(onboardingDrafts.id, existing.id));
+  } else {
+    await db.insert(onboardingDrafts).values({ tenantId, payloadJson });
+  }
+  return getOnboardingDraft(tenantId);
+}
+
+export async function clearOnboardingDraft(tenantId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(onboardingDrafts).where(eq(onboardingDrafts.tenantId, tenantId));
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

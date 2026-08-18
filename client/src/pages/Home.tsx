@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, Headphones, HeartPulse, HelpCircle, Loader2, MapPin, MessageSquareText, Package, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -39,6 +39,19 @@ type WebsiteDiscovery = {
   websiteUrl: string;
   pages: Array<{ url: string; title: string; description: string; headings: string[] }>;
   analysis: WebsiteAnalysis;
+};
+
+type OnboardingDraftPayload = {
+  step: number;
+  selectedGoals: string[];
+  websiteUrl: string;
+  websiteConsent: boolean;
+  websiteResult: WebsiteDiscovery | null;
+  websiteServices: WebsiteService[];
+  templateId: "general" | "ecommerce" | "realestate" | "healthcare";
+  selectedChannels: string[];
+  language: "ar" | "en" | "bilingual";
+  tone: string;
 };
 
 const goals: Goal[] = [
@@ -80,6 +93,11 @@ function Onboarding() {
   const analyzeWebsite = trpc.agents.analyzeWebsite.useMutation();
   const onboardFromWebsite = trpc.agents.onboardFromWebsite.useMutation();
   const previewChat = trpc.agents.previewChat.useMutation();
+  const onboardingDraftQuery = trpc.workspace.onboardingDraft.useQuery();
+  const saveOnboardingDraft = trpc.workspace.saveOnboardingDraft.useMutation();
+  const clearOnboardingDraft = trpc.workspace.clearOnboardingDraft.useMutation();
+  const draftRestoredRef = useRef(false);
+  const [draftReady, setDraftReady] = useState(false);
   const [step, setStep] = useState(() => {
     if (typeof window === "undefined") return 0;
     const onboardingMode = new URLSearchParams(window.location.search).get("onboarding");
@@ -99,6 +117,33 @@ function Onboarding() {
   const [previewMessages, setPreviewMessages] = useState<Array<{ role: "agent" | "user"; content: string }>>([]);
 
   const selectedGoalObjects = useMemo(() => goals.filter(goal => selectedGoals.includes(goal.id)), [selectedGoals]);
+
+  useEffect(() => {
+    if (onboardingDraftQuery.isLoading || draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const payload = onboardingDraftQuery.data?.payload as Partial<OnboardingDraftPayload> | undefined;
+    if (payload) {
+      if (typeof payload.step === "number") setStep(Math.max(0, Math.min(3, payload.step)));
+      if (Array.isArray(payload.selectedGoals)) setSelectedGoals(payload.selectedGoals);
+      if (typeof payload.websiteUrl === "string") setWebsiteUrl(payload.websiteUrl);
+      if (typeof payload.websiteConsent === "boolean") setWebsiteConsent(payload.websiteConsent);
+      if (payload.websiteResult) setWebsiteResult(payload.websiteResult);
+      if (Array.isArray(payload.websiteServices)) setWebsiteServices(payload.websiteServices);
+      if (payload.templateId) setTemplateId(payload.templateId);
+      if (Array.isArray(payload.selectedChannels)) setSelectedChannels(payload.selectedChannels);
+      if (payload.language) setLanguage(payload.language);
+      if (typeof payload.tone === "string") setTone(payload.tone);
+      toast.info("تمت استعادة مسودة إعداد وكيلك تلقائياً");
+    }
+    setDraftReady(true);
+  }, [onboardingDraftQuery.data, onboardingDraftQuery.isLoading]);
+
+  useEffect(() => {
+    if (!draftReady || step >= 4) return;
+    const payload: OnboardingDraftPayload = { step, selectedGoals, websiteUrl, websiteConsent, websiteResult, websiteServices, templateId, selectedChannels, language, tone };
+    const timer = window.setTimeout(() => saveOnboardingDraft.mutate({ payload }), 650);
+    return () => window.clearTimeout(timer);
+  }, [draftReady, step, selectedGoals, websiteUrl, websiteConsent, websiteResult, websiteServices, templateId, selectedChannels, language, tone]);
 
   const toggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
@@ -189,6 +234,7 @@ function Onboarding() {
         });
       }
       localStorage.setItem("neon-onboarding-complete", "1");
+      clearOnboardingDraft.mutate();
       toast.success("تم إنشاء وكيلك الذكي بنجاح");
       setStep(4);
     } catch (error: any) {
@@ -206,9 +252,9 @@ function Onboarding() {
             <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5b4df5] to-[#8c7cff] text-white shadow-lg shadow-indigo-300/40"><Bot className="h-5 w-5" /></span>
             <span>NEON <span className="font-normal text-slate-500">AI Agent</span></span>
           </button>
-          <Button variant="ghost" onClick={() => { localStorage.setItem("neon-onboarding-complete", "1"); setLocation("/agents"); }} className="text-xs text-slate-500 hover:bg-white hover:text-slate-900">
+          <div className="flex items-center gap-3"><span className="hidden items-center gap-1 text-[11px] font-semibold text-emerald-600 sm:flex"><span className={`h-1.5 w-1.5 rounded-full ${saveOnboardingDraft.isPending ? "animate-pulse bg-indigo-500" : "bg-emerald-500"}`} />{saveOnboardingDraft.isPending ? "جارٍ الحفظ" : "محفوظ تلقائياً"}</span><Button variant="ghost" onClick={() => { localStorage.setItem("neon-onboarding-complete", "1"); clearOnboardingDraft.mutate(); setLocation("/agents"); }} className="text-xs text-slate-500 hover:bg-white hover:text-slate-900">
             تخطي الآن <ArrowLeft className="mr-1 h-4 w-4" />
-          </Button>
+          </Button></div>
         </header>
 
         <div className="mx-auto mt-4 flex w-full max-w-3xl items-center gap-2 px-1 sm:mt-8">
