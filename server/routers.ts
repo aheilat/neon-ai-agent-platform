@@ -49,6 +49,7 @@ import {
   updateConversationContact,
   updateAgentInTenant,
   upsertChannelIntegration,
+  upsertWhatsAppEmbeddedCredential,
   getSubscriptionByTenant,
   upsertSubscription,
   createPaymentTransaction,
@@ -56,6 +57,7 @@ import {
   getTenantUsage,
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
+import { completeMetaEmbeddedSignup, getEmbeddedSignupPublicConfig } from "./metaEmbeddedSignup";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
 import { generateFastChatReply, type ChatLlmMessage } from "./chatService";
 import { analyzeWebsite, websiteAnalysisSchema } from "./websiteAnalyzer";
@@ -580,6 +582,64 @@ export const appRouter = router({
     list: protectedProcedure.input(z.object({ agentId: z.number().int().positive().optional() }).optional()).query(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       return listChannelIntegrations(tenant.id, input?.agentId);
+    }),
+    embeddedWhatsAppConfig: protectedProcedure.input(z.object({ agentId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      return getEmbeddedSignupPublicConfig();
+    }),
+    completeEmbeddedWhatsApp: protectedProcedure.input(z.object({
+      agentId: z.number().int().positive(),
+      code: z.string().min(10).max(6000),
+      phoneNumberId: z.string().min(5).max(100),
+      whatsappBusinessAccountId: z.string().min(5).max(100),
+      businessPortfolioId: z.string().min(5).max(100).optional(),
+      pin: z.string().regex(/^\d{6}$/, "PIN must contain 6 digits"),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      const completed = await completeMetaEmbeddedSignup({
+        code: input.code,
+        phoneNumberId: input.phoneNumberId,
+        whatsappBusinessAccountId: input.whatsappBusinessAccountId,
+        businessPortfolioId: input.businessPortfolioId,
+        pin: input.pin,
+      });
+      const integration = await upsertChannelIntegration({
+        tenantId: tenant.id,
+        agentId: agent.id,
+        channel: "whatsapp",
+        isActive: 1,
+        configJson: {
+          phoneNumberId: completed.phoneNumberId,
+          whatsappBusinessAccountId: completed.whatsappBusinessAccountId,
+          businessPortfolioId: completed.businessPortfolioId,
+          displayPhoneNumber: completed.displayPhoneNumber || "",
+          verifiedName: completed.verifiedName || "",
+          qualityRating: completed.qualityRating || "",
+          codeVerificationStatus: completed.codeVerificationStatus || "",
+          setupProvider: "meta_embedded_signup",
+          setupStatus: "awaiting_customer_billing",
+          configuredAt: new Date().toISOString(),
+        },
+      });
+      if (!integration) throw new Error("Channel integration could not be saved");
+      await upsertWhatsAppEmbeddedCredential({
+        tenantId: tenant.id,
+        channelIntegrationId: integration.id,
+        whatsappBusinessAccountId: completed.whatsappBusinessAccountId,
+        phoneNumberId: completed.phoneNumberId,
+        businessPortfolioId: completed.businessPortfolioId,
+        encryptedBusinessToken: completed.encryptedBusinessToken,
+      });
+      return {
+        integrationId: integration.id,
+        phoneNumberId: completed.phoneNumberId,
+        displayPhoneNumber: completed.displayPhoneNumber,
+        setupStatus: "awaiting_customer_billing" as const,
+      };
     }),
     configureWhatsApp: protectedProcedure.input(z.object({
       agentId: z.number().int().positive(),

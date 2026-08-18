@@ -9,6 +9,7 @@ import {
   InsertTenant,
   agents,
   channelIntegrations,
+  whatsappEmbeddedCredentials,
   conversations,
   knowledgeBase,
   leads,
@@ -26,6 +27,7 @@ import {
   InsertUser,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { decryptBusinessToken } from "./metaEmbeddedSignup";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -522,6 +524,60 @@ export async function getWhatsAppIntegrationByPhoneNumberId(phoneNumberId: strin
     const config = row.configJson as { phoneNumberId?: string } | null;
     return config?.phoneNumberId === phoneNumberId;
   });
+}
+
+export async function upsertWhatsAppEmbeddedCredential(input: {
+  tenantId: number;
+  channelIntegrationId: number;
+  whatsappBusinessAccountId: string;
+  phoneNumberId: string;
+  businessPortfolioId?: string;
+  encryptedBusinessToken: string;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await db.select().from(whatsappEmbeddedCredentials).where(and(
+    eq(whatsappEmbeddedCredentials.tenantId, input.tenantId),
+    eq(whatsappEmbeddedCredentials.channelIntegrationId, input.channelIntegrationId),
+  )).limit(1);
+  if (existing[0]) {
+    await db.update(whatsappEmbeddedCredentials).set({
+      whatsappBusinessAccountId: input.whatsappBusinessAccountId,
+      phoneNumberId: input.phoneNumberId,
+      businessPortfolioId: input.businessPortfolioId || null,
+      encryptedBusinessToken: input.encryptedBusinessToken,
+      tokenVersion: "v1",
+    }).where(eq(whatsappEmbeddedCredentials.id, existing[0].id));
+  } else {
+    await db.insert(whatsappEmbeddedCredentials).values({
+      tenantId: input.tenantId,
+      channelIntegrationId: input.channelIntegrationId,
+      whatsappBusinessAccountId: input.whatsappBusinessAccountId,
+      phoneNumberId: input.phoneNumberId,
+      businessPortfolioId: input.businessPortfolioId,
+      encryptedBusinessToken: input.encryptedBusinessToken,
+      tokenVersion: "v1",
+    });
+  }
+  const saved = await db.select().from(whatsappEmbeddedCredentials).where(and(
+    eq(whatsappEmbeddedCredentials.tenantId, input.tenantId),
+    eq(whatsappEmbeddedCredentials.channelIntegrationId, input.channelIntegrationId),
+  )).limit(1);
+  return saved[0];
+}
+
+export async function getEmbeddedBusinessTokenForPhoneNumberId(phoneNumberId: string) {
+  const integration = await getWhatsAppIntegrationByPhoneNumberId(phoneNumberId);
+  if (!integration) return undefined;
+  const db = await getDb();
+  if (!db) return undefined;
+  const credential = await db.select().from(whatsappEmbeddedCredentials).where(and(
+    eq(whatsappEmbeddedCredentials.tenantId, integration.tenantId),
+    eq(whatsappEmbeddedCredentials.channelIntegrationId, integration.id),
+    eq(whatsappEmbeddedCredentials.phoneNumberId, phoneNumberId),
+  )).limit(1);
+  if (!credential[0]) return undefined;
+  return decryptBusinessToken(credential[0].encryptedBusinessToken);
 }
 
 export async function markWhatsAppIntegrationLive(integrationId: number) {

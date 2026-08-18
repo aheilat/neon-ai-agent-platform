@@ -217,6 +217,25 @@ export const channelIntegrations = mysqlTable("channel_integrations", {
 export type ChannelIntegration = typeof channelIntegrations.$inferSelect;
 export type InsertChannelIntegration = typeof channelIntegrations.$inferInsert;
 
+// Private credentials returned by Meta Embedded Signup. This table is never
+// exposed through client-facing channel queries; the token is encrypted before
+// persistence and is scoped to exactly one tenant channel integration.
+export const whatsappEmbeddedCredentials = mysqlTable("whatsapp_embedded_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  channelIntegrationId: int("channelIntegrationId").notNull(),
+  whatsappBusinessAccountId: varchar("whatsappBusinessAccountId", { length: 100 }).notNull(),
+  phoneNumberId: varchar("phoneNumberId", { length: 100 }).notNull(),
+  businessPortfolioId: varchar("businessPortfolioId", { length: 100 }),
+  encryptedBusinessToken: longtext("encryptedBusinessToken").notNull(),
+  tokenVersion: varchar("tokenVersion", { length: 20 }).default("v1").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WhatsAppEmbeddedCredential = typeof whatsappEmbeddedCredentials.$inferSelect;
+export type InsertWhatsAppEmbeddedCredential = typeof whatsappEmbeddedCredentials.$inferInsert;
+
 export const websiteSnapshots = mysqlTable("website_snapshots", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),

@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { sdk } from "./sdk";
-import { getAgentBySyncTaskUid, getLastWebsiteSnapshot, createWebsiteSnapshot, updateAgentInTenant, replaceWebsiteKnowledge, createNotification } from "../db";
+import { getAgentBySyncTaskUid, getLastWebsiteSnapshot, createWebsiteSnapshot, updateAgentInTenant, replaceWebsiteKnowledge, createNotification, getEmbeddedBusinessTokenForPhoneNumberId } from "../db";
 import { analyzeWebsite, detectAnalysisChanges } from "../websiteAnalyzer";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -66,7 +66,8 @@ async function startServer() {
         });
         if (result.accepted && result.reply) {
           try {
-            await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply });
+            const customerBusinessToken = await getEmbeddedBusinessTokenForPhoneNumberId(message.phoneNumberId);
+            await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply, accessToken: customerBusinessToken });
             console.info("[WhatsApp Webhook] Automated reply sent");
           } catch (error) {
             console.error("[WhatsApp Webhook] Failed to send automated reply", error);
