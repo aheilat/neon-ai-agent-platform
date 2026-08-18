@@ -137,6 +137,7 @@ export async function ensureDefaultAgent(tenantId: number) {
     decisionRules: "إذا طلب العميل سعراً أو موعداً، اجمع بياناته ووجّهه للخطوة التالية. إذا طلب موظفاً، صعّد المحادثة.",
     fallbackMessage: "أقدر أساعدك أكثر إذا شاركتني بعض التفاصيل، أو أقدر أحوّلك الآن لأحد أعضاء الفريق.",
     escalationKeyword: "موظف,موظفة,human,agent",
+    capabilitiesJson: { enabled: ["answer", "qualify", "capture", "escalate"] },
     status: "active",
   });
 }
@@ -164,7 +165,10 @@ export async function getAgentInTenant(tenantId: number, agentId: number) {
 export async function createAgentForTenant(input: InsertAgent) {
   const db = await getDb();
   if (!db) return undefined;
-  await db.insert(agents).values(input);
+  await db.insert(agents).values({
+    ...input,
+    capabilitiesJson: input.capabilitiesJson ?? { enabled: ["answer", "qualify", "capture", "escalate"] },
+  });
   const result = await db.select().from(agents).where(and(eq(agents.tenantId, input.tenantId), eq(agents.name, input.name))).orderBy(desc(agents.id)).limit(1);
   return result[0];
 }
@@ -651,6 +655,7 @@ export async function upsertSubscription(data: {
   tenantId: number;
   planName: string;
   status: "active" | "trialing" | "past_due" | "canceled" | "incomplete";
+  billingCycle?: "trial" | "monthly" | "yearly";
   amount: number;
   currency?: string;
   hyperPayCheckoutId?: string;
@@ -665,6 +670,7 @@ export async function upsertSubscription(data: {
       .set({
         planName: data.planName,
         status: data.status,
+        billingCycle: data.billingCycle || "monthly",
         amount: data.amount,
         currency: data.currency || "SAR",
         hyperPayCheckoutId: data.hyperPayCheckoutId,
@@ -679,6 +685,7 @@ export async function upsertSubscription(data: {
       tenantId: data.tenantId,
       planName: data.planName,
       status: data.status,
+      billingCycle: data.billingCycle || "monthly",
       amount: data.amount,
       currency: data.currency || "SAR",
       hyperPayCheckoutId: data.hyperPayCheckoutId,

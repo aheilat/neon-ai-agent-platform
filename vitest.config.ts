@@ -14,7 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.{ts,tsx}", "server/**/*.spec.{ts,tsx}", "client/src/**/*.test.{ts,tsx}", "client/src/**/*.spec.{ts,tsx}"],
+    include: ["server/**/*.test.{ts,tsx}", "server/**/*.spec.{ts,tsx}", "client/src/**/*.test.{ts,tsx}", "client/src/**/*.spec.{ts,tsx}", "shared/**/*.test.{ts,tsx}", "shared/**/*.spec.{ts,tsx}"],
     testTimeout: 10_000,
   },
 });

@@ -1,0 +1,79 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { startLogin } from "@/const";
+import { ArrowLeft, Bot, Check, LockKeyhole, Sparkles } from "lucide-react";
+import { useEffect } from "react";
+import { Link, useLocation } from "wouter";
+
+export function getAccessCopy(isRegister: boolean) {
+  if (isRegister) {
+    return {
+      heading: "أنشئ مساحة عملك في Neon",
+      description: "ابدأ بناء وكيلك الأول مجاناً، ثم أضف المعرفة والقنوات عندما تكون جاهزاً.",
+      action: "إنشاء حسابي وبدء التجربة",
+      switchLead: "لديك مساحة عمل بالفعل؟",
+      switchAction: "تسجيل الدخول",
+      switchPath: "/login",
+    };
+  }
+
+  return {
+    heading: "أهلاً بعودتك إلى Neon",
+    description: "سجّل الدخول للعودة إلى وكلائك ومحادثاتك وقنواتك وفوترة مساحة عملك.",
+    action: "تسجيل الدخول والمتابعة",
+    switchLead: "جديد على Neon؟",
+    switchAction: "أنشئ حساباً مجاناً",
+    switchPath: "/register",
+  };
+}
+
+export default function Access() {
+  const [location, setLocation] = useLocation();
+  const { isAuthenticated, loading } = useAuth();
+  const isRegister = location === "/register";
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const intentRaw = localStorage.getItem("neon-checkout-intent");
+    if (intentRaw) {
+      localStorage.removeItem("neon-checkout-intent");
+      try {
+        const intent = JSON.parse(intentRaw) as { plan: string; cycle: string };
+        setLocation(`/billing?plan=${encodeURIComponent(intent.plan)}&cycle=${encodeURIComponent(intent.cycle)}`);
+        return;
+      } catch {
+        // Fall through to the guided first-agent flow if a stale intent is malformed.
+      }
+    }
+    setLocation("/start");
+  }, [isAuthenticated, setLocation]);
+
+  if (isAuthenticated) return null;
+
+  const copy = getAccessCopy(isRegister);
+
+  return (
+    <main className="relative grid min-h-screen overflow-hidden bg-[#07111f] text-white lg:grid-cols-[1.04fr_0.96fr]" dir="rtl">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_22%,rgba(103,232,249,0.16),transparent_26rem),radial-gradient(circle_at_15%_86%,rgba(190,242,100,0.09),transparent_25rem)]" />
+      <section className="relative z-10 flex flex-col px-5 py-6 sm:px-10 lg:px-16 lg:py-10">
+        <Link href="/" className="inline-flex w-fit items-center gap-2 text-sm font-bold text-slate-200 hover:text-white"><ArrowLeft className="h-4 w-4" /> العودة إلى الصفحة الرئيسية</Link>
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-12">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-lime-300 text-slate-950 shadow-[0_0_34px_rgba(103,232,249,0.25)]"><Bot className="h-6 w-6" /></div>
+          <p className="mt-7 text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Neon Workspace</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">{copy.heading}</h1>
+          <p className="mt-4 text-sm leading-7 text-slate-300">{copy.description}</p>
+          <div className="mt-8 rounded-2xl border border-white/[0.09] bg-white/[0.045] p-4">
+            <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-lime-300" /><div><p className="text-sm font-bold text-white">دخول آمن بدون كلمة مرور داخل Neon</p><p className="mt-1 text-xs leading-6 text-slate-400">نستخدم تسجيل دخول آمن ليتم إنشاء أو استعادة مساحة عملك وحفظ وكلائك وبياناتك بصورة محمية.</p></div></div>
+          </div>
+          <Button disabled={loading} onClick={() => { if (!localStorage.getItem("neon-checkout-intent")) localStorage.setItem("neon-after-auth", "/start"); startLogin(); }} size="lg" className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{loading ? "جارٍ التحقق..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>
+          <p className="mt-5 text-center text-sm text-slate-400">{copy.switchLead} <Link href={copy.switchPath} className="font-bold text-cyan-200 hover:text-cyan-100">{copy.switchAction}</Link></p>
+        </div>
+      </section>
+      <aside className="relative z-10 hidden border-r border-white/[0.07] bg-[#0a1828]/70 p-10 lg:flex lg:flex-col lg:justify-between">
+        <div className="flex items-center gap-2.5" dir="ltr"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-300 to-lime-300 text-slate-950"><Bot className="h-5 w-5" /></span><span className="text-sm font-bold tracking-[0.12em]">NEON <span className="font-medium text-slate-400">AI</span></span></div>
+        <div><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-200"><Sparkles className="h-6 w-6" /></span><h2 className="mt-6 max-w-sm text-4xl font-semibold leading-tight tracking-[-0.04em]">اجعل كل استفسار بداية علاقة أفضل مع عميلك.</h2><div className="mt-8 space-y-4">{["ابنِ الوكيل من موقع شركتك", "ابدأ بلا بطاقة دفع", "فعّل WhatsApp والموقع عند الجاهزية"].map(item => <p key={item} className="flex items-center gap-3 text-sm text-slate-300"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-lime-300/15 text-lime-300"><Check className="h-3.5 w-3.5" /></span>{item}</p>)}</div></div>
+        <p className="text-xs text-slate-500">Arabic-first AI agents for customer conversations.</p>
+      </aside>
+    </main>
+  );
+}

@@ -402,6 +402,23 @@ export function Dashboard() {
   </div>;
 }
 
+function TrialBootstrap() {
+  const { isAuthenticated } = useAuth();
+  const subscriptionQuery = trpc.billing.getSubscription.useQuery(undefined, { enabled: isAuthenticated });
+  const startTrial = trpc.billing.startTrial.useMutation({
+    onSuccess: () => subscriptionQuery.refetch(),
+  });
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || subscriptionQuery.isLoading || subscriptionQuery.data?.subscription || startedRef.current || startTrial.isPending) return;
+    startedRef.current = true;
+    startTrial.mutate();
+  }, [isAuthenticated, startTrial, subscriptionQuery.data?.subscription, subscriptionQuery.isLoading]);
+
+  return null;
+}
+
 export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(() => typeof window !== "undefined" && localStorage.getItem("neon-onboarding-complete") !== "1");
 
@@ -411,5 +428,5 @@ export default function Home() {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  return showOnboarding ? <Onboarding /> : <DashboardLayout><Dashboard /></DashboardLayout>;
+  return <><TrialBootstrap />{showOnboarding ? <Onboarding /> : <DashboardLayout><Dashboard /></DashboardLayout>}</>;
 }

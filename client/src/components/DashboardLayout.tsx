@@ -23,7 +23,7 @@ import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Bell, Bot, BrainCircuit, ChartNoAxesCombined, CreditCard, LayoutDashboard, LogOut, MessageSquareText, PanelLeft, Radio, Settings2, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
@@ -40,17 +40,17 @@ const gabsterCategories = [
   {
     category: "OPERATE",
     items: [
-      { icon: LayoutDashboard, label: "Appointments", path: "/" },
-      { icon: BrainCircuit, label: "Admissions & Intake", path: "/knowledge" },
-      { icon: Settings2, label: "Workflow Automation", path: "/settings" },
-      { icon: CreditCard, label: "Sales Automation", path: "/billing" },
+      { icon: LayoutDashboard, label: "Workspace overview", path: "/start" },
+      { icon: BrainCircuit, label: "Knowledge & training", path: "/knowledge" },
+      { icon: Settings2, label: "Workflow automation", path: "/settings" },
+      { icon: CreditCard, label: "Plans & billing", path: "/billing" },
     ]
   },
   {
     category: "ANALYZE",
     items: [
-      { icon: ChartNoAxesCombined, label: "Analytics & Dashboards", path: "/analytics" },
-      { icon: BrainCircuit, label: "GABSTER Vision", path: "/knowledge" },
+      { icon: ChartNoAxesCombined, label: "Analytics & dashboards", path: "/analytics" },
+      { icon: BrainCircuit, label: "Knowledge intelligence", path: "/knowledge" },
       { icon: Bot, label: "AI Engine", path: "/agents" },
     ]
   },
@@ -90,23 +90,25 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
+      <div className="flex min-h-screen items-center justify-center bg-[#07111f] px-4 text-white">
+        <div className="flex w-full max-w-md flex-col items-center gap-7 rounded-[28px] border border-white/10 bg-[#0b1728] p-8 shadow-2xl shadow-slate-950/40">
           <div className="flex flex-col items-center gap-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-lime-300 text-slate-950"><Bot className="h-6 w-6" /></div>
+            <h1 className="text-center text-2xl font-semibold tracking-tight">
               سجّل الدخول للمتابعة
             </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
+            <p className="max-w-sm text-center text-sm leading-7 text-slate-400">
               هذه مساحة عمل آمنة لإدارة وكلائك وقنوات عملائك. سجّل الدخول لبدء البناء.
             </p>
           </div>
           <Button
             onClick={() => startLogin()}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full bg-gradient-to-l from-cyan-300 to-lime-300 text-slate-950 shadow-lg hover:from-cyan-200 hover:to-lime-200"
           >
             تسجيل الدخول / Sign in
           </Button>
+          <Link href="/register" className="text-sm font-semibold text-cyan-200 hover:text-cyan-100">ليس لديك حساب؟ ابدأ مجاناً</Link>
         </div>
       </div>
     );

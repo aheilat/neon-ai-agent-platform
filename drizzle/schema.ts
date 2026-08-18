@@ -41,6 +41,7 @@ export const agents = mysqlTable("agents", {
   decisionRules: longtext("decisionRules"),
   fallbackMessage: text("fallbackMessage"),
   escalationKeyword: varchar("escalationKeyword", { length: 100 }).default("موظف,human,agent").notNull(),
+  capabilitiesJson: json("capabilitiesJson"),
   sourceWebsiteUrl: text("sourceWebsiteUrl"),
   lastWebsiteSyncAt: timestamp("lastWebsiteSyncAt"),
   syncCronTaskUid: varchar("syncCronTaskUid", { length: 65 }),
@@ -266,6 +267,7 @@ export const subscriptions = mysqlTable("subscriptions", {
   tenantId: int("tenantId").notNull(),
   planName: varchar("planName", { length: 50 }).default("starter").notNull(), // starter, professional, enterprise
   status: mysqlEnum("status", ["active", "trialing", "past_due", "canceled", "incomplete"]).default("incomplete").notNull(),
+  billingCycle: mysqlEnum("billingCycle", ["trial", "monthly", "yearly"]).default("monthly").notNull(),
   amount: int("amount").notNull(), // in SAR/USD cents or minor units (e.g., 29900 for $299)
   currency: varchar("currency", { length: 10 }).default("SAR").notNull(),
   hyperPayCheckoutId: varchar("hyperPayCheckoutId", { length: 255 }),

@@ -2,6 +2,14 @@ import type { Agent, KnowledgeBaseItem } from "../drizzle/schema";
 
 export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], userMessage: string) {
   const relevantKnowledge = selectRelevantKnowledge(knowledge, userMessage);
+  const configuredCapabilities = (agent.capabilitiesJson as { enabled?: string[] } | null)?.enabled;
+  const capabilities = configuredCapabilities?.length ? configuredCapabilities : ["answer", "qualify", "capture", "escalate"];
+  const capabilityGuidance = [
+    capabilities.includes("answer") ? "أجب من المعرفة الموثقة فقط." : "لا تقدّم جواباً معلوماتياً مفصلاً؛ حوّل الطلب للفريق.",
+    capabilities.includes("qualify") ? "عند الحاجة، اسأل سؤال تأهيل واحداً فقط عن الهدف أو المنصة أو المجال." : "لا تبدأ استجواباً تأهيلياً.",
+    capabilities.includes("capture") ? "عند طلب عرض أو متابعة، اجمع بيانات التواصل الضرورية فقط وبإذن العميل." : "لا تطلب بيانات اتصال إلا عند التحويل البشري الصريح.",
+    capabilities.includes("escalate") ? "احترم طلب التحويل البشري فوراً." : "عند الحاجة إلى تصعيد، أوضح أن الفريق سيتابع وفق سياسة القناة.",
+  ].join(" ");
   const knowledgeContext = relevantKnowledge.length
     ? relevantKnowledge
         .map(item => `### ${item.title}\n${item.content.slice(0, 1200)}${item.sourceUrl ? `\nالمصدر: ${item.sourceUrl}` : ""}`)
@@ -16,6 +24,7 @@ export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], u
     `ملخص العمل: ${agent.description || "خدمة العملاء والمبيعات."}`,
     `قواعد اتخاذ القرار: ${agent.decisionRules || "افهم الاحتياج، اقترح الخطوة الأنسب، واطلب بيانات التواصل عند الحاجة."}`,
     `رسالة التحويل للبشر عند الحاجة: ${agent.fallbackMessage || "سأحوّل محادثتك إلى أحد أعضاء الفريق لمساعدتك بشكل أدق."}`,
+    `القدرات المفعلة: ${capabilities.join(", ")}. توجيه القدرات: ${capabilityGuidance}`,
     "منهجية جودة الرد: طابق لغة رسالة العميل الأخيرة حرفياً: إن كتب بالإنجليزية، أجب بالإنجليزية فقط؛ وإن كتب بالعربية، أجب بالعربية فقط. قدّم حقيقة مدعومة فقط عند الحديث عن الخدمة أو السعر أو النتائج. لا تخترع أسعاراً أو باقات أو خصومات أو ضمانات أداء، ولا تفترض دعماً للفيديو أو أي صيغة أو ميزة لا تذكرها المعرفة صراحة. إذا لم تؤكد المعرفة الإجابة، اذكر ذلك بوضوح واسأل سؤال متابعة واحداً أو اعرض التحويل للفريق. عند استكشاف احتياج تسويقي، ابدأ بأهم تفصيل ناقص فقط، مثل المنصة أو الهدف أو المجال أو نوع الأصل الإعلاني. اختم كل رد بخطوة عملية مناسبة ولا تكرر سؤالاً أجاب عنه العميل.",
     `قاعدة المعرفة:\n${knowledgeContext}`,
     `رسالة العميل:\n${userMessage}`,

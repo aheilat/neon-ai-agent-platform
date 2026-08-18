@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` ADD `billingCycle` enum('trial','monthly','yearly') DEFAULT 'monthly' NOT NULL;

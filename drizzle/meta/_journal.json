@@ -127,6 +127,20 @@
       "when": 1787053525818,
       "tag": "0017_familiar_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1787092704557,
+      "tag": "0018_heavy_the_hood",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1787093815918,
+      "tag": "0019_adorable_the_hood",
+      "breakpoints": true
     }
   ]
 }

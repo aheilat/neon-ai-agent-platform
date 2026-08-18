@@ -73,4 +73,12 @@ describe("agentEngine", () => {
     expect(getReplyLanguageInstruction(agent, "Can you create ads for TikTok?")).toContain("Respond entirely in English");
     expect(getReplyLanguageInstruction(agent, "هل تدعمون إعلانات تيك توك؟")).toContain("Respond entirely in Arabic");
   });
+
+  it("uses the enabled capability pack to constrain discovery and contact capture", () => {
+    const answerOnlyAgent = { ...agent, capabilitiesJson: { enabled: ["answer"] } } as Agent;
+    const prompt = buildAgentPrompt(answerOnlyAgent, [], "أريد عرض سعر");
+    expect(prompt).toContain("القدرات المفعلة: answer");
+    expect(prompt).toContain("لا تبدأ استجواباً تأهيلياً");
+    expect(prompt).toContain("لا تطلب بيانات اتصال إلا عند التحويل البشري الصريح");
+  });
 });

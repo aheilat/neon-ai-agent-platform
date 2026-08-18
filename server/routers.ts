@@ -60,10 +60,13 @@ import {
   clearOnboardingDraft,
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
+import { BILLING_CYCLES, getPlanPrice, getSubscriptionPeriodEnd, type BillingCycle, type PaidPlanId } from "@shared/billingPlans";
 import { completeMetaEmbeddedSignup, getEmbeddedSignupPublicConfig } from "./metaEmbeddedSignup";
 import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, getReplyLanguageInstruction, normalizeLlmContent, toSafeAgentSettings } from "./agentEngine";
 import { generateFastChatReply, type ChatLlmMessage } from "./chatService";
 import { analyzeWebsite, websiteAnalysisSchema } from "./websiteAnalyzer";
+
+const agentCapability = z.enum(["answer", "qualify", "capture", "escalate"]);
 
 const agentInput = z.object({
   name: z.string().min(2).max(255),
@@ -75,6 +78,7 @@ const agentInput = z.object({
   decisionRules: z.string().max(5000).optional(),
   fallbackMessage: z.string().max(1000).optional(),
   escalationKeyword: z.string().max(200).optional(),
+  capabilities: z.array(agentCapability).min(1).max(4).default(["answer", "qualify", "capture", "escalate"]),
   status: z.enum(["active", "paused", "draft"]).default("active"),
 });
 
@@ -206,7 +210,8 @@ export const appRouter = router({
     }),
     create: protectedProcedure.input(agentInput).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
-      return createAgentForTenant({ tenantId: tenant.id, ...input });
+      const { capabilities, ...agentFields } = input;
+      return createAgentForTenant({ tenantId: tenant.id, ...agentFields, capabilitiesJson: { enabled: capabilities } });
     }),
     analyzeWebsite: protectedProcedure.input(z.object({
       websiteUrl: z.string().url().max(2048),
@@ -377,7 +382,8 @@ export const appRouter = router({
     }),
     update: protectedProcedure.input(z.object({ id: z.number().int().positive(), patch: agentInput.partial() })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
-      return updateAgentInTenant(tenant.id, input.id, input.patch);
+      const { capabilities, ...agentFields } = input.patch;
+      return updateAgentInTenant(tenant.id, input.id, capabilities ? { ...agentFields, capabilitiesJson: { enabled: capabilities } } : agentFields);
     }),
     syncFromWebsite: protectedProcedure.input(z.object({
       agentId: z.number().int().positive(),
@@ -1009,26 +1015,51 @@ export const appRouter = router({
       const txs = await getTenantTransactions(tenant.id);
       const usage = await getTenantUsage(tenant.id);
       return {
-        subscription: sub || { planName: "starter", status: "active", amount: 0, currency: "SAR" },
+        subscription: sub,
+        trialAvailable: !sub,
         transactions: txs,
         usage,
       };
     }),
+    startTrial: protectedProcedure.mutation(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const existing = await getSubscriptionByTenant(tenant.id);
+      if (existing) {
+        return { subscription: existing, started: false, message: "لديك اشتراك أو تجربة مسجلة بالفعل." };
+      }
+
+      const now = new Date();
+      const subscription = await upsertSubscription({
+        tenantId: tenant.id,
+        planName: "trial",
+        status: "trialing",
+        billingCycle: "trial",
+        amount: 0,
+        currency: "SAR",
+        currentPeriodStart: now,
+        currentPeriodEnd: getSubscriptionPeriodEnd(now, "trial"),
+      });
+      return { subscription, started: true, message: "بدأت تجربتك المجانية لمدة 14 يوماً." };
+    }),
     createCheckout: protectedProcedure.input(z.object({
       planName: z.enum(["starter", "professional", "enterprise"]),
-      amount: z.number().positive(),
+      billingCycle: z.enum(BILLING_CYCLES).default("monthly"),
+      amount: z.number().positive().optional(),
       currency: z.string().default("SAR"),
     })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
+      const planName = input.planName as PaidPlanId;
+      const billingCycle = input.billingCycle as BillingCycle;
+      const amount = getPlanPrice(planName, billingCycle);
       const transactionId = "TX_" + tenant.id + "_" + Date.now();
       const res = await hyperPayService.createCheckoutSession({
-        amount: input.amount,
+        amount,
         currency: input.currency,
         paymentType: "DB",
         merchantTransactionId: transactionId,
         customerEmail: ctx.user.email || "customer@neon.ai",
         customerName: ctx.user.name || tenant.name,
-        planName: input.planName,
+        planName,
         tenantId: tenant.id,
       });
 
@@ -1036,9 +1067,10 @@ export const appRouter = router({
         // Record pending transaction & subscription intent
         await upsertSubscription({
           tenantId: tenant.id,
-          planName: input.planName,
+          planName,
           status: "incomplete",
-          amount: Math.round(input.amount * 100), // convert to minor units
+          billingCycle,
+          amount: Math.round(amount * 100), // convert to minor units
           currency: input.currency,
           hyperPayCheckoutId: res.checkoutId,
         });
@@ -1048,7 +1080,7 @@ export const appRouter = router({
           tenantId: tenant.id,
           subscriptionId: sub?.id,
           checkoutId: res.checkoutId,
-          amount: Math.round(input.amount * 100),
+          amount: Math.round(amount * 100),
           currency: input.currency,
           status: "pending",
           responseMessage: res.resultMessage || "Checkout session created",
@@ -1071,16 +1103,18 @@ export const appRouter = router({
         
         // Update subscription to active
         const now = new Date();
-        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const billingCycle = sub?.billingCycle === "yearly" ? "yearly" : "monthly";
+        const periodEnd = getSubscriptionPeriodEnd(now, billingCycle);
         await upsertSubscription({
           tenantId: tenant.id,
           planName: sub?.planName || "professional",
           status: "active",
+          billingCycle,
           amount: amountMinor,
           currency: verification.currency || "SAR",
           hyperPayCheckoutId: input.checkoutId,
           currentPeriodStart: now,
-          currentPeriodEnd: nextMonth,
+          currentPeriodEnd: periodEnd,
         });
 
         await createPaymentTransaction({

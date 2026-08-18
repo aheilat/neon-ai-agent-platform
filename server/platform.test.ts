@@ -62,4 +62,29 @@ describe("Neon AI Agent Platform Server Routers", () => {
 
     expect(updated?.name).toBe("Sales Pro Bot");
   });
+
+  it("persists the selected capability pack on the tenant-owned agent", async () => {
+    const ctx = createTestContext(12, "open-id-12");
+    const caller = appRouter.createCaller(ctx);
+    const agent = await caller.agents.create({
+      name: "Qualified Sales Agent",
+      description: "Captures qualified leads",
+      persona: "Professional",
+      tone: "professional",
+      language: "bilingual",
+      decisionRules: "Ask one qualifying question.",
+      fallbackMessage: "A human will follow up.",
+      escalationKeyword: "human,موظف",
+      capabilities: ["answer", "qualify", "capture"],
+      status: "active",
+    });
+
+    expect((agent?.capabilitiesJson as { enabled?: string[] } | undefined)?.enabled).toEqual(["answer", "qualify", "capture"]);
+
+    const updated = await caller.agents.update({
+      id: agent!.id,
+      patch: { capabilities: ["answer", "escalate"] },
+    });
+    expect((updated?.capabilitiesJson as { enabled?: string[] } | undefined)?.enabled).toEqual(["answer", "escalate"]);
+  });
 });

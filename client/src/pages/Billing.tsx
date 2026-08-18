@@ -6,15 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ShieldCheck, CreditCard, Sparkles, CheckCircle2, AlertCircle, ExternalLink, Zap, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
+import { BILLING_PLANS, getPlanPrice, type BillingCycle, type PaidPlanId } from "@shared/billingPlans";
 
 export default function Billing() {
   const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.billing.getSubscription.useQuery();
-  const [selectedPlan, setSelectedPlan] = useState<"starter" | "professional" | "enterprise">("professional");
+  const [selectedPlan, setSelectedPlan] = useState<PaidPlanId>(() => {
+    const requested = new URLSearchParams(window.location.search).get("plan");
+    return requested === "starter" || requested === "professional" || requested === "enterprise" ? requested : "professional";
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(() => new URLSearchParams(window.location.search).get("cycle") === "monthly" ? "monthly" : "yearly");
   const [promoCode, setPromoCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [promoAppliedMsg, setPromoAppliedMsg] = useState("");
@@ -41,7 +45,7 @@ export default function Billing() {
       toast.success(res.message);
       setSuccessReceipt({
         planName: selectedPlan,
-        amount: billingCycle === "yearly" ? Math.round(2870 * (1 - discountPercent / 100)) : Math.round(299 * (1 - discountPercent / 100)),
+        amount: Math.round(getPlanPrice(selectedPlan, billingCycle) * (1 - discountPercent / 100)),
         currency: "SAR",
         transactionId: checkoutUrl || "TX_" + Date.now(),
         date: new Date().toLocaleString("ar-SA"),
@@ -84,34 +88,6 @@ export default function Billing() {
     toast.success("تم تنزيل الفاتورة الضريبية بنجاح!");
   };
 
-  const plans = [
-    {
-      id: "starter",
-      name: "الباقة المبتدئة (Starter)",
-      price: 99,
-      currency: "SAR",
-      description: "مناسبة للمشاريع الناشئة والأفراد الراغبين ببدء خدمة العملاء بالذكاء الاصطناعي.",
-      features: ["وكيل ذكي واحد (1 Agent)", "تعلّم تلقائي من موقع الويب", "دعم قنوات الويب والواتساب", "تخزين 500 مستند معرفي"],
-    },
-    {
-      id: "professional",
-      name: "الباقة المحترفة (Professional)",
-      price: 299,
-      currency: "SAR",
-      description: "المعيار المثالي للشركات المتوسطة مع أدوات مبيعات وإدارة فريق متكاملة.",
-      features: ["حتى 5 وكلاء ذكيين (AI Agents)", "نماذج OpenAI GPT-4o & Claude 3.5", "إدارة الفريق وتحويل المحادثات", "إشعارات المتصفح والتنبيهات الصوتية", "جدولة مزامنة الموقع والتصدير لـ CSV"],
-      popular: true,
-    },
-    {
-      id: "enterprise",
-      name: "باقة المؤسسات (Enterprise)",
-      price: 799,
-      currency: "SAR",
-      description: "حلول سيادية ومخصصة للشركات الكبرى مع دعم فني مخصص ونماذج GPT-5.",
-      features: ["عدد غير محدود من الوكلاء", "وصول حصري لنموذج GPT-5", "عزل تام وعناوين مخصصة", "مدير حساب خاص ودعم 24/7", "تكامل كامل مع كافة قنوات الاتصال والهاتف"],
-    },
-  ];
-
   const applyPromoCode = () => {
     const code = promoCode.trim().toUpperCase();
     if (!code) {
@@ -133,17 +109,18 @@ export default function Billing() {
     }
   };
 
-  const handleSubscribe = (planId: "starter" | "professional" | "enterprise", basePrice: number) => {
+  const handleSubscribe = (planId: PaidPlanId) => {
     setSelectedPlan(planId);
     setIsProcessing(true);
-    const finalAmount = discountPercent > 0 ? Math.round(basePrice * (1 - discountPercent / 100)) : basePrice;
-    toast.info(`جاري التواصل مع بوابة دفع HyperPay (الإجمالي: ${finalAmount} SAR)...`, {
+    const basePrice = getPlanPrice(planId, billingCycle);
+    const displayAmount = discountPercent > 0 ? Math.round(basePrice * (1 - discountPercent / 100)) : basePrice;
+    toast.info(`جاري تجهيز جلسة دفع HyperPay (${billingCycle === "yearly" ? "سنوية" : "شهرية"}، الإجمالي: ${displayAmount} SAR)...`, {
       icon: <Sparkles className="w-4 h-4 text-neon-cyan animate-spin" />,
     });
     setTimeout(() => {
       checkoutMutation.mutate({
         planName: planId,
-        amount: finalAmount,
+        billingCycle,
         currency: "SAR",
       });
     }, 800);
@@ -419,7 +396,7 @@ export default function Billing() {
                   disabled={isProcessing}
                   onClick={() => {
                     setShowUpgradeModal(false);
-                    handleSubscribe("professional", billingCycle === "yearly" ? 2870 : 299);
+                    handleSubscribe("professional");
                   }}
                   className="w-full bg-gradient-to-r from-neon-cyan to-indigo-500 text-slate-950 font-bold gap-2 shadow-lg shadow-neon-cyan/20 hover:opacity-90 transition-all transform active:scale-95 disabled:opacity-50"
                 >
@@ -533,19 +510,19 @@ export default function Billing() {
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((plan) => (
-            <Card key={plan.id} className={`relative flex flex-col justify-between border transition-all duration-300 hover:border-neon-cyan/50 ${plan.popular ? "border-neon-cyan/60 bg-gradient-to-b from-neon-cyan/10 via-card to-card shadow-2xl scale-[1.02]" : "border-border/60 bg-card/50"}`}>
-              {plan.popular && (
+          {BILLING_PLANS.map((plan) => (
+            <Card key={plan.id} className={`relative flex flex-col justify-between border transition-all duration-300 hover:border-neon-cyan/50 ${plan.highlighted ? "border-neon-cyan/60 bg-gradient-to-b from-neon-cyan/10 via-card to-card shadow-2xl scale-[1.02]" : "border-border/60 bg-card/50"}`}>
+              {plan.highlighted && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-neon-cyan text-slate-950 font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow">
                   الأكثر طلباً (Most Popular)
                 </div>
               )}
               <CardHeader>
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
+                <CardTitle className="text-xl">{plan.shortName} <span className="text-sm font-medium text-muted-foreground" dir="ltr">({plan.name})</span></CardTitle>
                 <CardDescription className="min-h-[40px]">{plan.description}</CardDescription>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight">{plan.price}</span>
-                  <span className="text-sm font-semibold text-muted-foreground">{plan.currency} / شهر</span>
+                  <span className="text-4xl font-extrabold tracking-tight">{getPlanPrice(plan.id, billingCycle)}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">SAR / {billingCycle === "yearly" ? "سنة" : "شهر"}</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6 flex-1 flex flex-col justify-between">
@@ -558,9 +535,9 @@ export default function Billing() {
                   ))}
                 </ul>
                 <Button
-                  onClick={() => handleSubscribe(plan.id as any, plan.price)}
+                  onClick={() => handleSubscribe(plan.id)}
                   disabled={isProcessing}
-                  className={`w-full gap-2 font-bold transition-all transform active:scale-95 disabled:opacity-50 ${plan.popular ? "bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 shadow-lg shadow-neon-cyan/20" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+                  className={`w-full gap-2 font-bold transition-all transform active:scale-95 disabled:opacity-50 ${plan.highlighted ? "bg-neon-cyan text-slate-950 hover:bg-neon-cyan/90 shadow-lg shadow-neon-cyan/20" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
                 >
                   {isProcessing && selectedPlan === plan.id ? (
                     <span className="flex items-center gap-2">
