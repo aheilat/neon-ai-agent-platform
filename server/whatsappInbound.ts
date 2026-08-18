@@ -10,7 +10,7 @@ import {
   markConversationStatus,
   markWhatsAppIntegrationLive,
 } from "./db";
-import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply } from "./agentEngine";
+import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, fallbackReply, getReplyLanguageInstruction } from "./agentEngine";
 import { generateFastChatReply } from "./chatService";
 import type { WhatsAppInboundMessage } from "./whatsappService";
 
@@ -79,6 +79,7 @@ export async function processWhatsAppInboundMessage(input: WhatsAppInboundMessag
     const knowledge = await getKnowledgeForAgent(integration.tenantId, agent.id);
     const generated = await generateFastChatReply(agent.llmModel, [
       { role: "system", content: "أنت وكيل خدمة عملاء عبر واتساب. استخدم فقط المعرفة الرسمية المتاحة، واكتب جواباً واضحاً ومختصراً." },
+      { role: "system", content: getReplyLanguageInstruction(agent, input.content) },
       { role: "user", content: buildAgentPrompt(agent, knowledge, input.content) },
     ]);
     const reply = createAssistantReply(generated.content);

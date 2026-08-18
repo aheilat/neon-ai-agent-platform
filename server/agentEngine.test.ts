@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, normalizeLlmContent, selectRelevantKnowledge } from "./agentEngine";
+import { buildAgentPrompt, containsEscalationKeyword, createAssistantReply, getReplyLanguageInstruction, normalizeLlmContent, selectRelevantKnowledge } from "./agentEngine";
 import type { Agent } from "../drizzle/schema";
 
 const agent = {
@@ -31,6 +31,7 @@ describe("agentEngine", () => {
     expect(containsEscalationKeyword("I need a human", agent.escalationKeyword)).toBe(true);
     expect(containsEscalationKeyword("نعم حولني إلى الفريق", agent.escalationKeyword)).toBe(true);
     expect(containsEscalationKeyword("Please transfer me", agent.escalationKeyword)).toBe(true);
+    expect(containsEscalationKeyword("أريد التحدث مع موظف", "موظف، إنسان، شكوى، عاجل")).toBe(true);
     expect(containsEscalationKeyword("What are your hours?", agent.escalationKeyword)).toBe(false);
   });
 
@@ -46,5 +47,30 @@ describe("agentEngine", () => {
       { id: 2, tenantId: 7, agentId: 1, title: "سياسة الإرجاع", content: "الإرجاع متاح خلال 14 يوماً.", category: "FAQ", createdAt: new Date(), updatedAt: new Date() },
     ];
     expect(selectRelevantKnowledge(knowledge, "أريد تمويل سيارة")[0]?.title).toBe("تمويل السيارات");
+  });
+
+  it("keeps operational guidance but excludes unrelated business knowledge", () => {
+    const knowledge = [
+      { id: 1, tenantId: 7, agentId: 1, title: "خطوة التأهيل", content: "اسأل سؤالاً واحداً عن هدف العميل قبل الاقتراح.", category: "Agent goal", createdAt: new Date(), updatedAt: new Date() },
+      { id: 2, tenantId: 7, agentId: 1, title: "إعلانات TikTok", content: "يمكن إنشاء أصول إعلانية لمنصة TikTok.", category: "Website service", createdAt: new Date(), updatedAt: new Date() },
+      { id: 3, tenantId: 7, agentId: 1, title: "سياسة الإرجاع", content: "الإرجاع متاح خلال 14 يوماً.", category: "FAQ", createdAt: new Date(), updatedAt: new Date() },
+    ];
+    const selected = selectRelevantKnowledge(knowledge, "هل تنشئون إعلانات TikTok؟");
+    expect(selected.map(item => item.title)).toEqual(["إعلانات TikTok", "خطوة التأهيل"]);
+    expect(selected.map(item => item.title)).not.toContain("سياسة الإرجاع");
+  });
+
+  it("adds factual, language-aware and next-step quality guardrails to the prompt", () => {
+    const prompt = buildAgentPrompt(agent, [], "أريد إعلاناً لمتجري");
+    expect(prompt).toContain("طابق لغة رسالة العميل الأخيرة");
+    expect(prompt).toContain("لا تخترع أسعاراً أو باقات أو خصومات أو ضمانات أداء");
+    expect(prompt).toContain("إن كتب بالإنجليزية، أجب بالإنجليزية فقط");
+    expect(prompt).toContain("لا تفترض دعماً للفيديو");
+    expect(prompt).toContain("اختم كل رد بخطوة عملية مناسبة");
+  });
+
+  it("emits a higher-priority language requirement for bilingual agents", () => {
+    expect(getReplyLanguageInstruction(agent, "Can you create ads for TikTok?")).toContain("Respond entirely in English");
+    expect(getReplyLanguageInstruction(agent, "هل تدعمون إعلانات تيك توك؟")).toContain("Respond entirely in Arabic");
   });
 });
