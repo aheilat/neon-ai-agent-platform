@@ -24,6 +24,7 @@ import {
   tenants,
   users,
   websiteSnapshots,
+  tenantDataPolicies,
   User,
   InsertUser,
 } from "../drizzle/schema";
@@ -42,6 +43,38 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function getTenantDataPolicy(tenantId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(tenantDataPolicies).where(eq(tenantDataPolicies.tenantId, tenantId)).limit(1);
+  return rows[0];
+}
+
+export async function upsertTenantDataPolicy(input: {
+  tenantId: number;
+  retentionDays: number;
+  requireConsent: boolean;
+  allowModelTraining: boolean;
+  deletionContactEmail?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(tenantDataPolicies).values({
+    tenantId: input.tenantId,
+    retentionDays: input.retentionDays,
+    requireConsent: input.requireConsent ? 1 : 0,
+    allowModelTraining: input.allowModelTraining ? 1 : 0,
+    deletionContactEmail: input.deletionContactEmail || null,
+  }).onDuplicateKeyUpdate({ set: {
+    retentionDays: input.retentionDays,
+    requireConsent: input.requireConsent ? 1 : 0,
+    allowModelTraining: input.allowModelTraining ? 1 : 0,
+    deletionContactEmail: input.deletionContactEmail || null,
+    updatedAt: new Date(),
+  } });
+  return getTenantDataPolicy(input.tenantId);
 }
 
 export async function getOnboardingDraft(tenantId: number) {
@@ -743,5 +776,96 @@ export async function getTenantUsage(tenantId: number) {
     agentsCount: Number(agentRows[0]?.total ?? 0),
     conversationsCount: Number(convRows[0]?.total ?? 0),
     knowledgeCount: Number(kbRows[0]?.total ?? 0),
+  };
+}
+
+function classifyEscalationReason(message: string | undefined) {
+  const normalized = (message || "").toLowerCase();
+  if (/(موظف|موظفة|بشري|تواصل|human|agent|representative|call me)/.test(normalized)) return "طلب العميل التواصل مع الفريق";
+  if (/(سعر|أسعار|عرض سعر|quote|price|pricing|offer)/.test(normalized)) return "سؤال سعر أو عرض يحتاج مراجعة المعرفة";
+  if (/(شكوى|مشكلة|complaint|problem|refund|استرجاع)/.test(normalized)) return "مشكلة أو شكوى تحتاج متابعة بشرية";
+  return "حالة تحتاج مراجعة سياق المحادثة";
+}
+
+function classifyMessageLanguageStyle(message: string) {
+  const hasArabic = /[\u0600-\u06FF]/.test(message);
+  const hasLatin = /[A-Za-z]/.test(message);
+  const isArabizi = /\b(?:ana|3ndi|3and|shlon|shlonak|keef|kif|mafi|kh|7|5|9)\b/i.test(message);
+  if (hasArabic && hasLatin) return "عربي + English";
+  if (hasArabic && /(وش|شلون|هلا|أبغى|ابي|عندي|مافي)/.test(message)) return "عربية خليجية محتملة";
+  if (hasArabic) return "عربية";
+  if (isArabizi) return "Arabizi";
+  return "English / أخرى";
+}
+
+export async function getAgentQualityStats(tenantId: number, agentId: number) {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalConversations: 0,
+      resolvedCount: 0,
+      escalatedCount: 0,
+      activeCount: 0,
+      resolutionRate: 0,
+      escalationRate: 0,
+      knowledgeItemCount: 0,
+      channels: [] as Array<{ channel: string; count: number }>,
+      languageStyles: [] as Array<{ style: string; count: number }>,
+      escalationReasons: [] as Array<{ reason: string; count: number }>,
+      knowledgeGaps: [] as Array<{ conversationId: number; channel: string; reason: string; sample: string; createdAt: Date }>,
+    };
+  }
+
+  const [conversationRows, knowledgeRows] = await Promise.all([
+    db.select().from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.agentId, agentId))).orderBy(desc(conversations.updatedAt)),
+    db.select({ total: count() }).from(knowledgeBase).where(and(eq(knowledgeBase.tenantId, tenantId), eq(knowledgeBase.agentId, agentId))),
+  ]);
+  const conversationIds = conversationRows.map(conversation => conversation.id);
+  const messageRows = conversationIds.length
+    ? await db.select().from(messages).where(inArray(messages.conversationId, conversationIds)).orderBy(desc(messages.createdAt))
+    : [];
+  const latestCustomerMessage = new Map<number, string>();
+  for (const message of messageRows) {
+    if (message.sender === "customer" && !latestCustomerMessage.has(message.conversationId)) latestCustomerMessage.set(message.conversationId, message.content);
+  }
+
+  const resolvedCount = conversationRows.filter(conversation => conversation.status === "resolved").length;
+  const escalatedConversations = conversationRows.filter(conversation => conversation.status === "escalated");
+  const escalatedCount = escalatedConversations.length;
+  const activeCount = conversationRows.filter(conversation => conversation.status === "active").length;
+  const completedCount = resolvedCount + escalatedCount;
+  const channelCounts = new Map<string, number>();
+  for (const conversation of conversationRows) channelCounts.set(conversation.channel, (channelCounts.get(conversation.channel) || 0) + 1);
+  const languageStyleCounts = new Map<string, number>();
+  for (const sample of Array.from(latestCustomerMessage.values())) {
+    const style = classifyMessageLanguageStyle(sample);
+    languageStyleCounts.set(style, (languageStyleCounts.get(style) || 0) + 1);
+  }
+
+  const knowledgeGaps = escalatedConversations.slice(0, 6).map(conversation => {
+    const sample = latestCustomerMessage.get(conversation.id) || "لم تسجل رسالة عميل قابلة للعرض لهذه المحادثة.";
+    return {
+      conversationId: conversation.id,
+      channel: conversation.channel,
+      reason: classifyEscalationReason(sample),
+      sample: sample.slice(0, 180),
+      createdAt: conversation.createdAt,
+    };
+  });
+  const reasonCounts: Record<string, number> = {};
+  for (const gap of knowledgeGaps) reasonCounts[gap.reason] = (reasonCounts[gap.reason] || 0) + 1;
+
+  return {
+    totalConversations: conversationRows.length,
+    resolvedCount,
+    escalatedCount,
+    activeCount,
+    resolutionRate: completedCount ? Math.round((resolvedCount / completedCount) * 100) : 0,
+    escalationRate: conversationRows.length ? Math.round((escalatedCount / conversationRows.length) * 100) : 0,
+    knowledgeItemCount: Number(knowledgeRows[0]?.total ?? 0),
+    channels: Array.from(channelCounts.entries()).map(([channel, count]) => ({ channel, count })),
+    languageStyles: Array.from(languageStyleCounts.entries()).map(([style, count]) => ({ style, count })).sort((a, b) => b.count - a.count),
+    escalationReasons: Object.entries(reasonCounts).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    knowledgeGaps,
   };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hyperPayService } from "./hyperpayService";
+import { hyperPayService, isSuccessfulHyperPayResult } from "./hyperpayService";
 
 describe("HyperPay Integration Tests", () => {
   it("should initialize checkout session successfully in test/mock mode", async () => {
@@ -25,5 +25,10 @@ describe("HyperPay Integration Tests", () => {
     expect(verification.success).toBe(true);
     expect(verification.responseCode).toBe("000.100.110");
     expect(verification.amount).toBe(299);
+  });
+
+  it("rejects non-success gateway response codes without network access", () => {
+    expect(isSuccessfulHyperPayResult("800.100.153")).toBe(false);
+    expect(isSuccessfulHyperPayResult("000.100.110")).toBe(true);
   });
 });

@@ -58,6 +58,16 @@ export default function Billing() {
     },
   });
 
+  const cancelCheckoutMutation = trpc.billing.cancelCheckout.useMutation({
+    onSuccess: (result) => {
+      setCheckoutUrl(null);
+      setIsProcessing(false);
+      utils.billing.getSubscription.invalidate();
+      toast.info(result.message);
+    },
+    onError: (error) => toast.error(error.message || "تعذر إلغاء جلسة الدفع الآن."),
+  });
+
   const downloadPdfInvoice = () => {
     if (!successReceipt) return;
     const invoiceContent = `
@@ -491,8 +501,8 @@ export default function Billing() {
               <Button onClick={handleSimulateSuccess} disabled={verifyMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
                 <CheckCircle2 className="w-4 h-4" /> محاكاة إتمام الدفع بنجاح (HyperPay Sandbox)
               </Button>
-              <Button variant="outline" onClick={() => setCheckoutUrl(null)}>
-                إلغاء
+              <Button variant="outline" disabled={cancelCheckoutMutation.isPending} onClick={() => { if (checkoutUrl) cancelCheckoutMutation.mutate({ checkoutId: checkoutUrl }); }}>
+                {cancelCheckoutMutation.isPending ? "جارٍ الإلغاء..." : "إلغاء جلسة الدفع"}
               </Button>
             </div>
           </CardContent>

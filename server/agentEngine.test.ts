@@ -67,11 +67,15 @@ describe("agentEngine", () => {
     expect(prompt).toContain("إن كتب بالإنجليزية، أجب بالإنجليزية فقط");
     expect(prompt).toContain("لا تفترض دعماً للفيديو");
     expect(prompt).toContain("اختم كل رد بخطوة عملية مناسبة");
+    expect(prompt).toContain("نبرة خليجية محايدة");
+    expect(prompt).toContain("Arabizi");
   });
 
   it("emits a higher-priority language requirement for bilingual agents", () => {
     expect(getReplyLanguageInstruction(agent, "Can you create ads for TikTok?")).toContain("Respond entirely in English");
     expect(getReplyLanguageInstruction(agent, "هل تدعمون إعلانات تيك توك؟")).toContain("Respond entirely in Arabic");
+    expect(getReplyLanguageInstruction(agent, "ana 3ndi so2al 3an al as3ar")).toContain("Arabizi");
+    expect(getReplyLanguageInstruction(agent, "ana 3ndi so2al 3an al as3ar")).toContain("Arabic script");
   });
 
   it("uses the enabled capability pack to constrain discovery and contact capture", () => {

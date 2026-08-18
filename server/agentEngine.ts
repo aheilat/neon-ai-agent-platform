@@ -25,7 +25,7 @@ export function buildAgentPrompt(agent: Agent, knowledge: KnowledgeBaseItem[], u
     `قواعد اتخاذ القرار: ${agent.decisionRules || "افهم الاحتياج، اقترح الخطوة الأنسب، واطلب بيانات التواصل عند الحاجة."}`,
     `رسالة التحويل للبشر عند الحاجة: ${agent.fallbackMessage || "سأحوّل محادثتك إلى أحد أعضاء الفريق لمساعدتك بشكل أدق."}`,
     `القدرات المفعلة: ${capabilities.join(", ")}. توجيه القدرات: ${capabilityGuidance}`,
-    "منهجية جودة الرد: طابق لغة رسالة العميل الأخيرة حرفياً: إن كتب بالإنجليزية، أجب بالإنجليزية فقط؛ وإن كتب بالعربية، أجب بالعربية فقط. قدّم حقيقة مدعومة فقط عند الحديث عن الخدمة أو السعر أو النتائج. لا تخترع أسعاراً أو باقات أو خصومات أو ضمانات أداء، ولا تفترض دعماً للفيديو أو أي صيغة أو ميزة لا تذكرها المعرفة صراحة. إذا لم تؤكد المعرفة الإجابة، اذكر ذلك بوضوح واسأل سؤال متابعة واحداً أو اعرض التحويل للفريق. عند استكشاف احتياج تسويقي، ابدأ بأهم تفصيل ناقص فقط، مثل المنصة أو الهدف أو المجال أو نوع الأصل الإعلاني. اختم كل رد بخطوة عملية مناسبة ولا تكرر سؤالاً أجاب عنه العميل.",
+    "منهجية جودة الرد: طابق لغة رسالة العميل الأخيرة حرفياً: إن كتب بالإنجليزية، أجب بالإنجليزية فقط؛ وإن كتب بالعربية، أجب بالعربية فقط. في العربية استخدم عربية واضحة مع نبرة خليجية محايدة وخفيفة عند ملاءمتها، من دون تقليد لهجة العميل أو الإفراط في العامية. إذا كتب العميل Arabizi أو عربياً ممزوجاً بالإنجليزية، افهم المقصود وأجب بعربية واضحة ما لم يطلب صراحةً الكتابة بالحروف اللاتينية. قدّم حقيقة مدعومة فقط عند الحديث عن الخدمة أو السعر أو النتائج. لا تخترع أسعاراً أو باقات أو خصومات أو ضمانات أداء، ولا تفترض دعماً للفيديو أو أي صيغة أو ميزة لا تذكرها المعرفة صراحة. إذا لم تؤكد المعرفة الإجابة، اذكر ذلك بوضوح واسأل سؤال متابعة واحداً أو اعرض التحويل للفريق. عند استكشاف احتياج تسويقي، ابدأ بأهم تفصيل ناقص فقط، مثل المنصة أو الهدف أو المجال أو نوع الأصل الإعلاني. اختم كل رد بخطوة عملية مناسبة ولا تكرر سؤالاً أجاب عنه العميل.",
     `قاعدة المعرفة:\n${knowledgeContext}`,
     `رسالة العميل:\n${userMessage}`,
     "اكتب رداً واضحاً ومختصراً وقابلاً للتنفيذ في 3 فقرات قصيرة كحد أقصى. لا تضف مقدمات عامة أو ادعاءات تسويقية فارغة. إذا كان السؤال غامضاً، اسأل سؤال متابعة واحداً فقط.",
@@ -36,6 +36,10 @@ export function getReplyLanguageInstruction(agent: Agent, userMessage: string) {
   if (agent.language === "ar") return "LANGUAGE REQUIREMENT: Respond entirely in Arabic. Do not add an English translation unless the customer asks for one.";
   if (agent.language === "en") return "LANGUAGE REQUIREMENT: Respond entirely in English. Do not add an Arabic translation unless the customer asks for one.";
   const containsArabic = /[\u0600-\u06FF]/.test(userMessage);
+  const isArabizi = /\b(?:ana|3ndi|3and|shlon|shlonak|keef|kif|mafi|mafi|kh|7|5|9)\b/i.test(userMessage);
+  if (!containsArabic && isArabizi) {
+    return "LANGUAGE REQUIREMENT: The customer's latest message is Arabizi (Arabic written with Latin letters/numbers). Understand the Arabic intent and respond entirely in clear Arabic script, using a light Gulf-neutral tone. Keep product names, codes, and numbers exactly as supplied. Do not add an English translation unless asked.";
+  }
   return containsArabic
     ? "LANGUAGE REQUIREMENT: The customer's latest message is Arabic. Respond entirely in Arabic, even if the knowledge source is English. Do not add an English translation unless asked."
     : "LANGUAGE REQUIREMENT: The customer's latest message is English. Respond entirely in English, even if the knowledge source is Arabic. Do not add an Arabic translation unless asked.";

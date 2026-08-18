@@ -80,4 +80,24 @@ describe("Industry agent templates", () => {
     expect(result.escalated).toBe(true);
     expect(result.reply).toContain("تحويل");
   });
+
+  it.each([
+    ["education", "مرشد التعليم والتدريب", 2],
+    ["automotive", "مستشار المركبات والخدمات", 3],
+    ["travel", "منسق السفر والضيافة", 3],
+  ] as const)("creates the %s template with its sector defaults", async (templateId, expectedName, expectedChannelCount) => {
+    const ctx = createContext();
+    await upsertUser(ctx.user);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.agents.onboard({
+      templateId,
+      language: "bilingual",
+      tone: "friendly",
+      goals: ["questions", "human"],
+    });
+
+    expect(result.agent.name).toBe(expectedName);
+    expect(result.knowledgeCount).toBeGreaterThan(1);
+    expect(result.channelCount).toBe(expectedChannelCount);
+  }, 15000);
 });

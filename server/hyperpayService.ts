@@ -22,6 +22,10 @@ export interface HyperPayCheckoutResponse {
   error?: string;
 }
 
+export function isSuccessfulHyperPayResult(resultCode?: string) {
+  return Boolean(resultCode && (resultCode.startsWith("000.000") || resultCode.startsWith("000.100") || resultCode.startsWith("000.3")));
+}
+
 export class HyperPayService {
   private entityId: string;
   private accessToken: string;
@@ -122,7 +126,7 @@ export class HyperPayService {
       const data = (await response.json()) as any;
       const resultCode = data.result?.code;
       // HyperPay success codes usually start with "000.000." or "000.100."
-      const isSuccess = resultCode && (resultCode.startsWith("000.000") || resultCode.startsWith("000.100") || resultCode.startsWith("000.3"));
+      const isSuccess = isSuccessfulHyperPayResult(resultCode);
 
       return {
         success: Boolean(isSuccess),

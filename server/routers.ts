@@ -55,9 +55,12 @@ import {
   createPaymentTransaction,
   getTenantTransactions,
   getTenantUsage,
+  getAgentQualityStats,
+  getTenantDataPolicy,
   getOnboardingDraft,
   saveOnboardingDraft,
   clearOnboardingDraft,
+  upsertTenantDataPolicy,
 } from "./db";
 import { hyperPayService } from "./hyperpayService";
 import { BILLING_CYCLES, getPlanPrice, getSubscriptionPeriodEnd, type BillingCycle, type PaidPlanId } from "@shared/billingPlans";
@@ -84,7 +87,7 @@ const agentInput = z.object({
 
 const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "symptoms", "medications", "insurance", "emergency", "human"]);
 const onboardingChannel = z.enum(["web", "whatsapp", "messenger", "instagram", "phone"]);
-const industryTemplateSchema = z.enum(["ecommerce", "realestate", "healthcare", "general"]).default("general");
+const industryTemplateSchema = z.enum(["ecommerce", "realestate", "healthcare", "education", "automotive", "travel", "general"]).default("general");
 
 const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: string; description: string; persona: string; goals: Array<z.infer<typeof onboardingGoal>>; channels: Array<z.infer<typeof onboardingChannel>>; knowledge: Array<{ title: string; content: string }> }> = {
   ecommerce: {
@@ -120,6 +123,39 @@ const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: 
       { title: "الاستفسارات الصحية العامة", content: "قدّم معلومات تثقيفية عامة من قاعدة المعرفة دون تشخيص أو وصف علاج. وضّح أن المعلومات لا تغني عن تقييم طبيب أو مختص مرخّص." },
       { title: "علامات الخطر والطوارئ", content: "إذا ذكر المريض خطراً فورياً أو أعراضاً شديدة مثل صعوبة التنفس أو فقدان الوعي أو نزيف حاد، اطلب منه التواصل فوراً مع رقم الطوارئ المحلي أو التوجه لأقرب قسم طوارئ، ولا تؤخر طلب المساعدة بأسئلة إضافية." },
       { title: "الخصوصية والبيانات الحساسة", content: "لا تطلب كلمات مرور أو أرقام بطاقات أو صور هويات أو تفاصيل طبية غير ضرورية. اجمع الحد الأدنى اللازم للتوجيه أو الحجز، وحوّل التفاصيل الحساسة إلى الفريق المختص عبر القناة المعتمدة." },
+    ],
+  },
+  education: {
+    name: "مرشد التعليم والتدريب",
+    description: "يشرح البرامج والدورات، يؤهل المتعلم، ويساعده في طلب التسجيل أو حجز استشارة.",
+    persona: "أنت مرشد تعليمي واضح ومشجع. تساعد العميل في فهم البرامج والمتطلبات والمواعيد من المعرفة المعتمدة فقط، ولا تعد بقبول أو شهادة أو منحة غير موثقة.",
+    goals: ["questions", "recommend", "appointments", "leads", "human"],
+    channels: ["web", "whatsapp"],
+    knowledge: [
+      { title: "استكشاف البرنامج المناسب", content: "اسأل عن الهدف والمستوى والوقت المتاح، ثم اقترح البرامج المذكورة في قاعدة المعرفة فقط مع توضيح الخطوة التالية للتسجيل." },
+      { title: "طلب التسجيل", content: "اجمع بيانات التواصل الضرورية بإذن المتعلم، ثم حوّل الطلب لفريق التسجيل لتأكيد المقاعد والرسوم والمتطلبات الرسمية." },
+    ],
+  },
+  automotive: {
+    name: "مستشار المركبات والخدمات",
+    description: "يساعد في استفسارات المركبات والخدمات والحجوزات وطلبات عرض السعر.",
+    persona: "أنت مستشار سيارات عملي وموثوق. وضّح الخيارات والخدمات المعتمدة، واجمع تفاصيل الاحتياج للحجز أو طلب العرض من دون اختراع مواصفات أو أسعار أو مواعيد توفر.",
+    goals: ["questions", "recommend", "appointments", "leads", "human"],
+    channels: ["web", "whatsapp", "phone"],
+    knowledge: [
+      { title: "طلب عرض أو تجربة", content: "اسأل عن نوع المركبة أو الخدمة والتاريخ والمدينة، ثم اجمع وسيلة التواصل بإذن العميل وأرسل الطلب للفريق لتأكيد السعر والتوفر." },
+      { title: "حجز خدمة المركبة", content: "اجمع نوع الخدمة والوقت المناسب وبيانات المركبة الضرورية فقط، ثم أكد أن الفريق سيتحقق من الموعد قبل اعتماده." },
+    ],
+  },
+  travel: {
+    name: "منسق السفر والضيافة",
+    description: "يؤهل طلبات السفر والإقامة والبرامج ويحيل التأكيدات النهائية للفريق.",
+    persona: "أنت منسق سفر منظم وودود. افهم الوجهة والتاريخ وعدد المسافرين والميزانية، واعرض المعلومات الموجودة في المعرفة فقط. لا تؤكد حجوزات أو أسعاراً أو تأشيرات قبل مراجعة الفريق المختص.",
+    goals: ["questions", "recommend", "leads", "appointments", "human"],
+    channels: ["web", "whatsapp", "instagram"],
+    knowledge: [
+      { title: "تأهيل طلب السفر", content: "اسأل عن الوجهة وتاريخ السفر وعدد المسافرين والميزانية، ثم لخّص الطلب للفريق لإعداد عرض أو برنامج مناسب." },
+      { title: "سياسة التأكيد", content: "لا تعتبر أي رحلة أو إقامة مؤكدة إلا بعد تأكيد مكتوب من الفريق أو مزود الخدمة المعتمد." },
     ],
   },
   general: {
@@ -200,6 +236,26 @@ export const appRouter = router({
       const tenant = await workspaceForUser(ctx.user);
       await clearOnboardingDraft(tenant.id);
       return { success: true };
+    }),
+    dataPolicy: protectedProcedure.query(async ({ ctx }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      return getTenantDataPolicy(tenant.id);
+    }),
+    saveDataPolicy: protectedProcedure.input(z.object({
+      retentionDays: z.number().int().min(7).max(730),
+      requireConsent: z.boolean(),
+      allowModelTraining: z.boolean(),
+      deletionContactEmail: z.string().email().optional().or(z.literal("")),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const policy = await upsertTenantDataPolicy({
+        tenantId: tenant.id,
+        retentionDays: input.retentionDays,
+        requireConsent: input.requireConsent,
+        allowModelTraining: input.allowModelTraining,
+        deletionContactEmail: input.deletionContactEmail || null,
+      });
+      return { policy };
     }),
   }),
 
@@ -507,6 +563,12 @@ export const appRouter = router({
         syncCronTaskUid: taskUid,
       });
       return { success: true, agent: updated ? toSafeAgentSettings(updated) : undefined };
+    }),
+    quality: protectedProcedure.input(z.object({ agentId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const agent = await getAgentInTenant(tenant.id, input.agentId);
+      if (!agent) throw new Error("Agent not found in workspace");
+      return getAgentQualityStats(tenant.id, agent.id);
     }),
     timeline: protectedProcedure.input(z.object({ agentId: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
@@ -1064,18 +1126,21 @@ export const appRouter = router({
       });
 
       if (res.success && res.checkoutId) {
-        // Record pending transaction & subscription intent
-        await upsertSubscription({
-          tenantId: tenant.id,
-          planName,
-          status: "incomplete",
-          billingCycle,
-          amount: Math.round(amount * 100), // convert to minor units
-          currency: input.currency,
-          hyperPayCheckoutId: res.checkoutId,
-        });
+        const existingSubscription = await getSubscriptionByTenant(tenant.id);
+        const keepsCurrentAccess = existingSubscription?.status === "active" || existingSubscription?.status === "trialing";
+        if (!keepsCurrentAccess) {
+          await upsertSubscription({
+            tenantId: tenant.id,
+            planName,
+            status: "incomplete",
+            billingCycle,
+            amount: Math.round(amount * 100), // convert to minor units
+            currency: input.currency,
+            hyperPayCheckoutId: res.checkoutId,
+          });
+        }
 
-        const sub = await getSubscriptionByTenant(tenant.id);
+        const sub = keepsCurrentAccess ? existingSubscription : await getSubscriptionByTenant(tenant.id);
         await createPaymentTransaction({
           tenantId: tenant.id,
           subscriptionId: sub?.id,
@@ -1084,6 +1149,7 @@ export const appRouter = router({
           currency: input.currency,
           status: "pending",
           responseMessage: res.resultMessage || "Checkout session created",
+          gatewayResponseJson: JSON.stringify({ kind: "checkout_intent", planName, billingCycle }),
         });
 
         return { success: true, checkoutId: res.checkoutId, message: res.resultMessage };
@@ -1091,23 +1157,69 @@ export const appRouter = router({
         throw new Error(res.error || "Failed to initialize HyperPay checkout session");
       }
     }),
+    cancelCheckout: protectedProcedure.input(z.object({
+      checkoutId: z.string().min(1),
+    })).mutation(async ({ ctx, input }) => {
+      const tenant = await workspaceForUser(ctx.user);
+      const sub = await getSubscriptionByTenant(tenant.id);
+      const pendingTransaction = (await getTenantTransactions(tenant.id)).find(transaction => transaction.checkoutId === input.checkoutId && transaction.status === "pending");
+      if (!pendingTransaction) {
+        throw new Error("لا توجد جلسة دفع معلّقة مطابقة لهذه المساحة.");
+      }
+
+      if (sub?.status === "incomplete" && sub.hyperPayCheckoutId === input.checkoutId) {
+        await upsertSubscription({
+          tenantId: tenant.id,
+          planName: sub.planName,
+          status: "canceled",
+          billingCycle: sub.billingCycle,
+          amount: sub.amount,
+          currency: sub.currency,
+          hyperPayCheckoutId: sub.hyperPayCheckoutId || undefined,
+          currentPeriodStart: sub.currentPeriodStart || undefined,
+          currentPeriodEnd: sub.currentPeriodEnd || undefined,
+        });
+      }
+      await createPaymentTransaction({
+        tenantId: tenant.id,
+        subscriptionId: sub?.id,
+        checkoutId: input.checkoutId,
+        amount: pendingTransaction.amount,
+        currency: pendingTransaction.currency,
+        status: "failed",
+        responseCode: "CANCELED_BY_USER",
+        responseMessage: "تم إلغاء جلسة الدفع من قبل العميل قبل الإتمام.",
+      });
+      return { success: true, message: "تم إلغاء جلسة الدفع. يمكنك اختيار باقة أخرى في أي وقت." };
+    }),
     verifyPayment: protectedProcedure.input(z.object({
       checkoutId: z.string(),
     })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
       const verification = await hyperPayService.verifyPaymentStatus(input.checkoutId);
+      const checkoutTransaction = (await getTenantTransactions(tenant.id)).find(transaction => transaction.checkoutId === input.checkoutId && transaction.status === "pending");
+      if (!checkoutTransaction) {
+        throw new Error("لم يتم العثور على جلسة دفع معلّقة لهذه المساحة.");
+      }
+      let intent: { planName?: PaidPlanId; billingCycle?: BillingCycle } = {};
+      try {
+        intent = JSON.parse(checkoutTransaction.gatewayResponseJson || "{}") as { planName?: PaidPlanId; billingCycle?: BillingCycle };
+      } catch {
+        // Preserve compatibility with older checkout sessions that did not store intent metadata.
+      }
 
       if (verification.success) {
         const sub = await getSubscriptionByTenant(tenant.id);
-        const amountMinor = verification.amount ? Math.round(verification.amount * 100) : (sub?.amount || 29900);
+        const selectedPlan = intent.planName || (sub?.planName === "trial" ? "professional" : (sub?.planName as PaidPlanId | undefined)) || "professional";
+        const billingCycle = intent.billingCycle || (sub?.billingCycle === "yearly" ? "yearly" : "monthly");
+        const amountMinor = checkoutTransaction.amount || (verification.amount ? Math.round(verification.amount * 100) : getPlanPrice(selectedPlan, billingCycle) * 100);
         
         // Update subscription to active
         const now = new Date();
-        const billingCycle = sub?.billingCycle === "yearly" ? "yearly" : "monthly";
         const periodEnd = getSubscriptionPeriodEnd(now, billingCycle);
         await upsertSubscription({
           tenantId: tenant.id,
-          planName: sub?.planName || "professional",
+          planName: selectedPlan,
           status: "active",
           billingCycle,
           amount: amountMinor,
@@ -1117,9 +1229,10 @@ export const appRouter = router({
           currentPeriodEnd: periodEnd,
         });
 
+        const activeSubscription = await getSubscriptionByTenant(tenant.id);
         await createPaymentTransaction({
           tenantId: tenant.id,
-          subscriptionId: sub?.id,
+          subscriptionId: activeSubscription?.id,
           checkoutId: input.checkoutId,
           paymentId: verification.paymentId,
           amount: amountMinor,
@@ -1132,10 +1245,26 @@ export const appRouter = router({
 
         return { success: true, message: "تمت عملية الدفع بنجاح وتفعيل الاشتراك!" };
       } else {
+        const sub = await getSubscriptionByTenant(tenant.id);
+        if (sub?.status === "incomplete" && sub.hyperPayCheckoutId === input.checkoutId) {
+          await upsertSubscription({
+            tenantId: tenant.id,
+            planName: sub.planName,
+            status: "past_due",
+            billingCycle: sub.billingCycle,
+            amount: sub.amount,
+            currency: sub.currency,
+            hyperPayCheckoutId: sub.hyperPayCheckoutId || undefined,
+            currentPeriodStart: sub.currentPeriodStart || undefined,
+            currentPeriodEnd: sub.currentPeriodEnd || undefined,
+          });
+        }
         await createPaymentTransaction({
           tenantId: tenant.id,
+          subscriptionId: sub?.id,
           checkoutId: input.checkoutId,
-          amount: 0,
+          amount: checkoutTransaction.amount,
+          currency: checkoutTransaction.currency,
           status: "failed",
           responseCode: verification.responseCode,
           responseMessage: verification.responseMessage,

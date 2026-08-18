@@ -28,6 +28,19 @@ export const tenants = mysqlTable("tenants", {
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
 
+export const tenantDataPolicies = mysqlTable("tenant_data_policies", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().unique(),
+  retentionDays: int("retentionDays").default(90).notNull(),
+  requireConsent: int("requireConsent").default(1).notNull(),
+  allowModelTraining: int("allowModelTraining").default(0).notNull(),
+  deletionContactEmail: varchar("deletionContactEmail", { length: 320 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TenantDataPolicy = typeof tenantDataPolicies.$inferSelect;
+export type InsertTenantDataPolicy = typeof tenantDataPolicies.$inferInsert;
+
 // AI Agents
 export const agents = mysqlTable("agents", {
   id: int("id").autoincrement().primaryKey(),

@@ -86,5 +86,55 @@ describe("Neon AI Agent Platform Server Routers", () => {
       patch: { capabilities: ["answer", "escalate"] },
     });
     expect((updated?.capabilitiesJson as { enabled?: string[] } | undefined)?.enabled).toEqual(["answer", "escalate"]);
+
+    const quality = await caller.agents.quality({ agentId: agent!.id });
+    expect(quality.totalConversations).toBeGreaterThanOrEqual(0);
+    expect(quality.knowledgeItemCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(quality.knowledgeGaps)).toBe(true);
   });
+
+  it("keeps a free trial active when a checkout is canceled, then activates the selected yearly plan after successful payment", async () => {
+    const uniqueUserId = 1_000_000 + Math.floor(Math.random() * 100_000_000);
+    const caller = appRouter.createCaller(createTestContext(uniqueUserId, `billing-open-id-${uniqueUserId}`));
+
+    const trial = await caller.billing.startTrial();
+    expect(trial.started).toBe(true);
+    expect(trial.subscription?.status).toBe("trialing");
+    expect(trial.subscription?.billingCycle).toBe("trial");
+
+    const firstCheckout = await caller.billing.createCheckout({ planName: "professional", billingCycle: "yearly" });
+    await caller.billing.cancelCheckout({ checkoutId: firstCheckout.checkoutId });
+    const afterCancellation = await caller.billing.getSubscription();
+    expect(afterCancellation.subscription?.status).toBe("trialing");
+    expect(afterCancellation.subscription?.planName).toBe("trial");
+
+    const secondCheckout = await caller.billing.createCheckout({ planName: "professional", billingCycle: "yearly" });
+    const payment = await caller.billing.verifyPayment({ checkoutId: secondCheckout.checkoutId });
+    const active = await caller.billing.getSubscription();
+
+    expect(payment.success).toBe(true);
+    expect(active.subscription?.status).toBe("active");
+    expect(active.subscription?.planName).toBe("professional");
+    expect(active.subscription?.billingCycle).toBe("yearly");
+    expect(active.subscription?.amount).toBe(287000);
+  }, 15000);
+
+  it("stores privacy controls per workspace", async () => {
+    const uniqueUserId = 1_000_000 + Math.floor(Math.random() * 100_000_000);
+    const caller = appRouter.createCaller(createTestContext(uniqueUserId, `privacy-open-id-${uniqueUserId}`));
+
+    expect(await caller.workspace.dataPolicy()).toBeUndefined();
+    await caller.workspace.saveDataPolicy({
+      retentionDays: 180,
+      requireConsent: true,
+      allowModelTraining: false,
+      deletionContactEmail: "privacy@example.com",
+    });
+    const policy = await caller.workspace.dataPolicy();
+
+    expect(policy?.retentionDays).toBe(180);
+    expect(policy?.requireConsent).toBe(1);
+    expect(policy?.allowModelTraining).toBe(0);
+    expect(policy?.deletionContactEmail).toBe("privacy@example.com");
+  }, 15000);
 });
