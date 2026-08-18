@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { WhatsAppConnectionDetails } from "@/components/WhatsAppConnectionDetails";
 import { trpc } from "@/lib/trpc";
 import { getWhatsAppEmbeddedStatus } from "@/lib/whatsappEmbeddedStatus";
+import { canCompleteMetaSignup, getMetaSignupCancellationMessage, getMetaSignupFailureMessage, isMetaSignupReadyForPin, type MetaSignupAssets } from "@/lib/whatsappSignupFlow";
 import { Check, CircleAlert, Globe2, Instagram, Link2, Loader2, MessageCircle, PhoneCall, Radio, RefreshCw, Send, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -28,12 +29,6 @@ type WhatsAppConfig = {
   setupStatus?: "pending_webhook_verification" | "connected" | "awaiting_customer_billing";
   setupProvider?: string;
   lastWebhookAt?: string;
-};
-
-type MetaSignupAssets = {
-  phone_number_id?: string;
-  waba_id?: string;
-  business_id?: string;
 };
 
 declare global {
@@ -116,26 +111,26 @@ export default function Channels() {
         return;
       }
       if (data.event === "CANCEL") {
-        setLaunchingSignup(false);
-        toast.info(data.data?.error_message || "تم إلغاء ربط WhatsApp. يمكنك المحاولة في أي وقت.");
+        resetSignup();
+        toast.info(getMetaSignupCancellationMessage(data.data?.error_message));
       }
     };
     window.addEventListener("message", onMetaMessage);
     return () => window.removeEventListener("message", onMetaMessage);
   }, []);
 
-  useEffect(() => {
-    if (!agentId || !signupCode || !signupAssets?.phone_number_id || !signupAssets.waba_id || !/^\d{6}$/.test(signupPin) || submittedRef.current) return;
+  const completeWhatsAppSignup = () => {
+    if (!agentId || !canCompleteMetaSignup(signupCode, signupAssets, signupPin) || submittedRef.current) return;
     submittedRef.current = true;
     completionMutation.mutate({
       agentId,
-      code: signupCode,
-      phoneNumberId: signupAssets.phone_number_id,
-      whatsappBusinessAccountId: signupAssets.waba_id,
-      businessPortfolioId: signupAssets.business_id,
+      code: signupCode!,
+      phoneNumberId: signupAssets!.phone_number_id!,
+      whatsappBusinessAccountId: signupAssets!.waba_id!,
+      businessPortfolioId: signupAssets!.business_id,
       pin: signupPin,
     });
-  }, [agentId, signupCode, signupAssets, signupPin, completionMutation]);
+  };
 
   const resetSignup = () => {
     submittedRef.current = false;
@@ -148,7 +143,6 @@ export default function Channels() {
   const launchWhatsAppSignup = async () => {
     if (!agentId) return toast.error("اختر وكيلاً أولاً");
     if (!embeddedConfig?.enabled) return toast.error("يحتاج مسؤول المنصة إلى إدخال Meta Configuration ID أولاً");
-    if (!/^\d{6}$/.test(signupPin)) return toast.error("أنشئ رمز PIN من 6 أرقام لحماية رقم WhatsApp");
     try {
       resetSignup();
       setLaunchingSignup(true);
@@ -158,7 +152,7 @@ export default function Channels() {
       window.FB.login(response => {
         setLaunchingSignup(false);
         const code = response.authResponse?.code;
-        if (!code) return toast.info("لم تكتمل جلسة Meta. يمكنك المحاولة مجدداً.");
+        if (!code) return toast.info("لم تكتمل جلسة Meta. تأكد من أن التطبيق نشط ثم حاول مجدداً.");
         setSignupCode(code);
       }, {
         config_id: embeddedConfig.configId,
@@ -168,7 +162,7 @@ export default function Channels() {
       });
     } catch (error) {
       setLaunchingSignup(false);
-      toast.error(error instanceof Error ? error.message : "تعذر بدء ربط Meta");
+      toast.error(getMetaSignupFailureMessage(error));
     }
   };
 
@@ -178,6 +172,8 @@ export default function Channels() {
     if (!channel.ready) return toast.info("هذه القناة تحتاج مزوداً رسمياً قبل تفعيلها.");
     configureMutation.mutate({ agentId, channel: channel.id, isActive: !activeMap.get(channel.id) });
   };
+
+  const metaReadyForPin = isMetaSignupReadyForPin(signupCode, signupAssets);
 
   return <div className="mx-auto max-w-[1400px] space-y-7 pb-12" dir="rtl">
     <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -199,11 +195,11 @@ export default function Channels() {
         <DialogHeader><div className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl bg-lime-300/10 text-lime-300"><Sparkles className="h-5 w-5" /></div><DialogTitle>ربط WhatsApp في دقيقتين</DialogTitle><DialogDescription className="leading-6 text-slate-400">لا تحتاج إلى نسخ Phone Number ID أو Access Token. ستدخل إلى Meta بحساب العميل فقط، ثم يعود الربط إلى Neon تلقائياً.</DialogDescription></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300"><p className="flex items-center gap-2 font-medium text-white"><Check className="h-4 w-4 text-lime-300" /> اختر أو أنشئ حساب WhatsApp Business داخل Meta</p><p className="flex items-center gap-2 font-medium text-white"><Check className="h-4 w-4 text-lime-300" /> أثبت ملكية رقم العمل واستكمل بياناته</p><p className="flex items-center gap-2 font-medium text-white"><Check className="h-4 w-4 text-lime-300" /> يعود Neon لربط الرقم بالوكيل الحالي دون كشف أي اعتماد</p></div>
-          <label className="block space-y-2"><span className="text-xs text-slate-300">رمز أمان WhatsApp من 6 أرقام</span><Input inputMode="numeric" maxLength={6} type="password" value={signupPin} onChange={e => setSignupPin(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" dir="ltr" className="border-white/10 bg-white/[0.04] text-white" /><p className="text-xs leading-5 text-slate-500">أنشئ رمزاً جديداً واحفظه في مكان آمن؛ Meta تستخدمه لحماية الرقم عند تفعيله على Cloud API.</p></label>
+          {metaReadyForPin ? <label className="block space-y-2"><span className="text-xs text-slate-300">رمز أمان WhatsApp من 6 أرقام</span><Input inputMode="numeric" maxLength={6} type="password" value={signupPin} onChange={e => setSignupPin(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" dir="ltr" className="border-white/10 bg-white/[0.04] text-white" /><p className="text-xs leading-5 text-slate-500">اكتملت بيانات الرقم في Meta. أنشئ رمزاً جديداً لحماية الرقم عند تفعيله على Cloud API؛ لا يظهر هذا الرمز للمنصة أو للعملاء.</p></label> : <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-xs leading-6 text-cyan-100">ابدأ أولاً في Meta. لن نطلب منك أي PIN أو معرّف تقني قبل أن تختار حساب WhatsApp ورقم العمل هناك.</div>}
           {!embeddedConfig?.enabled && <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-4 text-xs leading-6 text-amber-100"><div className="mb-1 flex items-center gap-2 font-medium"><CircleAlert className="h-4 w-4" /> جارٍ إكمال إعداد Meta للمسؤول</div>سيظهر زر Meta تلقائياً بعد إضافة Configuration ID وتسجيل نطاق Neon في Facebook Login for Business.</div>}
           {signupCode && !signupAssets && <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-xs text-cyan-100"><Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" /> تم استلام جلسة Meta؛ ننتظر بيانات الرقم لإكمال الربط.</div>}
         </div>
-        <DialogFooter><Button type="button" variant="outline" onClick={() => setShowWhatsAppSetup(false)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/10">إلغاء</Button><Button type="button" onClick={launchWhatsAppSignup} disabled={!embeddedConfig?.enabled || isEmbeddedConfigLoading || launchingSignup || completionMutation.isPending || !/^\d{6}$/.test(signupPin)} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{launchingSignup || completionMutation.isPending ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الربط الآمن</> : <><ShieldCheck className="ml-2 h-4 w-4" /> متابعة مع Meta</>}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="outline" onClick={() => setShowWhatsAppSetup(false)} className="border-white/10 bg-white/[0.04] text-white hover:bg-white/10">إلغاء</Button>{!metaReadyForPin && <Button type="button" onClick={launchWhatsAppSignup} disabled={!embeddedConfig?.enabled || isEmbeddedConfigLoading || launchingSignup || completionMutation.isPending} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{launchingSignup || completionMutation.isPending ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" /> جارٍ فتح Meta</> : <><ShieldCheck className="ml-2 h-4 w-4" /> متابعة مع Meta</>}</Button>}{metaReadyForPin && <Button type="button" onClick={completeWhatsAppSignup} disabled={!canCompleteMetaSignup(signupCode, signupAssets, signupPin) || completionMutation.isPending} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{completionMutation.isPending ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" /> جارٍ إكمال الربط</> : <><ShieldCheck className="ml-2 h-4 w-4" /> أكمل بعد إدخال PIN</>}</Button>}</DialogFooter>
       </DialogContent>
     </Dialog>
   </div>;
