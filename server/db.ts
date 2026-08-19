@@ -57,6 +57,9 @@ export async function upsertTenantDataPolicy(input: {
   retentionDays: number;
   requireConsent: boolean;
   allowModelTraining: boolean;
+  sectorProfile: "general" | "healthcare" | "financial" | "legal";
+  minimizeSensitiveData: boolean;
+  requireSensitiveHumanReview: boolean;
   deletionContactEmail?: string | null;
 }) {
   const db = await getDb();
@@ -66,11 +69,17 @@ export async function upsertTenantDataPolicy(input: {
     retentionDays: input.retentionDays,
     requireConsent: input.requireConsent ? 1 : 0,
     allowModelTraining: input.allowModelTraining ? 1 : 0,
+    sectorProfile: input.sectorProfile,
+    minimizeSensitiveData: input.minimizeSensitiveData ? 1 : 0,
+    requireSensitiveHumanReview: input.requireSensitiveHumanReview ? 1 : 0,
     deletionContactEmail: input.deletionContactEmail || null,
   }).onDuplicateKeyUpdate({ set: {
     retentionDays: input.retentionDays,
     requireConsent: input.requireConsent ? 1 : 0,
     allowModelTraining: input.allowModelTraining ? 1 : 0,
+    sectorProfile: input.sectorProfile,
+    minimizeSensitiveData: input.minimizeSensitiveData ? 1 : 0,
+    requireSensitiveHumanReview: input.requireSensitiveHumanReview ? 1 : 0,
     deletionContactEmail: input.deletionContactEmail || null,
     updatedAt: new Date(),
   } });
@@ -813,12 +822,17 @@ export async function getAgentQualityStats(tenantId: number, agentId: number) {
       languageStyles: [] as Array<{ style: string; count: number }>,
       escalationReasons: [] as Array<{ reason: string; count: number }>,
       knowledgeGaps: [] as Array<{ conversationId: number; channel: string; reason: string; sample: string; createdAt: Date }>,
+      capturedLeadCount: 0,
+      missedOpportunityCount: 0,
+      captureRate: 0,
+      channelCaptureMetrics: [] as Array<{ channel: string; conversations: number; captured: number; missed: number; captureRate: number }>,
     };
   }
 
-  const [conversationRows, knowledgeRows] = await Promise.all([
+  const [conversationRows, knowledgeRows, leadRows] = await Promise.all([
     db.select().from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.agentId, agentId))).orderBy(desc(conversations.updatedAt)),
     db.select({ total: count() }).from(knowledgeBase).where(and(eq(knowledgeBase.tenantId, tenantId), eq(knowledgeBase.agentId, agentId))),
+    db.select().from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.agentId, agentId))),
   ]);
   const conversationIds = conversationRows.map(conversation => conversation.id);
   const messageRows = conversationIds.length
@@ -840,6 +854,28 @@ export async function getAgentQualityStats(tenantId: number, agentId: number) {
   for (const sample of Array.from(latestCustomerMessage.values())) {
     const style = classifyMessageLanguageStyle(sample);
     languageStyleCounts.set(style, (languageStyleCounts.get(style) || 0) + 1);
+  }
+
+  const leadConversationIds = new Set(leadRows.map(lead => lead.conversationId).filter((conversationId): conversationId is number => typeof conversationId === "number"));
+  const channelCapture = new Map<string, { conversations: number; captured: number; missed: number }>();
+  const commercialIntentPattern = /عرض\s*سعر|طلب\s*سعر|سعر|تكلفة|حجز|موعد|شراء|اطلب|quote|price|cost|book|booking|appointment|buy|purchase/i;
+  let capturedLeadCount = 0;
+  let missedOpportunityCount = 0;
+  for (const conversation of conversationRows) {
+    const sample = latestCustomerMessage.get(conversation.id) || "";
+    const hasCommercialIntent = commercialIntentPattern.test(sample);
+    const hasCapturedContact = leadConversationIds.has(conversation.id) || Boolean(conversation.customerEmail || conversation.customerPhone);
+    const channel = channelCapture.get(conversation.channel) || { conversations: 0, captured: 0, missed: 0 };
+    channel.conversations += 1;
+    if (hasCommercialIntent && hasCapturedContact) {
+      capturedLeadCount += 1;
+      channel.captured += 1;
+    }
+    if (hasCommercialIntent && !hasCapturedContact && (conversation.status === "resolved" || conversation.status === "escalated")) {
+      missedOpportunityCount += 1;
+      channel.missed += 1;
+    }
+    channelCapture.set(conversation.channel, channel);
   }
 
   const knowledgeGaps = escalatedConversations.slice(0, 6).map(conversation => {
@@ -867,5 +903,13 @@ export async function getAgentQualityStats(tenantId: number, agentId: number) {
     languageStyles: Array.from(languageStyleCounts.entries()).map(([style, count]) => ({ style, count })).sort((a, b) => b.count - a.count),
     escalationReasons: Object.entries(reasonCounts).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
     knowledgeGaps,
+    capturedLeadCount,
+    missedOpportunityCount,
+    captureRate: capturedLeadCount + missedOpportunityCount ? Math.round((capturedLeadCount / (capturedLeadCount + missedOpportunityCount)) * 100) : 0,
+    channelCaptureMetrics: Array.from(channelCapture.entries()).map(([channel, metric]) => ({
+      channel,
+      ...metric,
+      captureRate: metric.captured + metric.missed ? Math.round((metric.captured / (metric.captured + metric.missed)) * 100) : 0,
+    })).sort((a, b) => b.conversations - a.conversations),
   };
 }

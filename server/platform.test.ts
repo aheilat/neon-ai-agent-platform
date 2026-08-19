@@ -91,6 +91,9 @@ describe("Neon AI Agent Platform Server Routers", () => {
     expect(quality.totalConversations).toBeGreaterThanOrEqual(0);
     expect(quality.knowledgeItemCount).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(quality.knowledgeGaps)).toBe(true);
+    expect(quality.captureRate).toBeGreaterThanOrEqual(0);
+    expect(quality.missedOpportunityCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(quality.channelCaptureMetrics)).toBe(true);
   });
 
   it("keeps a free trial active when a checkout is canceled, then activates the selected yearly plan after successful payment", async () => {
@@ -136,5 +139,27 @@ describe("Neon AI Agent Platform Server Routers", () => {
     expect(policy?.requireConsent).toBe(1);
     expect(policy?.allowModelTraining).toBe(0);
     expect(policy?.deletionContactEmail).toBe("privacy@example.com");
+  }, 15000);
+
+  it("enforces sensitive-sector privacy safeguards from the server", async () => {
+    const uniqueUserId = 1_000_000 + Math.floor(Math.random() * 100_000_000);
+    const caller = appRouter.createCaller(createTestContext(uniqueUserId, `healthcare-policy-open-id-${uniqueUserId}`));
+
+    await caller.workspace.saveDataPolicy({
+      retentionDays: 90,
+      requireConsent: false,
+      allowModelTraining: true,
+      sectorProfile: "healthcare",
+      minimizeSensitiveData: false,
+      requireSensitiveHumanReview: false,
+      deletionContactEmail: "privacy@example.com",
+    });
+    const policy = await caller.workspace.dataPolicy();
+
+    expect(policy?.sectorProfile).toBe("healthcare");
+    expect(policy?.requireConsent).toBe(1);
+    expect(policy?.allowModelTraining).toBe(0);
+    expect(policy?.minimizeSensitiveData).toBe(1);
+    expect(policy?.requireSensitiveHumanReview).toBe(1);
   }, 15000);
 });

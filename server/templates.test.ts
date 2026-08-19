@@ -85,6 +85,8 @@ describe("Industry agent templates", () => {
     ["education", "مرشد التعليم والتدريب", 2],
     ["automotive", "مستشار المركبات والخدمات", 3],
     ["travel", "منسق السفر والضيافة", 3],
+    ["marketing", "مستشار التسويق والنمو", 3],
+    ["localservices", "منسق الخدمات المحلية", 3],
   ] as const)("creates the %s template with its sector defaults", async (templateId, expectedName, expectedChannelCount) => {
     const ctx = createContext();
     await upsertUser(ctx.user);

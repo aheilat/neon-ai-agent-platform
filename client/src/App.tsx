@@ -20,6 +20,7 @@ import Widget from "./pages/Widget";
 import PublicLanding from "./pages/PublicLanding";
 import Access from "./pages/Access";
 import Pricing from "./pages/Pricing";
+import Quality from "./pages/Quality";
 
 function AppRoutes() {
   return (
@@ -38,6 +39,7 @@ function AppRoutes() {
             <Route path={"/conversations"} component={Conversations} />
             <Route path={"/channels"} component={Channels} />
             <Route path={"/analytics"} component={Analytics} />
+            <Route path={"/quality"} component={Quality} />
             <Route path={"/team"} component={Team} />
             <Route path={"/billing"} component={Billing} />
             <Route path={"/notifications"} component={Notifications} />

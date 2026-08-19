@@ -50,6 +50,7 @@ const gabsterCategories = [
     category: "ANALYZE",
     items: [
       { icon: ChartNoAxesCombined, label: "Analytics & dashboards", path: "/analytics" },
+      { icon: ChartNoAxesCombined, label: "Opportunity quality", path: "/quality" },
       { icon: BrainCircuit, label: "Knowledge intelligence", path: "/knowledge" },
       { icon: Bot, label: "AI Engine", path: "/agents" },
     ]

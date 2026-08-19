@@ -87,7 +87,7 @@ const agentInput = z.object({
 
 const onboardingGoal = z.enum(["questions", "issues", "recommend", "buy", "leads", "appointments", "orders", "route", "symptoms", "medications", "insurance", "emergency", "human"]);
 const onboardingChannel = z.enum(["web", "whatsapp", "messenger", "instagram", "phone"]);
-const industryTemplateSchema = z.enum(["ecommerce", "realestate", "healthcare", "education", "automotive", "travel", "general"]).default("general");
+const industryTemplateSchema = z.enum(["ecommerce", "realestate", "healthcare", "education", "automotive", "travel", "marketing", "localservices", "general"]).default("general");
 
 const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: string; description: string; persona: string; goals: Array<z.infer<typeof onboardingGoal>>; channels: Array<z.infer<typeof onboardingChannel>>; knowledge: Array<{ title: string; content: string }> }> = {
   ecommerce: {
@@ -156,6 +156,28 @@ const industryTemplates: Record<z.infer<typeof industryTemplateSchema>, { name: 
     knowledge: [
       { title: "تأهيل طلب السفر", content: "اسأل عن الوجهة وتاريخ السفر وعدد المسافرين والميزانية، ثم لخّص الطلب للفريق لإعداد عرض أو برنامج مناسب." },
       { title: "سياسة التأكيد", content: "لا تعتبر أي رحلة أو إقامة مؤكدة إلا بعد تأكيد مكتوب من الفريق أو مزود الخدمة المعتمد." },
+    ],
+  },
+  marketing: {
+    name: "مستشار التسويق والنمو",
+    description: "يؤهل طلبات التسويق والإعلانات والمحتوى ويجمع متطلبات العرض بوضوح.",
+    persona: "أنت مستشار تسويق عملي وواضح. افهم النشاط والهدف والميزانية والقناة والموعد المطلوب، ثم اشرح الخدمات الموجودة في المعرفة فقط. لا تعد بنتائج أو أرقام وصول أو مبيعات أو أسعار غير موثقة، وحوّل طلب العرض للفريق عند اكتمال المتطلبات.",
+    goals: ["questions", "recommend", "leads", "appointments", "human"],
+    channels: ["web", "whatsapp", "instagram"],
+    knowledge: [
+      { title: "تأهيل طلب تسويقي", content: "اسأل عن النشاط والهدف والجمهور والقنوات المستخدمة والميزانية والموعد. لخّص المتطلبات للفريق كي يجهز عرضاً مناسباً دون وعد بنتيجة غير موثقة." },
+      { title: "خدمات المحتوى والإعلانات", content: "اشرح نطاق الخدمات المعتمدة في قاعدة المعرفة فقط، مثل استراتيجية المحتوى أو إدارة الحملات أو إنتاج المواد الإبداعية. لا تثبت سعراً أو مدة أو نتيجة إلا إذا كانت موثقة." },
+    ],
+  },
+  localservices: {
+    name: "منسق الخدمات المحلية",
+    description: "يستقبل طلبات الخدمة، يؤهلها حسب الموقع والوقت، ويرسلها للفريق للتأكيد.",
+    persona: "أنت منسق خدمات محلية سريع وواضح. اسأل عن نوع الخدمة والمدينة أو المنطقة والوقت المناسب وأي تفاصيل لازمة لتنفيذها. لا تؤكد توفر الموعد أو السعر أو الوصول قبل مراجعة الفريق، واجمع بيانات التواصل بإذن العميل فقط.",
+    goals: ["questions", "appointments", "leads", "route", "human"],
+    channels: ["web", "whatsapp", "phone"],
+    knowledge: [
+      { title: "طلب خدمة أو موعد", content: "اجمع نوع الخدمة والموقع والوقت المرغوب وأي متطلبات تشغيلية أساسية. وضح أن الفريق سيتحقق من التوفر والسعر قبل تأكيد الطلب." },
+      { title: "التصعيد والمتابعة", content: "للطلبات العاجلة أو الشكاوى أو التعديلات المهمة، اجمع وسيلة تواصل بإذن العميل ولخّص الطلب بوضوح قبل تحويله للفريق." },
     ],
   },
   general: {
@@ -245,14 +267,21 @@ export const appRouter = router({
       retentionDays: z.number().int().min(7).max(730),
       requireConsent: z.boolean(),
       allowModelTraining: z.boolean(),
+      sectorProfile: z.enum(["general", "healthcare", "financial", "legal"]).default("general"),
+      minimizeSensitiveData: z.boolean().default(false),
+      requireSensitiveHumanReview: z.boolean().default(false),
       deletionContactEmail: z.string().email().optional().or(z.literal("")),
     })).mutation(async ({ ctx, input }) => {
       const tenant = await workspaceForUser(ctx.user);
+      const isSensitiveSector = input.sectorProfile !== "general";
       const policy = await upsertTenantDataPolicy({
         tenantId: tenant.id,
         retentionDays: input.retentionDays,
-        requireConsent: input.requireConsent,
-        allowModelTraining: input.allowModelTraining,
+        requireConsent: isSensitiveSector ? true : input.requireConsent,
+        allowModelTraining: isSensitiveSector ? false : input.allowModelTraining,
+        sectorProfile: input.sectorProfile,
+        minimizeSensitiveData: isSensitiveSector ? true : input.minimizeSensitiveData,
+        requireSensitiveHumanReview: isSensitiveSector ? true : input.requireSensitiveHumanReview,
         deletionContactEmail: input.deletionContactEmail || null,
       });
       return { policy };

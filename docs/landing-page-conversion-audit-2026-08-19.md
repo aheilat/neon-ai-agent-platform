@@ -26,3 +26,7 @@ This audit reviews the public Neon landing page against the product-led clarity 
 ## Design decision
 
 The refinement keeps **Neon’s dark neon identity**, but uses the product interface as the dominant visual proof. It will use an Arabic-first content rhythm, stronger spacing hierarchy, one conversion intent, and accessible contrast. Any WhatsApp claim will remain approval-aware while Meta Access Verification is under review.
+
+## Publication verification
+
+The redesigned interface was verified in the development preview on desktop and mobile. Immediately after checkpoint `fb298e04`, the production domain still rendered the earlier landing-page bundle even when loaded with a cache-busting query. This is recorded as a deployment-propagation observation and should be rechecked before representing the revised public page as live.

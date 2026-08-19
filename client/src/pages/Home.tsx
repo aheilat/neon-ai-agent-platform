@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, CarFront, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, GraduationCap, Headphones, HeartPulse, HelpCircle, Loader2, MapPin, MessageSquareText, Package, PlaneTakeoff, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Building2, CalendarDays, CarFront, Check, CheckCircle2, ChevronLeft, CircleCheck, ClipboardCheck, Globe2, GraduationCap, Headphones, HeartPulse, HelpCircle, Loader2, MapPin, Megaphone, MessageSquareText, Package, PlaneTakeoff, Plus, Radio, Send, ShoppingBag, Sparkles, Smartphone, Target, TrendingUp, UsersRound, Wand2, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -48,7 +48,7 @@ type OnboardingDraftPayload = {
   websiteConsent: boolean;
   websiteResult: WebsiteDiscovery | null;
   websiteServices: WebsiteService[];
-  templateId: "general" | "ecommerce" | "realestate" | "healthcare" | "education" | "automotive" | "travel";
+  templateId: "general" | "ecommerce" | "realestate" | "healthcare" | "education" | "automotive" | "travel" | "marketing" | "localservices";
   selectedChannels: string[];
   language: "ar" | "en" | "bilingual";
   tone: string;
@@ -88,6 +88,8 @@ const industryTemplates = [
   { id: "education" as const, title: "التعليم والتدريب", subtitle: "Education", description: "برامج، تسجيل، واستشارات للمتعلمين.", icon: GraduationCap, goals: ["questions", "recommend", "appointments", "leads", "human"], channels: ["web", "whatsapp"] },
   { id: "automotive" as const, title: "السيارات والخدمات", subtitle: "Automotive", description: "طلبات عرض، حجوزات خدمة، ومتابعة احتياج المركبة.", icon: CarFront, goals: ["questions", "recommend", "appointments", "leads", "human"], channels: ["web", "whatsapp", "phone"] },
   { id: "travel" as const, title: "السفر والضيافة", subtitle: "Travel", description: "تأهيل طلب السفر وتنسيق البرامج والاستفسارات.", icon: PlaneTakeoff, goals: ["questions", "recommend", "leads", "appointments", "human"], channels: ["web", "whatsapp", "instagram"] },
+  { id: "marketing" as const, title: "التسويق والنمو", subtitle: "Marketing", description: "تأهيل طلبات الإعلان والمحتوى وتجهيز متطلبات العرض.", icon: Megaphone, goals: ["questions", "recommend", "leads", "appointments", "human"], channels: ["web", "whatsapp", "instagram"] },
+  { id: "localservices" as const, title: "الخدمات المحلية", subtitle: "Local services", description: "طلبات خدمة، مواعيد، ومتابعة حسب الموقع والوقت.", icon: Wrench, goals: ["questions", "appointments", "leads", "route", "human"], channels: ["web", "whatsapp", "phone"] },
 ];
 
 function Onboarding() {
@@ -111,7 +113,7 @@ function Onboarding() {
   const [websiteConsent, setWebsiteConsent] = useState(false);
   const [websiteResult, setWebsiteResult] = useState<WebsiteDiscovery | null>(null);
   const [websiteServices, setWebsiteServices] = useState<WebsiteService[]>([]);
-  const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate" | "healthcare" | "education" | "automotive" | "travel">("general");
+  const [templateId, setTemplateId] = useState<"general" | "ecommerce" | "realestate" | "healthcare" | "education" | "automotive" | "travel" | "marketing" | "localservices">("general");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["web"]);
   const [language, setLanguage] = useState<"ar" | "en" | "bilingual">("bilingual");
   const [tone, setTone] = useState("friendly");

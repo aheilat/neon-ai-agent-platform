@@ -34,6 +34,9 @@ export const tenantDataPolicies = mysqlTable("tenant_data_policies", {
   retentionDays: int("retentionDays").default(90).notNull(),
   requireConsent: int("requireConsent").default(1).notNull(),
   allowModelTraining: int("allowModelTraining").default(0).notNull(),
+  sectorProfile: varchar("sectorProfile", { length: 32 }).default("general").notNull(),
+  minimizeSensitiveData: int("minimizeSensitiveData").default(0).notNull(),
+  requireSensitiveHumanReview: int("requireSensitiveHumanReview").default(0).notNull(),
   deletionContactEmail: varchar("deletionContactEmail", { length: 320 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
