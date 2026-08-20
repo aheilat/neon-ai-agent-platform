@@ -957,7 +957,7 @@ export const appRouter = router({
         phone: input.phone,
         notes: "بيانات تواصل تم جمعها بعد طلب التحويل البشري.",
       });
-      await addMessage({ conversationId: input.conversationId, sender: "system", content: "تم استلام بيانات التواصل وإرسالها إلى الفريق." });
+      await addMessage({ conversationId: input.conversationId, sender: "system", content: "تم حفظ بيانات التواصل وإنشاء إشعار داخل منصة Neon لفريق العمل." });
       await createNotification({
         tenantId: agent.tenantId,
         title: `بيانات تواصل جديدة (${agent.name})`,
