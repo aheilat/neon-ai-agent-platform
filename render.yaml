@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: neon-ai-agent-platform-staging
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: OAUTH_SERVER_URL
+        sync: false
+      - key: VITE_APP_ID
+        sync: false
+      - key: VITE_OAUTH_PORTAL_URL
+        sync: false
+      - key: OWNER_OPEN_ID
+        sync: false
+      - key: BUILT_IN_FORGE_API_URL
+        sync: false
+      - key: BUILT_IN_FORGE_API_KEY
+        sync: false
+      - key: VITE_FRONTEND_FORGE_API_URL
+        sync: false
+      - key: VITE_FRONTEND_FORGE_API_KEY
+        sync: false
+      - key: VITE_ANALYTICS_ENDPOINT
+        sync: false
+      - key: VITE_ANALYTICS_WEBSITE_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_GRAPH_API_VERSION
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_EMBEDDED_SIGNUP_CONFIG_ID
+        sync: false
+      - key: META_GRAPH_API_VERSION
+        sync: false
+      - key: HYPERPAY_BASE_URL
+        sync: false
+      - key: HYPERPAY_ACCESS_TOKEN
+        sync: false
+      - key: HYPERPAY_ENTITY_ID
+        sync: false
