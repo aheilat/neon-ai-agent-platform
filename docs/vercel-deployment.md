@@ -20,6 +20,21 @@ The built React client is served from Vercel's static output. Every `/api/*` req
 
 > Vercel Functions are request-driven and scale down when idle. The existing managed Neon deployment remains the recommended production target for Manus OAuth, Heartbeat schedules, Forge-backed storage, and Meta webhooks until their environment variables and operational behavior have been separately validated on Vercel.
 
+## Current Vercel authentication status
+
+The Vercel deployment is a **code-compatibility alternative**, not an approved customer-facing production environment yet. Its "Create account" and "Sign in" actions rely on the Manus OAuth application and an external live database. Vercel does not inherit either the managed Neon environment secrets or the OAuth configuration automatically.
+
+Do **not** direct customers to the Vercel domain or use it for account creation until all of the following are explicitly completed and tested:
+
+| Requirement | Why it is required |
+|---|---|
+| Vercel-specific OAuth redirect support | The login redirect is dynamically built from the active browser origin and must be accepted by the OAuth application. |
+| A secure, independent `DATABASE_URL` reachable from Vercel | User profiles, tenants, agents, conversations, and billing are stored by the backend, not in the static site. |
+| A Vercel-only `JWT_SECRET` and all required server and browser OAuth variables | The callback must exchange the login code and issue a host-only session safely. |
+| A full browser test of registration, callback, session persistence, and logout | A successful static build alone does not prove authentication is safe or operational. |
+
+Until that independent migration is approved, customers must use the primary application at `https://neonaiagent-nu42grqa.manus.space`. Do not copy managed Neon secrets into GitHub or chat, and do not place a Supabase password in Vercel before the planned database cutover.
+
 ## Required Vercel environment variables
 
 Add server-side values in **Project Settings → Environment Variables**. Never paste these values into GitHub or variables beginning with `VITE_` unless the value is explicitly safe for browsers.
@@ -36,6 +51,8 @@ The dedicated Supabase project is prepared but is not the live database yet. Do 
 ## Before deploying
 
 Confirm that Vercel has access to the private GitHub repository. Set the Framework preset to **Other**, then add the required environment variables. Review the deployment configuration before pressing Deploy; Vercel cannot inherit the secrets that are automatically injected in the managed Neon environment.
+
+> **Decision for the current release:** keep the managed Neon domain as the only public production URL. Treat Vercel as a staging deployment until the authentication and database requirements above are completed.
 
 ## References
 
