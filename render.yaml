@@ -35,6 +35,10 @@ services:
         sync: false
       - key: VITE_ANALYTICS_WEBSITE_ID
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5
       - key: WHATSAPP_ACCESS_TOKEN
         sync: false
       - key: WHATSAPP_APP_SECRET

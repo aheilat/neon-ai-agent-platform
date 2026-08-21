@@ -242,6 +242,7 @@
 - [x] إضافة محول Claude خادمي مستقل باستخدام ANTHROPIC_API_KEY من بيئة الاستضافة المشفرة
 - [ ] إنشاء مسار ترحيل متحكم به للبيانات والمخطط من MySQL/TiDB إلى PostgreSQL/Supabase
 - [ ] إعداد بيئتي Render وVercel التجريبيتين بأسرار مستقلة ومراجعة الوصول
+- [ ] إنشاء خدمة Render staging الفعلية بعد اكتمال طبقة PostgreSQL والمصادقة قبل إضافة ANTHROPIC_API_KEY
 - [ ] اختبار التسجيل والجلسة والبيانات والردود الذكية ومسارات Webhook خارج Manus
 
 ## Independent Production Environment Variables

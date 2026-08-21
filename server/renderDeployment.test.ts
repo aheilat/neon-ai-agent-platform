@@ -15,6 +15,8 @@ describe("Render staging deployment configuration", () => {
     expect(blueprint).toContain("key: DATABASE_URL\n        sync: false");
     expect(blueprint).toContain("key: OAUTH_SERVER_URL\n        sync: false");
     expect(blueprint).toContain("key: JWT_SECRET\n        generateValue: true");
+    expect(blueprint).toContain("key: ANTHROPIC_API_KEY\n        sync: false");
+    expect(blueprint).toContain("key: ANTHROPIC_MODEL\n        value: claude-haiku-4-5");
     expect(blueprint).not.toMatch(/(mysql|postgres):\/\/[^\s]+/i);
   });
 
