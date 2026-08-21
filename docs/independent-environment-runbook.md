@@ -9,14 +9,14 @@ This runbook applies to the separate Render and Vercel staging deployments. It d
 | 1 | `NODE_ENV`, `JWT_SECRET` | Safe baseline | Render-generated secret | `NODE_ENV=production`; let Render generate `JWT_SECRET`. |
 | 2 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Prepared | The dedicated Neon Supabase project | The publishable key may be used by browser code only after RLS and Supabase Auth flows are reviewed. |
 | 3 | `SUPABASE_SERVICE_ROLE_KEY` | Pending | Supabase dashboard, server-only secret | Never expose to the browser, GitHub, or chat. |
-| 4 | `DATABASE_URL` | Blocked by code migration | Supabase **pooled** connection string | Enter only after the Express data layer supports PostgreSQL. Do not use the direct connection URI currently shown in the dashboard. |
+| 4 | `INDEPENDENT_DATABASE_URL` | Blocked by code migration | Supabase **pooled** connection string | Enter only after the Express data layer supports PostgreSQL. Do not use the direct connection URI currently shown in the dashboard. |
 | 5 | Independent AI provider keys | Pending provider choice | Provider account's encrypted secret | Replace the managed Forge credentials; never send a provider secret to the browser. |
 | 6 | Meta WhatsApp variables | Blocked by Meta activation | Meta app dashboard | Configure in staging only; do not replace the current Oman Drive webhook. |
 | 7 | HyperPay variables | Pending checkout acceptance test | HyperPay merchant dashboard | Configure after the database, user session, and public origin are verified. |
 
 ## Variables to retire from the independent deployment
 
-The following managed-runtime values must not be copied into Render or Vercel as an attempt to make the external version work: `OAUTH_SERVER_URL`, `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`, `VITE_FRONTEND_FORGE_API_URL`, and `VITE_FRONTEND_FORGE_API_KEY`.
+The following managed-runtime values must not be copied into Render or Vercel as an attempt to make the external version work: `DATABASE_URL`, `OAUTH_SERVER_URL`, `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`, `VITE_FRONTEND_FORGE_API_URL`, and `VITE_FRONTEND_FORGE_API_KEY`.
 
 They are tied to the current managed Neon runtime. The external version will replace them with Supabase Auth and independently owned AI provider credentials.
 
