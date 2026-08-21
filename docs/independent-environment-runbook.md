@@ -10,7 +10,7 @@ This runbook applies to the separate Render and Vercel staging deployments. It d
 | 2 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Prepared | The dedicated Neon Supabase project | The publishable key may be used by browser code only after RLS and Supabase Auth flows are reviewed. |
 | 3 | `SUPABASE_SERVICE_ROLE_KEY` | Pending | Supabase dashboard, server-only secret | Never expose to the browser, GitHub, or chat. |
 | 4 | `INDEPENDENT_DATABASE_URL` | Blocked by code migration | Supabase **pooled** connection string | Enter only after the Express data layer supports PostgreSQL. Do not use the direct connection URI currently shown in the dashboard. |
-| 5 | Independent AI provider keys | Pending provider choice | Provider account's encrypted secret | Replace the managed Forge credentials; never send a provider secret to the browser. |
+| 5 | `ANTHROPIC_API_KEY`, optionally `ANTHROPIC_MODEL` | Claude selected | Anthropic Console, encrypted server secret | `ANTHROPIC_API_KEY` is server-only. The adapter defaults to `claude-haiku-4-5`; do not send the key to the browser, GitHub, or chat. |
 | 6 | Meta WhatsApp variables | Blocked by Meta activation | Meta app dashboard | Configure in staging only; do not replace the current Oman Drive webhook. |
 | 7 | HyperPay variables | Pending checkout acceptance test | HyperPay merchant dashboard | Configure after the database, user session, and public origin are verified. |
 
