@@ -29,6 +29,7 @@ function AppRoutes() {
       <Route path="/" component={PublicLanding} />
       <Route path="/login" component={Access} />
       <Route path="/register" component={Access} />
+      <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/start" component={Home} />
       <Route path="*">

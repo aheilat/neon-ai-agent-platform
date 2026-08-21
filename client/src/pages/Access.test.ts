@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { getAccessCopy } from "./Access";
 
 describe("access page copy", () => {
@@ -16,5 +18,11 @@ describe("access page copy", () => {
     expect(copy.heading).toContain("عودتك");
     expect(copy.action).toContain("تسجيل الدخول");
     expect(copy.switchPath).toBe("/register");
+  });
+
+  it("keeps the public /access compatibility route available", () => {
+    const appSource = fs.readFileSync(path.join(process.cwd(), "client", "src", "App.tsx"), "utf8");
+
+    expect(appSource).toContain('<Route path="/access" component={Access} />');
   });
 });
