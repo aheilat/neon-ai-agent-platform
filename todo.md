@@ -241,7 +241,7 @@
 - [ ] اختبار التسجيل والجلسة والبيانات والردود الذكية ومسارات Webhook خارج Manus
 
 ## Independent Production Environment Variables
-- [ ] توثيق مصادر وتبعيات متغيرات البيئة المستقلة من دون تسجيل قيم أو أسرار
+- [x] توثيق مصادر وتبعيات متغيرات البيئة المستقلة من دون تسجيل قيم أو أسرار
 - [ ] تحويل طبقة Drizzle الحالية من MySQL إلى PostgreSQL/Supabase قبل إدخال DATABASE_URL الخارجي في Render
 - [ ] إدخال إعدادات قاعدة بيانات Supabase والمصادقة في Render/Vercel عبر حقول مشفرة
 - [ ] إدخال إعدادات WhatsApp وMeta في بيئة اختبار خارجية من دون تحويل Webhook رقم Oman Drive الإنتاجي
