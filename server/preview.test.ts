@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { upsertUser } from "./db";
+
+vi.mock("./chatService", () => ({
+  generateFastChatReply: vi.fn(async () => ({ content: "أهلاً بك، كيف أقدر أساعدك اليوم؟" })),
+}));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 

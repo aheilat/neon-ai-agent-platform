@@ -19,11 +19,15 @@ The first independent sign-in flow will use Supabase email-and-password authenti
 
 The production browser URLs will be added only after the Render and Vercel staging hostnames exist. No wildcard redirect URL will be used. Password reset and confirmation links will point to explicit, public application routes owned by the external version.
 
+The current Supabase migration enables RLS on all application tables but intentionally contains no browser-facing policies. This is safe for the empty staging database, but Supabase Auth cannot be exposed to the browser until a reviewed ownership model maps `auth.users` identities to the application `users` and tenant tables and adds narrowly scoped tenant policies. Until then, the Express service remains the only approved data-access layer.
+
 ## Database decision
 
 The existing Supabase project is a separate, active PostgreSQL target in `ap-south-1`. Its public schema contains the Neon tenant, agent, knowledge, conversation, notification, channel, onboarding, website, subscription, and payment tables. All inspected application tables have row-level security enabled and contain zero rows. Two migrations—`neon_initial_schema` and `harden_function_search_path`—are already applied.
 
 Schema work must remain in version-controlled migration files and be applied in order. The external staging database will receive **schema first, no production data by default**. Any later tenant-data migration requires a backup, a dry run, tenant-by-tenant validation, and explicit owner approval.
+
+> **Current compatibility gate:** the running Neon server imports `drizzle-orm/mysql2` and MySQL schema definitions. It cannot use the Supabase PostgreSQL connection string safely until the data-access layer, schema typing, and authentication context are migrated. The external connection string was verified in the Supabase dashboard but has intentionally not been copied into Render.
 
 ## AI routing decision
 
