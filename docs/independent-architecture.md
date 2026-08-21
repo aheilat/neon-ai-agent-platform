@@ -29,6 +29,20 @@ Schema work must remain in version-controlled migration files and be applied in 
 
 > **Current compatibility gate:** the running Neon server imports `drizzle-orm/mysql2` and MySQL schema definitions. It cannot use the Supabase PostgreSQL connection string safely until the data-access layer, schema typing, and authentication context are migrated. The external connection string was verified in the Supabase dashboard but has intentionally not been copied into Render.
 
+## Data-access migration scope
+
+The current `server/db.ts` combines more than one responsibility. The independent conversion will preserve its public behaviour but split it into tested PostgreSQL repositories in this order:
+
+| Repository group | Current responsibilities | Migration order |
+|---|---|---|
+| Identity and workspace | User lookup, tenant creation, and default workspace agent | First; required for Supabase Auth sessions. |
+| Agents and knowledge | Agents, capability packs, knowledge items, and website snapshots | Second; required for onboarding and agent replies. |
+| Conversations and leads | Conversations, messages, handoffs, and lead capture | Third; required for widget and WhatsApp staging tests. |
+| Team and notifications | Members, assignments, browser preferences, and notifications | Fourth; required for human handoff. |
+| Billing and channels | Subscriptions, payment records, channel credentials, and WhatsApp configuration | Last; not enabled until external checkout and Meta staging acceptance. |
+
+The managed MySQL implementation will remain in place until the independent repositories meet the same tenant-scoping tests. No generic switch based only on `DATABASE_URL` is permitted.
+
 ## AI routing decision
 
 The independent service will retain the product behaviour—fast default model with fallback capability—but provider keys will be stored only in the external host's encrypted environment settings. The client will never receive an AI provider secret. Provider selection, quota controls, and error logging will run in the Express server.
