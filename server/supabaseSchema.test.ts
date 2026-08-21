@@ -61,4 +61,20 @@ describe("Supabase Production Schema Verification", () => {
     expect(sqlContent).toContain("security definer");
     expect(sqlContent).toContain("set search_path = public, pg_temp");
   });
+
+  it("adds owner-scoped browser policies while keeping sensitive credentials server-only", () => {
+    const migrationPath = path.join(
+      process.cwd(),
+      "supabase",
+      "migrations",
+      "0004_workspace_owner_rls.sql"
+    );
+    const sqlContent = fs.readFileSync(migrationPath, "utf-8");
+
+    expect(sqlContent).toContain("create or replace function public.neon_owns_tenant(target_tenant_id bigint)");
+    expect(sqlContent).toContain('create policy "neon_agents_owner_access"');
+    expect(sqlContent).toContain('create policy "neon_messages_owner_access"');
+    expect(sqlContent).not.toContain("policy \"neon_whatsapp_embedded_credentials");
+    expect(sqlContent).not.toContain("policy \"neon_payment_transactions");
+  });
 });
