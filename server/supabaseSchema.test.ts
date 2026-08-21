@@ -46,4 +46,19 @@ describe("Supabase Production Schema Verification", () => {
     expect(sqlContent).toContain("alter function public.neon_set_updated_at()");
     expect(sqlContent).toContain("set search_path = public, pg_temp");
   });
+
+  it("maps Supabase Auth identities to tenant-isolated Neon users", () => {
+    const migrationPath = path.join(
+      process.cwd(),
+      "supabase",
+      "migrations",
+      "0003_supabase_auth_identity.sql"
+    );
+    const sqlContent = fs.readFileSync(migrationPath, "utf-8");
+
+    expect(sqlContent).toContain('"supabaseUserId" uuid unique');
+    expect(sqlContent).toContain("on auth.users");
+    expect(sqlContent).toContain("security definer");
+    expect(sqlContent).toContain("set search_path = public, pg_temp");
+  });
 });
