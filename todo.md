@@ -244,6 +244,7 @@
 ## Independent Production Environment Variables
 - [x] توثيق مصادر وتبعيات متغيرات البيئة المستقلة من دون تسجيل قيم أو أسرار
 - [x] بناء مستودع PostgreSQL مستقل لاسترجاع مستخدم Neon المرتبط بهوية Supabase
+- [x] بناء مستودع PostgreSQL مستقل لإنشاء واسترجاع مساحة عمل Neon للمستخدم المصادق
 - [ ] تحويل طبقة Drizzle الحالية من MySQL إلى PostgreSQL/Supabase قبل إدخال DATABASE_URL الخارجي في Render
 - [ ] إدخال إعدادات قاعدة بيانات Supabase والمصادقة في Render/Vercel عبر حقول مشفرة
 - [ ] إدخال إعدادات WhatsApp وMeta في بيئة اختبار خارجية من دون تحويل Webhook رقم Oman Drive الإنتاجي
