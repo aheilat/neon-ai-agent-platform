@@ -269,6 +269,7 @@
 - [x] إضافة واجهة تسجيل Supabase بالبريد وكلمة المرور تظهر فقط في استضافة Render/Vercel المستقلة
 - [x] إضافة مسار محادثة Claude خادمي مستقل مع معرفة الوكيل وعزل مساحة العمل
 - [x] فصل تشغيل Render المستقل عن OAuth وForge ومسارات tRPC الخاصة ببيئة Manus
+- [x] استبدال متغيرات Blueprint الخاصة بـManus بمتغيرات Supabase وPostgreSQL اللازمة للتشغيل المستقل
 - [ ] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
 - [ ] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
 - [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus

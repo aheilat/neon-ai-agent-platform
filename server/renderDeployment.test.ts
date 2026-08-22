@@ -12,11 +12,17 @@ describe("Render staging deployment configuration", () => {
     expect(blueprint).toContain("buildCommand: pnpm install --frozen-lockfile && pnpm build");
     expect(blueprint).toContain("startCommand: pnpm start");
     expect(blueprint).toContain("autoDeployTrigger: off");
-    expect(blueprint).toContain("key: DATABASE_URL\n        sync: false");
-    expect(blueprint).toContain("key: OAUTH_SERVER_URL\n        sync: false");
-    expect(blueprint).toContain("key: JWT_SECRET\n        generateValue: true");
+    expect(blueprint).toContain("healthCheckPath: /api/health");
+    expect(blueprint).toContain("key: INDEPENDENT_DATABASE_URL\n        sync: false");
+    expect(blueprint).toContain("key: SUPABASE_URL\n        sync: false");
+    expect(blueprint).toContain("key: SUPABASE_SERVICE_ROLE_KEY\n        sync: false");
+    expect(blueprint).toContain("key: VITE_SUPABASE_URL\n        sync: false");
+    expect(blueprint).toContain("key: VITE_SUPABASE_PUBLISHABLE_KEY\n        sync: false");
     expect(blueprint).toContain("key: ANTHROPIC_API_KEY\n        sync: false");
     expect(blueprint).toContain("key: ANTHROPIC_MODEL\n        value: claude-haiku-4-5");
+    expect(blueprint).not.toContain("key: DATABASE_URL");
+    expect(blueprint).not.toContain("key: OAUTH_SERVER_URL");
+    expect(blueprint).not.toContain("key: BUILT_IN_FORGE_API_KEY");
     expect(blueprint).not.toMatch(/(mysql|postgres):\/\/[^\s]+/i);
   });
 
