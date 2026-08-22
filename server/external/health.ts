@@ -53,7 +53,7 @@ export async function getIndependentRuntimeHealth(
     return {
       ok: false,
       runtime: "independent",
-      database: pool ? "connected" : "configuration-required",
+      database: pool ? "not-checked" : "configuration-required",
       supabase: supabaseStatus.configured ? "configured" : "configuration-required",
       missing,
     };

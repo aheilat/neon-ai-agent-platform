@@ -35,6 +35,17 @@ describe("getIndependentRuntimeHealth", () => {
     });
   });
 
+  it("does not claim a database connection before all required services can be checked", async () => {
+    const result = await getIndependentRuntimeHealth({
+      isIndependentRuntime: true,
+      getPool: () => ({ query: vi.fn() }),
+      getSupabaseStatus: () => ({ configured: false, missing: ["SUPABASE_URL"] }),
+    });
+
+    expect(result.database).toBe("not-checked");
+    expect(result.missing).toEqual(["SUPABASE_URL"]);
+  });
+
   it("confirms a configured independent runtime after a minimal database query", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ "?column?": 1 }] });
     const result = await getIndependentRuntimeHealth({

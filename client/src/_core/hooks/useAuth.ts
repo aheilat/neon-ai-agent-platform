@@ -2,6 +2,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { getIndependentSupabaseBrowserClient, hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -14,9 +15,11 @@ export function useAuth(options?: UseAuthOptions) {
   // the state cookie, so calling it per render would overwrite the cookie and
   // desync it from an in-flight login's `state`.
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
+  const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !isIndependentRuntime,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -28,6 +31,10 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    if (isIndependentRuntime) {
+      await getIndependentSupabaseBrowserClient()?.auth.signOut();
+      return;
+    }
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
@@ -48,20 +55,23 @@ export function useAuth(options?: UseAuthOptions) {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
     }
-  }, [logoutMutation, utils]);
+  }, [isIndependentRuntime, logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    if (!isIndependentRuntime) {
+      localStorage.setItem(
+        "manus-runtime-user-info",
+        JSON.stringify(meQuery.data)
+      );
+    }
     return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
-      error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      user: isIndependentRuntime ? null : meQuery.data ?? null,
+      loading: isIndependentRuntime ? false : meQuery.isLoading || logoutMutation.isPending,
+      error: isIndependentRuntime ? null : meQuery.error ?? logoutMutation.error ?? null,
+      isAuthenticated: isIndependentRuntime ? false : Boolean(meQuery.data),
     };
   }, [
+    isIndependentRuntime,
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,
@@ -70,7 +80,7 @@ export function useAuth(options?: UseAuthOptions) {
   ]);
 
   useEffect(() => {
-    if (!redirectOnUnauthenticated) return;
+    if (isIndependentRuntime || !redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
@@ -83,6 +93,7 @@ export function useAuth(options?: UseAuthOptions) {
       startLogin();
     }
   }, [
+    isIndependentRuntime,
     redirectOnUnauthenticated,
     redirectPath,
     logoutMutation.isPending,
