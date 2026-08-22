@@ -265,6 +265,7 @@
 - [x] مراجعة تسجيل المستخدم لشاشة Render وتحديد المرحلة الحالية من إنشاء خدمة staging
 - [ ] استكمال أقل مسار PostgreSQL ومصادقة Supabase لازم لتشغيل تجربة مستقلة آمنة
 - [x] إضافة نقطة صحة مستقلة تتحقق من PostgreSQL وتهيئة Supabase دون إظهار أسرار
+- [x] إضافة مستودع PostgreSQL معزول للوكلاء وقاعدة المعرفة ومسارات API خارجية تقبل Bearer token من Supabase
 - [ ] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
 - [ ] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
 - [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus

@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { extractWhatsAppInboundMessages, sendWhatsAppText, verifyWhatsAppSignature, verifyWhatsAppWebhook } from "../whatsappService";
 import { processWhatsAppInboundMessage } from "../whatsappInbound";
 import { getIndependentRuntimeHealth } from "../external/health";
+import { registerIndependentRuntimeRoutes } from "../external/routes";
 
 /**
  * Creates Neon’s HTTP application without binding a port.
@@ -70,6 +71,7 @@ export async function createNeonApp() {
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  registerIndependentRuntimeRoutes(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
 
