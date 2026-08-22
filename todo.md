@@ -122,6 +122,7 @@
 
 ## Self-Service Client Agent & WhatsApp Onboarding
 - [x] تقديم طلب Meta Access Verification بصفة Tech Provider وتسجيل حالة الطلب «In review»
+- [x] تأكيد اعتماد Meta Access Verification بصفة Tech Provider عبر لقطة لوحة Meta بتاريخ 22 أغسطس 2026، من دون تغيير Webhook أو أصول WhatsApp
 - [x] تصميم رحلة إعداد ذاتية قصيرة: نشاط العميل، رابط الموقع، شخصية الوكيل، والمعاينة قبل النشر
 - [x] إضافة حالة تقدم واضحة وحفظ تلقائي للاستكمال لاحقاً لكل عميل داخل مساحة العمل الخاصة به
 - [ ] إعداد ربط WhatsApp المضمّن داخل المنصة ليمنح العميل صلاحية حسابه دون مشاركة رمز وصول يدوي
@@ -263,16 +264,17 @@
 
 ## Render Full-Stack Staging Deployment
 - [x] مراجعة تسجيل المستخدم لشاشة Render وتحديد المرحلة الحالية من إنشاء خدمة staging
-- [ ] استكمال أقل مسار PostgreSQL ومصادقة Supabase لازم لتشغيل تجربة مستقلة آمنة
+- [x] استكمال أقل مسار PostgreSQL ومصادقة Supabase لازم لتشغيل تجربة مستقلة آمنة
 - [x] إضافة نقطة صحة مستقلة تتحقق من PostgreSQL وتهيئة Supabase دون إظهار أسرار
 - [x] إضافة مستودع PostgreSQL معزول للوكلاء وقاعدة المعرفة ومسارات API خارجية تقبل Bearer token من Supabase
 - [x] إضافة واجهة تسجيل Supabase بالبريد وكلمة المرور تظهر فقط في استضافة Render/Vercel المستقلة
 - [x] إضافة مسار محادثة Claude خادمي مستقل مع معرفة الوكيل وعزل مساحة العمل
 - [x] فصل تشغيل Render المستقل عن OAuth وForge ومسارات tRPC الخاصة ببيئة Manus
 - [x] استبدال متغيرات Blueprint الخاصة بـManus بمتغيرات Supabase وPostgreSQL اللازمة للتشغيل المستقل
-- [ ] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
-- [ ] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
+- [x] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
+- [x] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
 - [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus
 - [ ] توثيق رابط تجربة Render وخطوات فصل Vercel التالية من دون تغيير Webhook Oman Drive
-- [ ] تشخيص وإصلاح حالة `database: unavailable` في نقطة صحة Render المستقلة، ثم إعادة فحصها قبل اختبار التسجيل
-- [ ] إضافة واجهة محادثة اختبارية مقيّدة للمستخدم والوكيل داخل `/external` للتحقق من رد Claude الخادمي المستقل
+- [x] تشخيص وإصلاح حالة `database: unavailable` في نقطة صحة Render المستقلة، ثم إعادة فحصها قبل اختبار التسجيل
+- [x] إضافة واجهة محادثة اختبارية مقيّدة للمستخدم والوكيل داخل `/external` للتحقق من رد Claude الخادمي المستقل
+- [ ] تفعيل رصيد Anthropic API ثم تأكيد ظهور رد Claude خادمي ناجح من واجهة Render المستقلة
