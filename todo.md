@@ -267,6 +267,7 @@
 - [x] إضافة نقطة صحة مستقلة تتحقق من PostgreSQL وتهيئة Supabase دون إظهار أسرار
 - [x] إضافة مستودع PostgreSQL معزول للوكلاء وقاعدة المعرفة ومسارات API خارجية تقبل Bearer token من Supabase
 - [x] إضافة واجهة تسجيل Supabase بالبريد وكلمة المرور تظهر فقط في استضافة Render/Vercel المستقلة
+- [x] إضافة مسار محادثة Claude خادمي مستقل مع معرفة الوكيل وعزل مساحة العمل
 - [ ] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
 - [ ] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
 - [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus
