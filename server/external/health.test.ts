@@ -65,19 +65,30 @@ describe("getIndependentRuntimeHealth", () => {
   });
 
   it("does not expose a database exception in an unhealthy response", async () => {
-    const result = await getIndependentRuntimeHealth({
-      isIndependentRuntime: true,
-      getPool: () => ({ query: vi.fn().mockRejectedValue(new Error("database password leaked")) }),
-      getSupabaseStatus: () => ({ configured: true, missing: [] }),
-    });
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(result).toEqual({
-      ok: false,
-      runtime: "independent",
-      database: "unavailable",
-      supabase: "configured",
-      missing: [],
-    });
-    expect(JSON.stringify(result)).not.toContain("password");
+    try {
+      const databaseError = Object.assign(new Error("database password leaked"), { code: "28P01" });
+      const result = await getIndependentRuntimeHealth({
+        isIndependentRuntime: true,
+        getPool: () => ({ query: vi.fn().mockRejectedValue(databaseError) }),
+        getSupabaseStatus: () => ({ configured: true, missing: [] }),
+      });
+
+      expect(result).toEqual({
+        ok: false,
+        runtime: "independent",
+        database: "unavailable",
+        supabase: "configured",
+        missing: [],
+      });
+      expect(JSON.stringify(result)).not.toContain("password");
+      expect(logError).toHaveBeenCalledWith("[Independent health] PostgreSQL readiness check failed", {
+        code: "28P01",
+      });
+      expect(JSON.stringify(logError.mock.calls)).not.toContain("password");
+    } finally {
+      logError.mockRestore();
+    }
   });
 });

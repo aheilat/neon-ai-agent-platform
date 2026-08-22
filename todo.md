@@ -274,3 +274,4 @@
 - [ ] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
 - [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus
 - [ ] توثيق رابط تجربة Render وخطوات فصل Vercel التالية من دون تغيير Webhook Oman Drive
+- [ ] تشخيص وإصلاح حالة `database: unavailable` في نقطة صحة Render المستقلة، ثم إعادة فحصها قبل اختبار التسجيل

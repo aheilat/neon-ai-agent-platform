@@ -19,6 +19,19 @@ type IndependentHealthDependencies = {
   getSupabaseStatus?: () => IndependentSupabaseStatus;
 };
 
+function getSafeDatabaseErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+
+  return "unknown";
+}
+
 function hasIndependentRuntimeConfiguration() {
   return Boolean(process.env.INDEPENDENT_DATABASE_URL);
 }
@@ -68,7 +81,11 @@ export async function getIndependentRuntimeHealth(
       supabase: "configured",
       missing: [],
     };
-  } catch {
+  } catch (error) {
+    console.error("[Independent health] PostgreSQL readiness check failed", {
+      code: getSafeDatabaseErrorCode(error),
+    });
+
     return {
       ok: false,
       runtime: "independent",
