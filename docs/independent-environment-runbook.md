@@ -6,13 +6,12 @@ This runbook applies to the separate Render and Vercel staging deployments. It d
 
 | Order | Variable group | Status | Source | Rule |
 |---|---|---|---|---|
-| 1 | `NODE_ENV`, `JWT_SECRET` | Safe baseline | Render-generated secret | `NODE_ENV=production`; let Render generate `JWT_SECRET`. |
-| 2 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Prepared | The dedicated Neon Supabase project | The publishable key may be used by browser code only after RLS and Supabase Auth flows are reviewed. |
-| 3 | `SUPABASE_SERVICE_ROLE_KEY` | Pending | Supabase dashboard, server-only secret | Never expose to the browser, GitHub, or chat. |
-| 4 | `INDEPENDENT_DATABASE_URL` | Blocked by code migration | Supabase **pooled** connection string | Enter only after the Express data layer supports PostgreSQL. Do not use the direct connection URI currently shown in the dashboard. |
-| 5 | `ANTHROPIC_API_KEY`, optionally `ANTHROPIC_MODEL` | Claude selected | Anthropic Console, encrypted server secret | `ANTHROPIC_API_KEY` is server-only. The adapter defaults to `claude-haiku-4-5`; do not send the key to the browser, GitHub, or chat. |
-| 6 | Meta WhatsApp variables | Blocked by Meta activation | Meta app dashboard | Configure in staging only; do not replace the current Oman Drive webhook. |
-| 7 | HyperPay variables | Pending checkout acceptance test | HyperPay merchant dashboard | Configure after the database, user session, and public origin are verified. |
+| 1 | `INDEPENDENT_DATABASE_URL` | Required | The dedicated Neon Supabase project | Use the Supabase **pooled Session pooler** connection string. Never use `DATABASE_URL` or a direct connection URI. |
+| 2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Required | The dedicated Neon Supabase project | `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be exposed to the browser, GitHub, or chat. |
+| 3 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Required | The dedicated Neon Supabase project | These are the browser-safe Supabase values used only for independent email/password sign-in. |
+| 4 | `ANTHROPIC_API_KEY`, optionally `ANTHROPIC_MODEL` | Claude selected | Anthropic Console, encrypted server secret | `ANTHROPIC_API_KEY` is server-only. The adapter defaults to `claude-haiku-4-5`; do not send the key to the browser, GitHub, or chat. |
+| 5 | Meta WhatsApp variables | Deferred | Meta app dashboard | Do not configure these for this first independent staging deployment; the Oman Drive webhook remains unchanged. |
+| 6 | HyperPay variables | Deferred | HyperPay merchant dashboard | Configure only after the independent database, session, and public origin are verified. |
 
 ## Variables to retire from the independent deployment
 
