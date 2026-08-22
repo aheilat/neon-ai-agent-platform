@@ -21,6 +21,7 @@ import PublicLanding from "./pages/PublicLanding";
 import Access from "./pages/Access";
 import Pricing from "./pages/Pricing";
 import Quality from "./pages/Quality";
+import IndependentStaging from "./pages/IndependentStaging";
 
 function AppRoutes() {
   return (
@@ -31,6 +32,7 @@ function AppRoutes() {
       <Route path="/register" component={Access} />
       <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/external" component={IndependentStaging} />
       <Route path="/start" component={Home} />
       <Route path="*">
         <DashboardLayout>

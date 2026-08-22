@@ -1,8 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { startLogin } from "@/const";
+import { signInToIndependentNeon, signUpForIndependentNeon } from "@/lib/independentAuth";
+import { hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
 import { ArrowLeft, Bot, Check, LockKeyhole, Sparkles } from "lucide-react";
-import { useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 export function getAccessCopy(isRegister: boolean) {
@@ -31,9 +34,15 @@ export default function Access() {
   const [location, setLocation] = useLocation();
   const { isAuthenticated, loading } = useAuth();
   const isRegister = location === "/register";
+  const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (isIndependentRuntime || !isAuthenticated) return;
     const intentRaw = localStorage.getItem("neon-checkout-intent");
     if (intentRaw) {
       localStorage.removeItem("neon-checkout-intent");
@@ -46,11 +55,35 @@ export default function Access() {
       }
     }
     setLocation("/start");
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, isIndependentRuntime, setLocation]);
 
   if (isAuthenticated) return null;
 
   const copy = getAccessCopy(isRegister);
+
+  const submitIndependentAccess = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    setConfirmationMessage(null);
+    setSubmitting(true);
+    try {
+      if (isRegister) {
+        const result = await signUpForIndependentNeon(email, password, window.location.origin);
+        if (result.confirmationRequired) {
+          setConfirmationMessage("تحقق من بريدك الإلكتروني ثم افتح رابط التأكيد للمتابعة إلى مساحة العمل.");
+        } else {
+          setLocation("/external");
+        }
+      } else {
+        await signInToIndependentNeon(email, password);
+        setLocation("/external");
+      }
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : "تعذرت عملية المصادقة. حاول مرة أخرى.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <main className="relative grid min-h-screen overflow-hidden bg-[#07111f] text-white lg:grid-cols-[1.04fr_0.96fr]" dir="rtl">
@@ -65,7 +98,7 @@ export default function Access() {
           <div className="mt-8 rounded-2xl border border-white/[0.09] bg-white/[0.045] p-4">
             <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-lime-300" /><div><p className="text-sm font-bold text-white">دخول آمن بدون كلمة مرور داخل Neon</p><p className="mt-1 text-xs leading-6 text-slate-400">نستخدم تسجيل دخول آمن ليتم إنشاء أو استعادة مساحة عملك وحفظ وكلائك وبياناتك بصورة محمية.</p></div></div>
           </div>
-          <Button disabled={loading} onClick={() => { if (!localStorage.getItem("neon-checkout-intent")) localStorage.setItem("neon-after-auth", "/start"); startLogin(); }} size="lg" className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{loading ? "جارٍ التحقق..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>
+          {isIndependentRuntime ? <form className="mt-6 space-y-3" onSubmit={submitIndependentAccess}><Input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" /><Input required type="password" minLength={8} autoComplete={isRegister ? "new-password" : "current-password"} value={password} onChange={event => setPassword(event.target.value)} placeholder="كلمة المرور (8 أحرف على الأقل)" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />{formError && <p className="text-sm text-rose-200">{formError}</p>}{confirmationMessage && <p className="text-sm leading-6 text-lime-200">{confirmationMessage}</p>}<Button disabled={submitting} type="submit" size="lg" className="h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{submitting ? "جارٍ المتابعة..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button></form> : <Button disabled={loading} onClick={() => { if (!localStorage.getItem("neon-checkout-intent")) localStorage.setItem("neon-after-auth", "/start"); startLogin(); }} size="lg" className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{loading ? "جارٍ التحقق..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>}
           <p className="mt-5 text-center text-sm text-slate-400">{copy.switchLead} <Link href={copy.switchPath} className="font-bold text-cyan-200 hover:text-cyan-100">{copy.switchAction}</Link></p>
         </div>
       </section>
