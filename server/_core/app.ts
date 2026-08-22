@@ -9,6 +9,7 @@ import { analyzeWebsite, detectAnalysisChanges } from "../websiteAnalyzer";
 import { createContext } from "./context";
 import { extractWhatsAppInboundMessages, sendWhatsAppText, verifyWhatsAppSignature, verifyWhatsAppWebhook } from "../whatsappService";
 import { processWhatsAppInboundMessage } from "../whatsappInbound";
+import { getIndependentRuntimeHealth } from "../external/health";
 
 /**
  * Creates Neon’s HTTP application without binding a port.
@@ -19,6 +20,11 @@ import { processWhatsAppInboundMessage } from "../whatsappInbound";
  */
 export async function createNeonApp() {
   const app = express();
+
+  app.get("/api/health", async (_req, res) => {
+    const health = await getIndependentRuntimeHealth();
+    return res.status(health.ok ? 200 : 503).json(health);
+  });
 
   app.get("/api/webhooks/whatsapp", (req, res) => {
     const challenge = verifyWhatsAppWebhook(req.query as Record<string, string | string[] | undefined>, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);

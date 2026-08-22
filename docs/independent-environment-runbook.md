@@ -27,3 +27,10 @@ The staging deployment must use a separate test configuration until Meta activat
 ## Safe operator workflow
 
 Use the platform's encrypted environment-variable panel to enter values directly. A screenshot may be shared only when every token and password is obscured. Never save secrets in `.env` files, source code, issue comments, or GitHub commits.
+
+## Provider references
+
+The Claude adapter follows Anthropic's server-side API-key guidance: `ANTHROPIC_API_KEY` is a static server secret and must be rotated or revoked if exposure is suspected. The default `claude-haiku-4-5` is Anthropic's documented convenience alias for Claude Haiku 4.5.
+
+- [Anthropic authentication documentation](https://platform.claude.com/docs/en/manage-claude/authentication)
+- [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview)
