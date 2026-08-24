@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
 import { BILLING_PLANS, TRIAL_PLAN, type BillingCycle, type PaidPlanId } from "@shared/billingPlans";
 import { NEON_CONTACT_EMAIL } from "@shared/contact";
 import { ArrowLeft, Bot, Check, ChevronLeft, CircleHelp, Sparkles } from "lucide-react";
@@ -8,13 +9,26 @@ import { Link, useLocation } from "wouter";
 
 const cycleLabel: Record<BillingCycle, string> = { monthly: "شهري", yearly: "سنوي" };
 
+export function independentPlanRequestUrl(plan: PaidPlanId, cycle: BillingCycle) {
+  const query = new URLSearchParams({
+    subject: `طلب باقة Neon AI — ${plan}`,
+    body: `مرحباً Neon، أريد طلب باقة ${plan} بالدفع ${cycleLabel[cycle]} لمنشأتي.\n\nاسم الشركة:\nرابط الموقع:\nأفضل وسيلة للتواصل:`,
+  });
+  return `mailto:${NEON_CONTACT_EMAIL}?${query.toString()}`;
+}
+
 export default function Pricing() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
+  const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
 
-  const beginTrial = () => setLocation(isAuthenticated ? "/start" : "/register");
+  const beginTrial = () => setLocation(isIndependentRuntime ? "/register" : isAuthenticated ? "/start" : "/register");
   const choosePaidPlan = (plan: PaidPlanId) => {
+    if (isIndependentRuntime) {
+      window.location.href = independentPlanRequestUrl(plan, cycle);
+      return;
+    }
     const intent = { plan, cycle };
     localStorage.setItem("neon-checkout-intent", JSON.stringify(intent));
     setLocation(isAuthenticated ? `/billing?plan=${plan}&cycle=${cycle}` : "/register");
@@ -35,7 +49,7 @@ export default function Pricing() {
 
         <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <article className="flex flex-col rounded-[26px] border border-cyan-300/30 bg-gradient-to-b from-cyan-300/12 to-white/[0.025] p-6 shadow-[0_20px_55px_rgba(8,145,178,0.10)]"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950"><Sparkles className="h-5 w-5" /></span><h2 className="mt-6 text-xl font-bold">{TRIAL_PLAN.name}</h2><p className="mt-3 min-h-14 text-sm leading-6 text-slate-300">{TRIAL_PLAN.description}</p><div className="mt-6"><span className="text-4xl font-semibold">0</span><span className="mr-1 text-sm text-slate-400">ر.س</span><p className="mt-1 text-xs text-cyan-100">لمدة {TRIAL_PLAN.durationDays} يوماً · بلا بطاقة دفع</p></div><ul className="mt-7 space-y-3 border-t border-white/[0.08] pt-6">{TRIAL_PLAN.features.map(feature => <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-200"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-lime-300" />{feature}</li>)}</ul><Button onClick={beginTrial} className="mt-8 h-12 rounded-xl bg-white text-slate-950 hover:bg-slate-100">ابدأ التجربة <ArrowLeft className="mr-2 h-4 w-4" /></Button></article>
-          {BILLING_PLANS.map(plan => { const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice; return <article key={plan.id} className={`relative flex flex-col rounded-[26px] border p-6 ${plan.highlighted ? "border-lime-300/55 bg-lime-300/[0.07] shadow-[0_20px_55px_rgba(190,242,100,0.08)]" : "border-white/[0.09] bg-white/[0.025]"}`}>{plan.highlighted && <span className="absolute -top-3 right-5 rounded-full bg-lime-300 px-3 py-1 text-[10px] font-black text-slate-950">الأكثر اختياراً</span>}<h2 className="text-xl font-bold">{plan.shortName}</h2><p className="mt-1 text-xs font-semibold text-cyan-200" dir="ltr">{plan.name}</p><p className="mt-4 min-h-14 text-sm leading-6 text-slate-300">{plan.description}</p><div className="mt-6"><span className="text-4xl font-semibold">{price.toLocaleString("ar-SA")}</span><span className="mr-1 text-sm text-slate-400">ر.س</span><p className="mt-1 text-xs text-slate-400">لكل {cycleLabel[cycle] === "شهري" ? "شهر" : "سنة"} · {cycle === "yearly" ? "الدفع السنوي مقدمًا" : "يمكن الإلغاء لاحقاً"}</p></div><ul className="mt-7 space-y-3 border-t border-white/[0.08] pt-6">{plan.features.map(feature => <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-200"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-lime-300" />{feature}</li>)}</ul><Button onClick={() => choosePaidPlan(plan.id)} className={`mt-8 h-12 rounded-xl ${plan.highlighted ? "bg-lime-300 text-slate-950 hover:bg-lime-200" : "bg-white/[0.10] text-white hover:bg-white/[0.16]"}`}>اختر باقة {plan.shortName} <ArrowLeft className="mr-2 h-4 w-4" /></Button></article>; })}
+          {BILLING_PLANS.map(plan => { const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice; return <article key={plan.id} className={`relative flex flex-col rounded-[26px] border p-6 ${plan.highlighted ? "border-lime-300/55 bg-lime-300/[0.07] shadow-[0_20px_55px_rgba(190,242,100,0.08)]" : "border-white/[0.09] bg-white/[0.025]"}`}>{plan.highlighted && <span className="absolute -top-3 right-5 rounded-full bg-lime-300 px-3 py-1 text-[10px] font-black text-slate-950">الأكثر اختياراً</span>}<h2 className="text-xl font-bold">{plan.shortName}</h2><p className="mt-1 text-xs font-semibold text-cyan-200" dir="ltr">{plan.name}</p><p className="mt-4 min-h-14 text-sm leading-6 text-slate-300">{plan.description}</p><div className="mt-6"><span className="text-4xl font-semibold">{price.toLocaleString("ar-SA")}</span><span className="mr-1 text-sm text-slate-400">ر.س</span><p className="mt-1 text-xs text-slate-400">لكل {cycleLabel[cycle] === "شهري" ? "شهر" : "سنة"} · {cycle === "yearly" ? "الدفع السنوي مقدمًا" : "يمكن الإلغاء لاحقاً"}</p></div><ul className="mt-7 space-y-3 border-t border-white/[0.08] pt-6">{plan.features.map(feature => <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-200"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-lime-300" />{feature}</li>)}</ul><Button onClick={() => choosePaidPlan(plan.id)} className={`mt-8 h-12 rounded-xl ${plan.highlighted ? "bg-lime-300 text-slate-950 hover:bg-lime-200" : "bg-white/[0.10] text-white hover:bg-white/[0.16]"}`}>{isIndependentRuntime ? `اطلب باقة ${plan.shortName}` : `اختر باقة ${plan.shortName}`} <ArrowLeft className="mr-2 h-4 w-4" /></Button></article>; })}
         </div>
         <div className="mx-auto mt-10 flex max-w-3xl flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><CircleHelp className="h-5 w-5 text-cyan-300" />هل تحتاج خطة خاصة، حجماً أكبر، أو متطلبات تكامل محددة؟</span><a href={`mailto:${NEON_CONTACT_EMAIL}`} className="inline-flex items-center gap-1 font-bold text-cyan-200 hover:text-cyan-100">تحدث إلى Neon <ChevronLeft className="h-4 w-4" /></a></div>
       </section>
