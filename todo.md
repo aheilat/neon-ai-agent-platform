@@ -273,8 +273,8 @@
 - [x] استبدال متغيرات Blueprint الخاصة بـManus بمتغيرات Supabase وPostgreSQL اللازمة للتشغيل المستقل
 - [x] إنشاء خدمة Render staging من render.yaml وربطها بمستودع GitHub الخاص
 - [x] إدخال متغيرات Supabase وClaude المشفّرة في Render دون نقل أسرار Manus
-- [ ] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus
-- [ ] توثيق رابط تجربة Render وخطوات فصل Vercel التالية من دون تغيير Webhook Oman Drive
+- [x] اختبار صحة الخدمة والتسجيل وجلسة Supabase ورد Claude خارج Manus
+- [x] توثيق رابط تجربة Render وخطوات فصل Vercel التالية من دون تغيير Webhook Oman Drive
 - [x] تشخيص وإصلاح حالة `database: unavailable` في نقطة صحة Render المستقلة، ثم إعادة فحصها قبل اختبار التسجيل
 - [x] إضافة واجهة محادثة اختبارية مقيّدة للمستخدم والوكيل داخل `/external` للتحقق من رد Claude الخادمي المستقل
-- [ ] تفعيل رصيد Anthropic API ثم تأكيد ظهور رد Claude خادمي ناجح من واجهة Render المستقلة
+- [x] تفعيل رصيد Anthropic API ثم تأكيد ظهور رد Claude خادمي ناجح من واجهة Render المستقلة
