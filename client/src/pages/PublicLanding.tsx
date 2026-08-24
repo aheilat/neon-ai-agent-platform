@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { startLogin } from "@/const";
+import { hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
 import { NEON_CONTACT_EMAIL } from "@shared/contact";
 import {
   ArrowLeft,
@@ -37,8 +38,13 @@ export const LANDING_VERTICALS = [
   { name: "العقارات", outcome: "تأهيل العملاء وحجز المعاينات", icon: Globe2 },
   { name: "الخدمات المحلية", outcome: "طلبات العرض والحجوزات والمتابعة", icon: PhoneCall },
   { name: "الرعاية الصحية", outcome: "توجيه آمن ومواعيد مع تصعيد واضح", icon: ShieldCheck },
-  { name: "السفر والضيافة", outcome: "تأهيل الطلبات وتنسيق البرنامج", icon: Languages },
+  { name: "السفر والضيافة", outcome: "تأهيل طلب السفر وتنسيق البرنامج", icon: Languages },
 ];
+
+export function publicStartDestination(isIndependentRuntime: boolean, isAuthenticated: boolean) {
+  if (isIndependentRuntime) return "/register";
+  return isAuthenticated ? "/start" : undefined;
+}
 
 function NeonMark({ compact = false }: { compact?: boolean }) {
   return <span className="inline-flex items-center gap-2.5" dir="ltr"><span className="relative flex h-10 w-10 items-center justify-center rounded-[14px] bg-gradient-to-br from-cyan-300 via-sky-400 to-lime-300 text-slate-950 shadow-[0_0_32px_rgba(103,232,249,0.32)]"><Bot className="h-5 w-5" /><span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#07111f] bg-lime-300" /></span>{!compact && <span className="text-sm font-extrabold tracking-[0.16em] text-white">NEON <span className="font-semibold text-cyan-200">AI</span></span>}</span>;
@@ -47,6 +53,7 @@ function NeonMark({ compact = false }: { compact?: boolean }) {
 export default function PublicLanding() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
+  const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
   const [isLight, setIsLight] = useState(false);
 
   useEffect(() => {
@@ -73,7 +80,8 @@ export default function PublicLanding() {
   }, [isAuthenticated, setLocation]);
 
   const beginFree = () => {
-    if (isAuthenticated) return setLocation("/start");
+    const destination = publicStartDestination(isIndependentRuntime, isAuthenticated);
+    if (destination) return setLocation(destination);
     localStorage.setItem("neon-after-auth", "/start");
     startLogin();
   };
