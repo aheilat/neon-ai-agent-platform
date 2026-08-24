@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getIndependentAgentKnowledge, getIndependentWorkspaceAgents, resolveIndependentWorkspaceSession } from "./runtime";
+import {
+  addIndependentWorkspaceKnowledge,
+  getIndependentAgentKnowledge,
+  getIndependentWorkspaceAgents,
+  resolveIndependentWorkspaceSession,
+  updateIndependentWorkspaceAgent,
+} from "./runtime";
 
 const user = {
   id: 5,
@@ -12,6 +18,7 @@ const user = {
 
 const workspace = { id: 9, ownerId: 5, name: "Neon Owner Workspace", slug: "neon-owner-5" };
 const pool = { query: vi.fn() } as never;
+const authenticatedContext = { identity: { supabaseUserId: "id", email: null, name: null }, user, workspace };
 
 describe("independent runtime", () => {
   it("does not create a session unless both the Neon user and workspace are present", async () => {
@@ -26,7 +33,7 @@ describe("independent runtime", () => {
     const ensureDefaultAgent = vi.fn().mockResolvedValue({ id: 21, tenantId: 9, name: "Neon Concierge" });
     const listAgents = vi.fn().mockResolvedValue([{ id: 21, tenantId: 9, name: "Neon Concierge" }]);
     const result = await getIndependentWorkspaceAgents("Bearer token", {
-      createContext: vi.fn().mockResolvedValue({ identity: { supabaseUserId: "id", email: null, name: null }, user, workspace }),
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
       getPool: () => pool,
       ensureDefaultAgent,
       listAgents,
@@ -55,7 +62,7 @@ describe("independent runtime", () => {
   it("uses the authenticated workspace when retrieving knowledge", async () => {
     const listKnowledge = vi.fn().mockResolvedValue([{ id: 2, tenantId: 9, agentId: 41 }]);
     const result = await getIndependentAgentKnowledge("Bearer token", 41, {
-      createContext: vi.fn().mockResolvedValue({ identity: { supabaseUserId: "id", email: null, name: null }, user, workspace }),
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
       getPool: () => pool,
       ensureDefaultAgent: vi.fn(),
       listAgents: vi.fn(),
@@ -64,5 +71,47 @@ describe("independent runtime", () => {
 
     expect(result?.knowledge).toEqual([{ id: 2, tenantId: 9, agentId: 41 }]);
     expect(listKnowledge).toHaveBeenCalledWith(pool, 9, 41);
+  });
+
+  it("updates an agent using the authenticated tenant rather than a browser-supplied tenant", async () => {
+    const updateAgent = vi.fn().mockResolvedValue({ id: 41, tenantId: 9, name: "وكيل" });
+    await updateIndependentWorkspaceAgent("Bearer token", 41, {
+      name: "وكيل",
+      description: null,
+      persona: null,
+      tone: "friendly",
+      language: "bilingual",
+      status: "active",
+    }, {
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
+      getPool: () => pool,
+      getAgent: vi.fn(),
+      createAgent: vi.fn(),
+      updateAgent,
+      createKnowledge: vi.fn(),
+    });
+
+    expect(updateAgent).toHaveBeenCalledWith(pool, 9, 41, expect.objectContaining({ name: "وكيل" }));
+  });
+
+  it("refuses to add knowledge to an agent outside the authenticated tenant", async () => {
+    const createKnowledge = vi.fn();
+    const result = await addIndependentWorkspaceKnowledge("Bearer token", 41, {
+      title: "خدمة",
+      content: "تفاصيل",
+      category: "business",
+      sourceUrl: null,
+      sourceTitle: null,
+    }, {
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
+      getPool: () => pool,
+      getAgent: vi.fn().mockResolvedValue(undefined),
+      createAgent: vi.fn(),
+      updateAgent: vi.fn(),
+      createKnowledge,
+    });
+
+    expect(result).toBeNull();
+    expect(createKnowledge).not.toHaveBeenCalled();
   });
 });

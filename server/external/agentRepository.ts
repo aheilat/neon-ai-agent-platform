@@ -48,12 +48,26 @@ export type CreateIndependentAgentInput = Pick<
   | "status"
 >;
 
+export type UpdateIndependentAgentProfileInput = Pick<
+  IndependentAgent,
+  "name" | "description" | "persona" | "tone" | "language" | "status"
+>;
+
+export type CreateIndependentKnowledgeInput = Pick<
+  IndependentKnowledgeItem,
+  "tenantId" | "agentId" | "title" | "content" | "category" | "sourceUrl" | "sourceTitle"
+>;
+
 type Queryable = Pick<Pool, "query">;
 
 const agentColumns = `
   id, "tenantId", name, description, persona, tone, language, "llmModel",
   "decisionRules", "fallbackMessage", "escalationKeyword", "capabilitiesJson",
   status, "createdAt", "updatedAt"`;
+
+const knowledgeColumns = `
+  id, "agentId", "tenantId", title, content, category, "sourceUrl", "sourceTitle",
+  "sourceFetchedAt", "createdAt", "updatedAt"`;
 
 export async function listIndependentTenantAgents(client: Queryable, tenantId: number) {
   const result = await client.query<IndependentAgent>(
@@ -103,6 +117,28 @@ export async function createIndependentAgent(client: Queryable, input: CreateInd
   return result.rows[0];
 }
 
+export async function updateIndependentAgentProfile(
+  client: Queryable,
+  tenantId: number,
+  agentId: number,
+  input: UpdateIndependentAgentProfileInput,
+) {
+  const result = await client.query<IndependentAgent>(
+    `update public.agents
+     set name = $3,
+         description = $4,
+         persona = $5,
+         tone = $6,
+         language = $7,
+         status = $8,
+         "updatedAt" = now()
+     where "tenantId" = $1 and id = $2
+     returning ${agentColumns}`,
+    [tenantId, agentId, input.name, input.description, input.persona, input.tone, input.language, input.status],
+  );
+  return result.rows[0];
+}
+
 export async function ensureIndependentDefaultAgent(client: Queryable, tenantId: number) {
   const existing = await listIndependentTenantAgents(client, tenantId);
   if (existing[0]) return existing[0];
@@ -125,12 +161,23 @@ export async function ensureIndependentDefaultAgent(client: Queryable, tenantId:
 
 export async function listIndependentKnowledgeForAgent(client: Queryable, tenantId: number, agentId: number) {
   const result = await client.query<IndependentKnowledgeItem>(
-    `select id, "agentId", "tenantId", title, content, category, "sourceUrl", "sourceTitle",
-            "sourceFetchedAt", "createdAt", "updatedAt"
+    `select ${knowledgeColumns}
      from public.knowledge_base
      where "tenantId" = $1 and "agentId" = $2
      order by "updatedAt" desc`,
     [tenantId, agentId],
   );
   return result.rows;
+}
+
+export async function createIndependentKnowledgeItem(client: Queryable, input: CreateIndependentKnowledgeInput) {
+  const result = await client.query<IndependentKnowledgeItem>(
+    `insert into public.knowledge_base (
+       "tenantId", "agentId", title, content, category, "sourceUrl", "sourceTitle", "sourceFetchedAt"
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, case when $6::text is null then null else now() end
+     ) returning ${knowledgeColumns}`,
+    [input.tenantId, input.agentId, input.title, input.content, input.category, input.sourceUrl, input.sourceTitle],
+  );
+  return result.rows[0];
 }

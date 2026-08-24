@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+
+  createIndependentKnowledgeItem,
   createIndependentAgent,
   ensureIndependentDefaultAgent,
   getIndependentAgentInTenant,
   listIndependentKnowledgeForAgent,
   listIndependentTenantAgents,
+  updateIndependentAgentProfile,
 } from "./agentRepository";
 
 const createdAgent = {
@@ -80,5 +83,36 @@ describe("independent agent repository", () => {
 
     expect(query.mock.calls[0]?.[0]).toContain('where "tenantId" = $1 and "agentId" = $2');
     expect(query.mock.calls[0]?.[1]).toEqual([8, 31]);
+  });
+
+  it("updates an agent only when tenant and agent ID match", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [createdAgent] });
+    await updateIndependentAgentProfile({ query } as never, 8, 31, {
+      name: "Updated concierge",
+      description: null,
+      persona: null,
+      tone: "professional",
+      language: "ar",
+      status: "active",
+    });
+
+    expect(query.mock.calls[0]?.[0]).toContain('where "tenantId" = $1 and id = $2');
+    expect(query.mock.calls[0]?.[1]?.slice(0, 2)).toEqual([8, 31]);
+  });
+
+  it("creates knowledge through tenant and agent-bound values", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 4 }] });
+    await createIndependentKnowledgeItem({ query } as never, {
+      tenantId: 8,
+      agentId: 31,
+      title: "الخدمات",
+      content: "خدمة مخصصة",
+      category: "business",
+      sourceUrl: "https://example.com/",
+      sourceTitle: "Website",
+    });
+
+    expect(query.mock.calls[0]?.[0]).toContain('"tenantId", "agentId"');
+    expect(query.mock.calls[0]?.[1]?.slice(0, 2)).toEqual([8, 31]);
   });
 });
