@@ -278,3 +278,8 @@
 - [x] تشخيص وإصلاح حالة `database: unavailable` في نقطة صحة Render المستقلة، ثم إعادة فحصها قبل اختبار التسجيل
 - [x] إضافة واجهة محادثة اختبارية مقيّدة للمستخدم والوكيل داخل `/external` للتحقق من رد Claude الخادمي المستقل
 - [x] تفعيل رصيد Anthropic API ثم تأكيد ظهور رد Claude خادمي ناجح من واجهة Render المستقلة
+
+## Custom Domain & Controlled Public Launch
+- [x] ربط `agent.neonadai.com` بخدمة Render المستقلة عبر إعداد DNS وTLS من دون تغيير نطاق Manus أو Webhook Oman Drive
+- [x] التحقق من الوصول العام عبر `https://agent.neonadai.com` واستمرار عزل PostgreSQL وSupabase وClaude
+- [x] إعداد مواد إطلاق وتسويق أولية صادقة تشرح التجربة والخدمة وحدود القنوات الحالية قبل بدء البيع
