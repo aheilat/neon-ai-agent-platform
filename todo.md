@@ -388,3 +388,6 @@
 - [ ] Verify that Widget conversations appear in the selected agent inbox and document the customer testing flow
 - [ ] Diagnose why ready-made templates are not visible or actionable on the Render workspace
 - [ ] Restore visible social-channel onboarding controls while preserving truthful Meta App not active gating
+- [x] Simplify onboarding to login, URL, function selection, analysis, agent page, chat, and embed code
+- [x] Rework the independent workspace into a mobile-first two-column function-card selection flow
+- [x] Add regression coverage for the simplified onboarding sequence and responsive workspace sections

@@ -23,6 +23,7 @@ import Access from "./pages/Access";
 import Pricing from "./pages/Pricing";
 import Quality from "./pages/Quality";
 import IndependentStaging from "./pages/IndependentStaging";
+import IndependentOnboarding from "./pages/IndependentOnboarding";
 import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 
 function AppRoutes() {
@@ -34,7 +35,7 @@ function AppRoutes() {
       <Route path="/register" component={Access} />
       <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
-      <Route path="/external" component={IndependentStaging} />
+      <Route path="/external" component={hasIndependentSupabaseBrowserConfig() ? IndependentOnboarding : IndependentStaging} />
       <Route path="/start" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Home} />
       <Route path="/agents" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Agents} />
       <Route path="/knowledge" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Knowledge} />
