@@ -12,7 +12,7 @@ import { generateIndependentAgentReply, generateIndependentAgentReplyForTenant }
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
 import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
-import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
+import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
@@ -363,6 +363,18 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const agent = await updateIndependentAgentHandoffContact(pool, session.workspace.id, agentId, { name: name ?? null, phone: phone ?? null, email: email ?? null });
     if (!agent) return res.status(404).json({ error: "Agent not found" });
     return res.json(agent);
+  });
+
+  app.get("/api/external/agents/:agentId/handoff-requests", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const leads = await listIndependentHandoffLeadsForAgent(pool, session.workspace.id, agent.id);
+    return res.json({ leads });
   });
 
   app.post("/api/external/agents/:agentId/handoff-requests", async (req, res) => {

@@ -8,6 +8,7 @@ import {
   addIndependentTextFileKnowledge,
   createIndependentHandoffRequest,
   createIndependentWorkspaceAgent,
+  listIndependentHandoffRequests,
   saveIndependentHandoffContact,
   updateIndependentAgentProfile,
   type IndependentAgentProfile,
@@ -38,6 +39,16 @@ type IndependentKnowledgeItem = {
   category: string;
   sourceUrl: string | null;
   sourceTitle: string | null;
+};
+
+type IndependentHandoffLead = {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  status: string;
+  createdAt: string;
 };
 
 type IndependentWorkspaceResponse = {
@@ -124,6 +135,9 @@ export default function IndependentStaging() {
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffRequest, setHandoffRequest] = useState({ name: "", phone: "", email: "", notes: "", consent: false });
   const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
+  const [handoffLeads, setHandoffLeads] = useState<IndependentHandoffLead[]>([]);
+  const [handoffLeadsLoading, setHandoffLeadsLoading] = useState(false);
+  const [handoffLeadsError, setHandoffLeadsError] = useState<string | null>(null);
   const [widgetCopyStatus, setWidgetCopyStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -188,12 +202,29 @@ export default function IndependentStaging() {
     }
   }, [accessToken, setLocation]);
 
+  const loadHandoffRequests = useCallback(async (agentId: number) => {
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setHandoffLeadsLoading(true);
+    setHandoffLeadsError(null);
+    try {
+      const payload = await listIndependentHandoffRequests<{ leads: IndependentHandoffLead[] }>(token, agentId);
+      setHandoffLeads(payload.leads ?? []);
+    } catch (reason) {
+      setHandoffLeads([]);
+      setHandoffLeadsError(reason instanceof Error ? reason.message : "تعذر تحميل طلبات التحويل البشري.");
+    } finally {
+      setHandoffLeadsLoading(false);
+    }
+  }, [accessToken, setLocation]);
+
   useEffect(() => { void loadWorkspace(); }, [loadWorkspace]);
 
   useEffect(() => {
     if (!selectedAgent) return;
     setProfile(profileFromAgent(selectedAgent));
     void loadKnowledge(selectedAgent.id);
+    void loadHandoffRequests(selectedAgent.id);
     setChatDraft("");
     setChatMessages([]);
     setChatError(null);
@@ -206,7 +237,7 @@ export default function IndependentStaging() {
     setHandoffContact({ name: typeof contact.name === "string" ? contact.name : "", phone: typeof contact.phone === "string" ? contact.phone : "", email: typeof contact.email === "string" ? contact.email : "" });
     setHandoffOpen(false);
     setHandoffStatus(null);
-  }, [loadKnowledge, selectedAgent]);
+  }, [loadHandoffRequests, loadKnowledge, selectedAgent]);
 
   const signOut = async () => {
     await getIndependentSupabaseBrowserClient()?.auth.signOut();
@@ -487,6 +518,7 @@ export default function IndependentStaging() {
         setConversationId(result.conversation.id);
         setConversationStatus("escalated");
       }
+      await loadHandoffRequests(selectedAgent.id);
       setHandoffStatus(`${confirmation} تمت إزالة سجل الدردشة من شاشة الاختبار.`);
       setHandoffOpen(false);
       setHandoffRequest({ name: "", phone: "", email: "", notes: "", consent: false });
@@ -528,9 +560,19 @@ export default function IndependentStaging() {
     }
   };
 
+  const handoffInbox = selectedAgent ? <section className="mb-6 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:p-6">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" />طلبات التحويل البشري</h2><p className="mt-1 text-sm leading-6 text-slate-300">طلبات الزوار المحفوظة للوكيل <strong>{selectedAgent.name}</strong> فقط. لا تُعرض بيانات وكلاء أو شركات أخرى.</p></div>
+      <Button type="button" variant="outline" size="sm" onClick={() => void loadHandoffRequests(selectedAgent.id)} disabled={handoffLeadsLoading} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{handoffLeadsLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}تحديث الطلبات</Button>
+    </div>
+    {handoffLeadsError ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{handoffLeadsError}</p> : handoffLeadsLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل الطلبات الخاصة بهذا الوكيل…</p> : handoffLeads.length ? <div className="mt-5 space-y-3">{handoffLeads.map((lead) => <article key={lead.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold text-white">{lead.name}</p><p dir="ltr" className="mt-1 text-sm text-cyan-100">{lead.phone || lead.email || "لم يقدّم وسيلة تواصل"}</p></div><div className="text-left"><span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2 py-1 text-xs font-bold text-lime-100">{lead.status === "new" ? "طلب جديد" : lead.status}</span><p className="mt-2 text-xs text-slate-500">{new Date(lead.createdAt).toLocaleString("ar")}</p></div></div>{lead.notes && <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-6 text-slate-300">{lead.notes}</p>}</article>)}</div> : <p className="mt-4 rounded-2xl border border-dashed border-white/15 p-4 text-sm leading-7 text-slate-400">لا توجد طلبات تحويل مسجلة لهذا الوكيل بعد. عند طلب زائر التواصل من الـWidget وموافقته، سيظهر طلبه هنا.</p>}
+    <p className="mt-4 text-xs leading-6 text-slate-400">هذه اللوحة تحفظ وتعرض الطلبات فقط. لا تدّعي إرسال إشعار WhatsApp أو بريد أو اتصال هاتفي، لأن قنوات الإرسال ليست مهيّأة بعد.</p>
+  </section> : null;
+
   return (
     <main className="min-h-screen bg-[#07111f] px-4 py-5 text-white sm:px-8 sm:py-8" dir="rtl">
       <div className="mx-auto max-w-6xl">
+        {handoffInbox}
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-lime-300 text-slate-950"><Bot className="h-5 w-5" /></span><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">Neon workspace</p><h1 className="text-xl font-bold">إعداد وكيلك الذكي</h1></div></div>
           <div className="flex gap-2"><Button variant="outline" onClick={() => void loadWorkspace()} disabled={loading} className="border-white/15 text-white hover:bg-white/10"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button><Button variant="outline" onClick={() => void signOut()} className="border-white/15 text-white hover:bg-white/10"><LogOut className="ml-2 h-4 w-4" />خروج</Button></div>

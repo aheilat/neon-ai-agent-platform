@@ -43,15 +43,15 @@ function serverError(payload: unknown) {
 
 async function requestJson<T>(
   path: string,
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "GET",
   accessToken: string,
-  payload: unknown,
+  payload: unknown = undefined,
   fetchImplementation: FetchImplementation,
 ): Promise<T> {
   const response = await fetchImplementation(path, {
     method,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    ...(method === "GET" ? {} : { body: JSON.stringify(payload) }),
   });
   const body = await response.json() as unknown;
   if (!response.ok) throw new Error(serverError(body));
@@ -143,4 +143,12 @@ export function createIndependentHandoffRequest<T>(
   fetchImplementation: FetchImplementation = fetch,
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/handoff-requests`, "POST", accessToken, request, fetchImplementation);
+}
+
+export function listIndependentHandoffRequests<T>(
+  accessToken: string,
+  agentId: number,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/handoff-requests`, "GET", accessToken, undefined, fetchImplementation);
 }

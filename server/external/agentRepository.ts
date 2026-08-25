@@ -92,6 +92,20 @@ export type CreateIndependentLeadInput = {
   conversationId: number | null;
 };
 
+export type IndependentLead = {
+  id: number;
+  tenantId: number;
+  agentId: number;
+  conversationId: number | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type CreateIndependentConversationInput = Pick<IndependentConversation, "tenantId" | "agentId" | "channel">;
 
 type Queryable = Pick<Pool, "query">;
@@ -107,6 +121,9 @@ const knowledgeColumns = `
 
 const conversationColumns = `
   id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "createdAt", "updatedAt"`;
+
+const leadColumns = `
+  id, "tenantId", "agentId", "conversationId", name, email, phone, notes, status, "createdAt", "updatedAt"`;
 
 export async function listIndependentTenantAgents(client: Queryable, tenantId: number) {
   const result = await client.query<IndependentAgent>(
@@ -241,6 +258,18 @@ export async function createIndependentHandoffLead(client: Queryable, input: Cre
     [input.tenantId, input.agentId, input.conversationId, input.name, input.email, input.phone, input.notes],
   );
   return result.rows[0];
+}
+
+export async function listIndependentHandoffLeadsForAgent(client: Queryable, tenantId: number, agentId: number) {
+  const result = await client.query<IndependentLead>(
+    `select ${leadColumns}
+     from public.leads
+     where "tenantId" = $1 and "agentId" = $2
+     order by "createdAt" desc
+     limit 50`,
+    [tenantId, agentId],
+  );
+  return result.rows;
 }
 
 export async function createIndependentConversation(client: Queryable, input: CreateIndependentConversationInput) {
