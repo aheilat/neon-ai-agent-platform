@@ -407,3 +407,7 @@
 - [x] Add a simple primary-agent control panel for editing core settings
 - [x] Add save, loading, success, and error feedback for primary-agent settings
 - [x] Add regression coverage for primary-agent editing and tenant-scoped persistence
+- [x] Audit every independent workspace page against the supplied reference screens
+- [x] Redesign the independent navigation and page shells to match the reference structure
+- [x] Align Agents, Knowledge, Conversations, Channels, Settings, onboarding, and Widget entry points with the reference flow
+- [x] Verify all redesigned pages at mobile and desktop widths and label any genuine placeholders

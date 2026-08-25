@@ -780,16 +780,16 @@ export default function IndependentStaging() {
   </section> : null;
 
   return (
-    <main data-independent-view={independentWorkspaceNavigation.some((item) => item.href === location) ? location.slice(1) : "workspace"} className="min-h-screen bg-[#07111f] px-4 py-5 text-white sm:px-8 sm:py-8" dir="rtl">
-      <div className="mx-auto max-w-6xl">
+    <main data-independent-view={independentWorkspaceNavigation.some((item) => item.href === location) ? location.slice(1) : "workspace"} className="independent-shell min-h-screen px-3 py-4 sm:px-8 sm:py-8" dir="rtl">
+      <div className="independent-container mx-auto max-w-6xl">
         {handoffInbox}
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+        <header className="independent-header flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border px-4 py-4 shadow-sm sm:px-6">
           <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-lime-300 text-slate-950"><Bot className="h-5 w-5" /></span><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">Neon workspace</p><h1 className="text-xl font-bold">إعداد وكيلك الذكي</h1></div></div>
           <div className="flex gap-2"><Button variant="outline" onClick={() => void loadWorkspace()} disabled={loading} className="border-white/15 text-white hover:bg-white/10"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button><Button variant="outline" onClick={() => void signOut()} className="border-white/15 text-white hover:bg-white/10"><LogOut className="ml-2 h-4 w-4" />خروج</Button></div>
         </header>
 
-        <nav aria-label="أقسام مساحة العمل المستقلة" className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {independentWorkspaceNavigation.map((item) => <a key={item.href} href={item.href} className={`shrink-0 rounded-full border px-3 py-2 text-sm font-bold transition ${location === item.href ? "border-cyan-200/60 bg-cyan-300/15 text-cyan-100" : "border-white/10 bg-white/[0.025] text-slate-300 hover:border-white/25 hover:text-white"}`}>{item.label}</a>)}
+        <nav aria-label="أقسام مساحة العمل المستقلة" className="independent-nav mt-4 flex gap-2 overflow-x-auto rounded-3xl border p-2 pb-2 shadow-sm">
+          {independentWorkspaceNavigation.map((item) => <a key={item.href} href={item.href} className={`independent-nav-link shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition ${location === item.href ? "is-active" : ""}`}>{item.label}</a>)}
         </nav>
 
         {primaryAgentControlPanel}
@@ -799,7 +799,7 @@ export default function IndependentStaging() {
         {!loading && error && <section className="mt-6 rounded-3xl border border-amber-300/25 bg-amber-300/10 p-5"><p className="font-bold text-amber-100">نحتاج خطوة بسيطة قبل المتابعة</p><p className="mt-2 text-sm leading-7 text-amber-50/80">{error}</p></section>}
 
         {!loading && data && selectedAgent && <>
-          <section id="independent-overview" className="mt-6 grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
+          <section id="independent-overview" className="independent-overview mt-6 grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
             <div className="rounded-3xl border border-cyan-200/15 bg-gradient-to-l from-cyan-300/10 to-lime-300/5 p-6"><p className="text-sm text-cyan-100">مساحة العمل المستقلة</p><h2 className="mt-2 text-2xl font-semibold">{data.workspace.name}</h2><p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">ابدأ بتعريف وكيلك، ثم أضف معلومات شركتك المعتمدة، وبعدها اختبر الرد قبل مشاركته مع العملاء.</p><div className="mt-5 grid gap-2 sm:grid-cols-3">{[["1", "عرّف الوكيل"], ["2", "أضف المعرفة"], ["3", "اختبر الرد"]].map(([number, label]) => <div key={number} className="rounded-2xl border border-white/10 bg-slate-950/30 px-3 py-3 text-sm"><span className="ml-2 text-cyan-200">{number}</span>{label}</div>)}</div></div>
             <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"><ShieldCheck className="h-6 w-6 text-lime-300" /><p className="mt-3 text-sm font-bold">{data.user.name || data.user.email || "مستخدم Neon"}</p><p className="mt-1 text-xs text-slate-400">{data.workspace.slug}</p><p className="mt-5 text-xs leading-6 text-slate-400">بيانات كل مساحة عمل تبقى معزولة. لا نستخدم معرفة أي شركة أخرى في رد وكيلك.</p></div>
           </section>
