@@ -376,3 +376,11 @@
 - [x] إظهار حالة قنوات مستقلة داخل مساحة العمل: Widget الويب جاهز وMeta/WhatsApp محظور بوضوح حتى يصبح التطبيق نشطاً، من دون ادعاء اتصال هاتف أو بريد غير مهيأ
 
 - [x] معالجة بلاغ الهاتف الذي يفتح رابط التطوير المحلي `3000/start` بدلاً من رابط Render العام، والتحقق من أن رابط العميل المقدم هو `https://agent.neonadai.com`
+
+## Independent Runtime Recovery Continuation
+- [x] Transfer the independent ready-made industry templates into the authenticated Agents workspace with isolated create-from-template behavior
+- [x] Verify template catalog loading and create-from-template route with focused regression tests
+- [x] Add the truthful independent WhatsApp onboarding surface that clearly explains Meta App not active and prepares the gated Embedded Signup path
+- [ ] Run the final disposable New Customer journey: register → template or website → knowledge → Widget → handoff
+- [ ] Remove temporary test artifacts and disposable Supabase test records without touching customer or production WhatsApp data
+- [ ] Review the independent dashboard for remaining non-functional placeholders and label or replace them

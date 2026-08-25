@@ -7,7 +7,10 @@ import {
   applyIndependentWebsiteProposal,
   addIndependentTextFileKnowledge,
   createIndependentHandoffRequest,
+  createIndependentAgentFromTemplate,
   createIndependentWorkspaceAgent,
+  listIndependentTemplates,
+  type IndependentTemplate,
   getIndependentAgentConversation,
   listIndependentAgentConversations,
   listIndependentHandoffRequests,
@@ -151,6 +154,9 @@ export default function IndependentStaging() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [addingKnowledge, setAddingKnowledge] = useState(false);
   const [creatingAgent, setCreatingAgent] = useState(false);
+  const [templates, setTemplates] = useState<IndependentTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [websiteProposal, setWebsiteProposal] = useState<IndependentWebsiteProposal | null>(null);
   const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
@@ -297,7 +303,37 @@ export default function IndependentStaging() {
     }
   };
 
-  useEffect(() => { void loadWorkspace(); }, [loadWorkspace]);
+  const loadTemplates = useCallback(async () => {
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setTemplatesLoading(true);
+    try {
+      const payload = await listIndependentTemplates<{ templates: IndependentTemplate[] }>(token);
+      setTemplates(payload.templates ?? []);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر تحميل القوالب الجاهزة.");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [accessToken, setLocation]);
+
+  const createAgentFromTemplate = async (templateId: string) => {
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setApplyingTemplateId(templateId);
+    setError(null);
+    try {
+      const created = await createIndependentAgentFromTemplate<{ agent: IndependentAgent }>(token, templateId);
+      await loadWorkspace();
+      setSelectedAgentId(created.agent.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر إنشاء وكيل من القالب.");
+    } finally {
+      setApplyingTemplateId(null);
+    }
+  };
+
+  useEffect(() => { void loadWorkspace(); void loadTemplates(); }, [loadTemplates, loadWorkspace]);
 
   useEffect(() => {
     const target = independentWorkspaceNavigation.find((item) => item.href === location);
@@ -716,6 +752,7 @@ export default function IndependentStaging() {
           <section id="independent-agents" className="mt-6 scroll-mt-5 rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="flex items-center gap-2 font-bold"><Bot className="h-5 w-5 text-cyan-200" /> وكلاؤك</p><p className="mt-1 text-sm text-slate-400">اختر وكيلاً أو أنشئ وكيلاً جديداً لنشاط مختلف.</p></div><Button onClick={() => void createAdditionalAgent()} disabled={creatingAgent} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{creatingAgent ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CirclePlus className="ml-2 h-4 w-4" />}وكيل جديد</Button></div>
             <div className="mt-4 flex flex-wrap gap-2">{data.agents.map((agent) => <button key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-2xl border px-4 py-3 text-right transition ${selectedAgent.id === agent.id ? "border-cyan-200/60 bg-cyan-300/15 text-white" : "border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/25"}`}><span className="block text-sm font-bold">{agent.name}</span><span className="mt-1 block text-xs text-slate-400">{agent.status === "active" ? "نشط" : agent.status}</span></button>)}</div>
+            <div className="mt-6 rounded-2xl border border-lime-300/15 bg-lime-300/[0.04] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 font-bold text-lime-100"><Sparkles className="h-4 w-4" />قوالب جاهزة للبدء</p><p className="mt-1 text-sm leading-6 text-slate-400">اختر قطاعاً لإنشاء وكيل جديد مستقل مع شخصية ومعرفة بداية قابلة للتعديل. لن يغيّر القالب الوكيل المحدد حالياً.</p></div><span className="text-xs text-slate-500">{templates.length} قوالب مستقلة</span></div>{templatesLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل القوالب…</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">{templates.map((template) => <article key={template.id} className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"><p className="font-bold text-white">{template.name}</p><p className="mt-2 text-sm leading-6 text-slate-400">{template.description}</p><p className="mt-2 text-xs text-cyan-100">{template.knowledge.length} عناصر معرفة بداية</p><Button type="button" onClick={() => void createAgentFromTemplate(template.id)} disabled={applyingTemplateId !== null} className="mt-4 w-full bg-lime-300 text-slate-950 hover:bg-lime-200">{applyingTemplateId === template.id ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CirclePlus className="ml-2 h-4 w-4" />}إنشاء وكيل بهذا القالب</Button></article>)}</div>}</div>
           </section>
 
           <section id="independent-widget" className="mt-6 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:p-6">
@@ -726,7 +763,7 @@ export default function IndependentStaging() {
 
           <section id="independent-channels" className="mt-6 scroll-mt-5 rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-6">
             <div className="flex items-start gap-3"><Globe2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" /><div><h2 className="font-bold">قنوات وكيلك</h2><p className="mt-1 text-sm leading-6 text-slate-300">هذه الحالة تخص الوكيل المحدد فقط. لا نظهر قناة على أنها متصلة قبل أن تكون جاهزة فعلياً.</p></div></div>
-            <div className="mt-5 grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.08] p-4"><p className="font-bold text-lime-100">Widget الويب</p><p className="mt-2 text-sm leading-6 text-slate-300">جاهز للمعاينة والتضمين مع الوكيل المحدد.</p><a href={`/widget/${selectedAgent.id}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-bold text-lime-200 hover:text-lime-100">فتح الـWidget ←</a></div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4"><p className="font-bold text-amber-100">WhatsApp / Meta</p><p className="mt-2 text-sm leading-6 text-slate-300">غير متاح الآن لأن تطبيق Meta غير نشط. لا توجد رسالة WhatsApp أو رقم متصل من هذه المنصة حتى يصبح التطبيق Live وتكتمل المراجعة.</p></div><div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"><p className="font-bold text-slate-100">الهاتف والبريد</p><p className="mt-2 text-sm leading-6 text-slate-300">قنوات الإرسال لم تُهيأ بعد. يمكن للوكيل حفظ طلب تحويل بموافقة العميل فقط، من دون ادعاء إرسال مكالمة أو بريد.</p></div></div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.08] p-4"><p className="font-bold text-lime-100">Widget الويب</p><p className="mt-2 text-sm leading-6 text-slate-300">جاهز للمعاينة والتضمين مع الوكيل المحدد.</p><a href={`/widget/${selectedAgent.id}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-bold text-lime-200 hover:text-lime-100">فتح الـWidget ←</a></div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-amber-100">إعداد WhatsApp / Meta</p><p className="mt-1 text-xs font-bold text-amber-200">الحالة الحالية: App not active</p></div><span className="rounded-full border border-amber-200/20 px-2 py-1 text-[11px] text-amber-100">محجوز حتى اعتماد Meta</span></div><p className="mt-3 text-sm leading-6 text-slate-300">لا ندّعي وجود اتصال أو إرسال رسائل الآن. بعد تفعيل التطبيق ومراجعة صلاحيات Tech Provider يمكن للعميل ربط حسابه عبر Embedded Signup، من دون مشاركة Access Token يدوي.</p><ol className="mt-3 space-y-2 text-xs leading-5 text-slate-300"><li><span className="ml-2 text-amber-200">١.</span>أكمل App Review وAccess Verification في Meta.</li><li><span className="ml-2 text-amber-200">٢.</span>فعّل التطبيق من وضع Development إلى Live.</li><li><span className="ml-2 text-amber-200">٣.</span>سنفتح زر الربط الذاتي بعد تأكيد Configuration ID وصلاحيات الإنتاج.</li></ol><a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="mt-4 inline-flex text-xs font-bold text-amber-100 underline decoration-amber-200/40 underline-offset-4 hover:text-white">فتح لوحة Meta للمراجعة ←</a></div><div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"><p className="font-bold text-slate-100">الهاتف والبريد</p><p className="mt-2 text-sm leading-6 text-slate-300">قنوات الإرسال لم تُهيأ بعد. يمكن للوكيل حفظ طلب تحويل بموافقة العميل فقط، من دون ادعاء إرسال مكالمة أو بريد.</p></div></div>
           </section>
 
           <section id="independent-website-learning" className="mt-6 rounded-3xl border border-lime-300/25 bg-gradient-to-l from-lime-300/[0.10] to-cyan-300/[0.06] p-5 sm:p-6">

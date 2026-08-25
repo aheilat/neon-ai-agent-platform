@@ -17,6 +17,16 @@ export type IndependentKnowledgeInput = {
   sourceTitle: string | null;
 };
 
+export type IndependentTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  persona: string;
+  tone: "friendly" | "professional" | "direct";
+  language: "ar" | "en" | "bilingual";
+  knowledge: Array<{ title: string; content: string }>;
+};
+
 export type IndependentWebsiteProposal = {
   websiteUrl: string;
   pages: Array<{ url: string; title: string; description: string; headings: string[] }>;
@@ -73,6 +83,21 @@ export function createIndependentWorkspaceAgent<T>(
   fetchImplementation: FetchImplementation = fetch,
 ) {
   return requestJson<T>("/api/external/agents", "POST", accessToken, profile, fetchImplementation);
+}
+
+export function listIndependentTemplates<T = { templates: IndependentTemplate[] }>(
+  accessToken: string,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>("/api/external/templates", "GET", accessToken, undefined, fetchImplementation);
+}
+
+export function createIndependentAgentFromTemplate<T>(
+  accessToken: string,
+  templateId: string,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/templates/${encodeURIComponent(templateId)}/agents`, "POST", accessToken, {}, fetchImplementation);
 }
 
 export function addIndependentKnowledgeItem<T>(

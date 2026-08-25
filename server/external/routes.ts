@@ -15,6 +15,7 @@ import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
 import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus, updateIndependentPublicConversationSatisfactionRating } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
+import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
   const value = headers.authorization;
@@ -259,6 +260,37 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const result = await getIndependentWorkspaceAgents(authorizationFromRequest(req.headers));
     if (!result) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
     return res.json(result);
+  });
+
+  app.get("/api/external/templates", async (req, res) => {
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
+    return res.json({ templates: INDEPENDENT_TEMPLATES });
+  });
+
+  app.post("/api/external/templates/:templateId/agents", async (req, res) => {
+    const template = getIndependentTemplate(req.params.templateId);
+    if (!template) return res.status(404).json({ error: "Template not found" });
+    const authorization = authorizationFromRequest(req.headers);
+    const agent = await createIndependentWorkspaceAgent(authorization, {
+      name: template.name,
+      description: template.description,
+      persona: template.persona,
+      tone: template.tone,
+      language: template.language,
+      status: "active",
+      llmModel: "claude-haiku-4-5",
+      decisionRules: "أجب من المعرفة المعتمدة فقط. إذا لم تكن المعلومة متاحة أو طلب العميل موظفاً، صعّد المحادثة بوضوح.",
+      fallbackMessage: "لا أملك هذه المعلومة المعتمدة بعد؛ يمكنني تحويل طلبك إلى الفريق.",
+      escalationKeyword: "موظف,موظفة,human,agent",
+      capabilitiesJson: { enabled: ["answer", "qualify", "capture", "escalate"], templateId: template.id },
+    });
+    if (!agent) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    for (const item of template.knowledge) {
+      const knowledge = await addIndependentWorkspaceKnowledge(authorization, agent.id, { title: item.title, content: item.content, category: "Ready-made template", sourceUrl: null, sourceTitle: template.name });
+      if (!knowledge) return res.status(500).json({ error: "Template agent was created but its knowledge could not be completed" });
+    }
+    return res.status(201).json({ agent, templateId: template.id, knowledgeCount: template.knowledge.length });
   });
 
   app.post("/api/external/website/analysis", async (req, res) => {
