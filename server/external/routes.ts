@@ -229,12 +229,15 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const websiteUrl = safeWebsiteUrl(req.body?.websiteUrl);
     const category = optionalText(req.body?.category, 80) ?? "Website source";
     if (!Number.isSafeInteger(agentId) || agentId <= 0 || !websiteUrl || req.body?.consent !== true) return res.status(400).json({ error: "A public website URL and consent are required" });
+    const authorization = authorizationFromRequest(req.headers);
+    const session = await resolveIndependentWorkspaceSession(authorization);
+    if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
     try {
       const proposal = await discoverIndependentWebsiteProposal(websiteUrl);
       const analysis = proposal.analysis;
       const services = analysis.services.slice(0, 8).map((service) => `- ${service.name}: ${service.description}`).join("\n");
       const faqs = analysis.faqs.slice(0, 6).map((faq) => `- ${faq.question}: ${faq.answer}`).join("\n");
-      const knowledge = await addIndependentWorkspaceKnowledge(authorizationFromRequest(req.headers), agentId, {
+      const knowledge = await addIndependentWorkspaceKnowledge(authorization, agentId, {
         title: `موقع: ${analysis.businessName}`.slice(0, 160),
         content: [analysis.businessSummary, services && `الخدمات:\n${services}`, faqs && `الأسئلة الشائعة:\n${faqs}`].filter(Boolean).join("\n\n").slice(0, 16_000),
         category,
