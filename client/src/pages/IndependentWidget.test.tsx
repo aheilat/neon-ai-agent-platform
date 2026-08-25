@@ -50,6 +50,28 @@ describe("Independent public Widget feedback", () => {
     ));
   });
 
+  it("previews a text attachment and includes its readable content in the sent customer message", async () => {
+    render(<IndependentWidget />);
+    await screen.findByText("مرحباً، أنا وكيل الاختبار. كيف أستطيع مساعدتك؟");
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["اسم العميل: عبدالله\nالطلب: شاحنة مبردة"], "request.txt", { type: "text/plain" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    await screen.findByText(/request.txt/);
+    expect(screen.getByText(/سيُقرأ كنص/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "إرسال الرسالة" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/public/agents/10/chat",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining("اسم العميل: عبدالله") }),
+    ));
+  });
+
+  it("keeps voice behavior truthful when the browser has no recording API", async () => {
+    render(<IndependentWidget />);
+    await screen.findByText("مرحباً، أنا وكيل الاختبار. كيف أستطيع مساعدتك؟");
+    fireEvent.click(screen.getByRole("button", { name: "تسجيل رسالة صوتية" }));
+    await screen.findByText("التسجيل الصوتي غير مدعوم في هذا المتصفح.");
+  });
+
   it("turns an HTML gateway response into a clear service message instead of a JSON parse error", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
