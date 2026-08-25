@@ -36,13 +36,14 @@ function AppRoutes() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/external" component={IndependentStaging} />
       <Route path="/start" component={Home} />
+      <Route path="/agents" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Agents} />
+      <Route path="/knowledge" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Knowledge} />
+      <Route path="/conversations" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Conversations} />
+      <Route path="/channels" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Channels} />
+      <Route path="/settings" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Settings} />
       <Route path="*">
         <DashboardLayout>
           <Switch>
-            <Route path={"/agents"} component={Agents} />
-            <Route path={"/knowledge"} component={Knowledge} />
-            <Route path={"/conversations"} component={Conversations} />
-            <Route path={"/channels"} component={Channels} />
             <Route path={"/analytics"} component={Analytics} />
             <Route path={"/quality"} component={Quality} />
             <Route path={"/team"} component={Team} />
