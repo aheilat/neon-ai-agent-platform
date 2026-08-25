@@ -100,3 +100,21 @@ export function applyIndependentWebsiteProposal<T>(
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/apply-website-proposal`, "POST", accessToken, proposal, fetchImplementation);
 }
+
+export function addIndependentImageKnowledge<T>(
+  accessToken: string,
+  agentId: number,
+  image: { fileName: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; dataUrl: string },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/image-knowledge`, "POST", accessToken, image, fetchImplementation);
+}
+
+export function addIndependentTextFileKnowledge<T>(
+  accessToken: string,
+  agentId: number,
+  file: { fileName: string; mediaType: "text/plain" | "text/markdown" | "text/csv" | "application/json"; dataUrl: string },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/file-knowledge`, "POST", accessToken, file, fetchImplementation);
+}

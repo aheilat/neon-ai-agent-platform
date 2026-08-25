@@ -2,16 +2,19 @@ import { Button } from "@/components/ui/button";
 import { requestIndependentAgentReply } from "@/lib/independentChat";
 import {
   addIndependentKnowledgeItem,
+  addIndependentImageKnowledge,
   analyzeIndependentCompanyWebsite,
   applyIndependentWebsiteProposal,
+  addIndependentTextFileKnowledge,
   createIndependentWorkspaceAgent,
   updateIndependentAgentProfile,
   type IndependentAgentProfile,
   type IndependentWebsiteProposal,
 } from "@/lib/independentSetup";
 import { getIndependentSupabaseBrowserClient } from "@/lib/supabase";
-import { Bot, CheckCircle2, CirclePlus, FileText, Globe2, Loader2, LogOut, MessageSquareText, RefreshCw, Save, Send, ShieldCheck, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot, CheckCircle2, CirclePlus, FileText, Globe2, ImageIcon, Loader2, LogOut, MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send, ShieldCheck, Sparkles, Square, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Streamdown } from "streamdown";
 import { useLocation } from "wouter";
 
 type IndependentAgent = {
@@ -39,6 +42,23 @@ type IndependentWorkspaceResponse = {
   workspace: { name: string; slug: string };
   defaultAgent: IndependentAgent;
   agents: IndependentAgent[];
+};
+
+type WorkspaceChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
 };
 
 function profileFromAgent(agent: IndependentAgent): IndependentAgentProfile {
@@ -86,8 +106,15 @@ export default function IndependentStaging() {
   const [applyingWebsiteProposal, setApplyingWebsiteProposal] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [sendingAgentId, setSendingAgentId] = useState<number | null>(null);
-  const [chatResult, setChatResult] = useState<{ agentId: number; reply: string } | null>(null);
+  const [chatMessages, setChatMessages] = useState<WorkspaceChatMessage[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [addingAttachment, setAddingAttachment] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const selectedAgent = useMemo(
     () => data?.agents.find((agent) => agent.id === selectedAgentId) ?? data?.defaultAgent ?? null,
@@ -153,7 +180,7 @@ export default function IndependentStaging() {
     setProfile(profileFromAgent(selectedAgent));
     void loadKnowledge(selectedAgent.id);
     setChatDraft("");
-    setChatResult(null);
+    setChatMessages([]);
     setChatError(null);
   }, [loadKnowledge, selectedAgent]);
 
@@ -268,6 +295,95 @@ export default function IndependentStaging() {
     }
   };
 
+  const addKnowledgeAttachment = async (file: File) => {
+    if (!selectedAgent) return;
+    if (file.size > 5 * 1024 * 1024) return setError("الحد الأقصى للمرفق 5 MB.");
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setAddingAttachment(true);
+    setError(null);
+    try {
+      if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("تعذر قراءة الصورة."));
+          reader.onload = () => resolve(String(reader.result));
+          reader.readAsDataURL(file);
+        });
+        const result = await addIndependentImageKnowledge<{ knowledge: IndependentKnowledgeItem; extractedText: string }>(token, selectedAgent.id, { fileName: file.name, mediaType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif", dataUrl });
+        setKnowledge((current) => [result.knowledge, ...current]);
+        setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة المعرفة المستخرجة من الصورة **${file.name}** إلى معرفة الوكيل.` }]);
+        return;
+      }
+      const isText = file.type.startsWith("text/") || /\.(txt|md|csv|json)$/i.test(file.name);
+      if (!isText) throw new Error("يدعم الوكيل الآن الصور وملفات TXT وMD وCSV وJSON. حوّل PDF أو Word إلى نص قبل إرفاقه.");
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("تعذر قراءة الملف."));
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(file);
+      });
+      const mediaType = file.type === "text/markdown" || file.type === "text/csv" || file.type === "application/json" ? file.type : "text/plain";
+      const result = await addIndependentTextFileKnowledge<{ knowledge: IndependentKnowledgeItem }>(token, selectedAgent.id, {
+        fileName: file.name, mediaType, dataUrl,
+      });
+      setKnowledge((current) => [result.knowledge, ...current]);
+      setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة محتوى الملف **${file.name}** إلى معرفة الوكيل.` }]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر إضافة المرفق إلى معرفة الوكيل.");
+    } finally {
+      setAddingAttachment(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const startVoiceCapture = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return setChatError("التسجيل الصوتي غير مدعوم في هذا المتصفح.");
+    const browserWindow = window as typeof window & { SpeechRecognition?: new () => BrowserSpeechRecognition; webkitSpeechRecognition?: new () => BrowserSpeechRecognition };
+    const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
+    if (!Recognition) return setChatError("استخدم Chrome على الهاتف لتفعيل تحويل الصوت إلى نص قبل الإرسال.");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : undefined });
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) audioChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
+      };
+      const recognition = new Recognition();
+      speechRecognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = selectedAgent?.language === "en" ? "en-US" : "ar-SA";
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
+        if (transcript) setChatDraft((current) => current ? `${current} ${transcript}` : transcript);
+      };
+      recognition.onerror = () => setChatError("تعذر تحويل الصوت إلى نص. يمكنك كتابة الرسالة أو المحاولة مجدداً.");
+      recognition.onend = () => setIsRecording(false);
+      recorder.start();
+      recognition.start();
+      setIsRecording(true);
+      setChatError(null);
+    } catch {
+      setChatError("اسمح بالوصول إلى الميكروفون لتسجيل رسالتك الصوتية.");
+    }
+  };
+
+  const stopVoiceCapture = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    speechRecognitionRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const cancelVoiceCapture = () => {
+    stopVoiceCapture();
+    setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+  };
+
   const sendTestMessage = async () => {
     if (!selectedAgent) return;
     const message = chatDraft.trim();
@@ -276,10 +392,11 @@ export default function IndependentStaging() {
     if (!token) return setLocation("/login");
     setSendingAgentId(selectedAgent.id);
     setChatError(null);
-    setChatResult(null);
+    setChatMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: message }]);
+    setChatDraft("");
     try {
       const result = await requestIndependentAgentReply({ accessToken: token, agentId: selectedAgent.id, message });
-      setChatResult(result);
+      setChatMessages((current) => [...current, { id: `assistant-${Date.now()}`, role: "assistant", content: result.reply }]);
     } catch (reason) {
       setChatError(reason instanceof Error ? reason.message : "تعذر الحصول على رد Claude.");
     } finally {
@@ -324,7 +441,9 @@ export default function IndependentStaging() {
             </article>
           </section>
 
-          <section className="mt-6 rounded-3xl border border-cyan-200/15 bg-gradient-to-l from-cyan-300/10 to-transparent p-5 sm:p-6"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-bold">3. اختبر رد الوكيل</h2></div><p className="mt-2 text-sm leading-6 text-slate-300">هذا الاختبار يستخدم Claude من الخادم فقط، ويأخذ معرفة هذا الوكيل في الاعتبار. لا تشارك الرابط مع العملاء قبل إضافة المعرفة ومراجعة الإجابات.</p><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder="مثال: ما الخدمات التي تقدمونها؟" className="mt-4 min-h-24 w-full rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none ring-cyan-200/70 placeholder:text-slate-500 focus:ring-2" disabled={sendingAgentId === selectedAgent.id} /><Button onClick={() => void sendTestMessage()} disabled={sendingAgentId === selectedAgent.id} className="mt-3 w-full bg-cyan-300 text-slate-950 hover:bg-cyan-200">{sendingAgentId === selectedAgent.id ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />جارٍ طلب الرد…</> : <><Send className="ml-2 h-4 w-4" />اختبر الرد الآن</>}</Button>{chatResult?.agentId === selectedAgent.id && <div className="mt-4 rounded-2xl border border-lime-300/25 bg-lime-300/10 p-4"><p className="flex items-center gap-2 text-xs font-bold text-lime-200"><CheckCircle2 className="h-4 w-4" />رد الوكيل</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-100">{chatResult.reply}</p></div>}{chatError && <p className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{chatError}</p>}</section>
+          <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.025] p-4 sm:p-5"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void addKnowledgeAttachment(file); }} /><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={addingAttachment} className="border-white/15 text-white hover:bg-white/10">{addingAttachment ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Paperclip className="ml-2 h-4 w-4" />}إرفاق معرفة</Button><Button type="button" variant="outline" onClick={() => isRecording ? stopVoiceCapture() : void startVoiceCapture()} className={isRecording ? "border-rose-300/40 text-rose-100 hover:bg-rose-300/10" : "border-white/15 text-white hover:bg-white/10"}>{isRecording ? <><Square className="ml-2 h-4 w-4" />إيقاف التسجيل</> : <><Mic className="ml-2 h-4 w-4" />رسالة صوتية</>}</Button><span className="text-xs leading-6 text-slate-400">الصور وملفات TXT وMD وCSV وJSON تُضاف إلى معرفة الوكيل. حد المرفق 5 MB.</span></div>{isRecording && <p className="mt-3 flex items-center gap-2 text-sm text-rose-100"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-300" />جارٍ التسجيل وتحويل كلامك إلى نص…</p>}{audioPreviewUrl && <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.08] p-3"><Mic className="h-4 w-4 text-cyan-200" /><audio controls src={audioPreviewUrl} className="h-9 max-w-full" /><Button type="button" variant="ghost" size="sm" onClick={cancelVoiceCapture} className="text-slate-200 hover:bg-white/10 hover:text-white"><X className="ml-1 h-4 w-4" />إلغاء التسجيل</Button><span className="text-xs text-slate-400">تمت إضافة النص المسموع إلى خانة الإرسال؛ راجعه ثم أرسله.</span></div>}</section>
+
+          <section className="mt-6 overflow-hidden rounded-3xl border border-cyan-200/20 bg-gradient-to-b from-cyan-300/[0.10] to-slate-950/40"><div className="border-b border-white/10 px-5 py-5 sm:px-6"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-bold">3. اختبر وكيل شركتك</h2></div><p className="mt-2 text-sm leading-6 text-slate-300">محادثة اختبار حقيقية مع Claude من الخادم ومعرفة الوكيل المختار. راجع الإجابات قبل نشر الوكيل للعملاء.</p></div><div className="min-h-72 space-y-4 p-5 sm:p-6">{chatMessages.length ? chatMessages.map((message) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-start" : "justify-end"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-7 shadow-sm ${message.role === "user" ? "bg-cyan-300 text-slate-950" : "border border-white/10 bg-slate-950/70 text-slate-100"}`}>{message.role === "assistant" ? <div className="prose prose-sm max-w-none break-words prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0"><Streamdown>{message.content}</Streamdown></div> : <p className="whitespace-pre-wrap">{message.content}</p>}</div></div>) : <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-slate-950/25 p-5 text-center"><Sparkles className="h-7 w-7 text-lime-200" /><p className="mt-3 font-bold">جرّب أول سؤال كعميل</p><p className="mt-1 max-w-md text-sm leading-6 text-slate-400">اكتب سؤالاً من نوع الأسئلة التي يسألها عملاء شركتك عادةً، وتحقق أن الوكيل يعتمد على المعلومات التي راجعتها.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{["ما الخدمات التي تقدمونها؟", "كيف أبدأ معكم؟", "هل يمكن التحدث مع موظف؟"].map((prompt) => <button key={prompt} onClick={() => setChatDraft(prompt)} className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-2 text-xs text-cyan-100 transition hover:border-cyan-200/50 hover:bg-cyan-300/10">{prompt}</button>)}</div></div>}{sendingAgentId === selectedAgent.id && <div className="flex justify-end"><div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-300"><Loader2 className="h-4 w-4 animate-spin text-cyan-200" />يفكّر الوكيل…</div></div>}</div><div className="border-t border-white/10 bg-slate-950/45 p-4 sm:p-5"><div className="flex items-end gap-3 rounded-2xl border border-white/15 bg-slate-950/70 p-2 focus-within:border-cyan-200/50"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendTestMessage(); } }} placeholder="اكتب رسالتك إلى وكيل شركتك…" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500" disabled={sendingAgentId === selectedAgent.id} /><Button onClick={() => void sendTestMessage()} size="icon" disabled={!chatDraft.trim() || sendingAgentId === selectedAgent.id} className="h-11 w-11 shrink-0 rounded-xl bg-cyan-300 text-slate-950 hover:bg-cyan-200" aria-label="إرسال الرسالة">{sendingAgentId === selectedAgent.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}</Button></div>{chatError && <p className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{chatError}</p>}</div></section>
         </>}
       </div>
     </main>

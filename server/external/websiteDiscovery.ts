@@ -121,14 +121,20 @@ export function extractIndependentWebsitePage(html: string, pageUrl: string): In
   return independentWebsitePageSchema.parse({ url: pageUrl, title, description, headings, content, links: links.slice(0, 200) });
 }
 
-async function fetchPublicHtml(url: string) {
+async function fetchPublicHtml(url: string, redirectCount = 0): Promise<{ html: string; pageUrl: string }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { headers: { accept: "text/html,text/plain;q=0.9", "user-agent": USER_AGENT }, redirect: "error", signal: controller.signal });
+    const response = await fetch(url, { headers: { accept: "text/html,text/plain;q=0.9", "user-agent": USER_AGENT }, redirect: "manual", signal: controller.signal });
+    if ([301, 302, 303, 307, 308].includes(response.status) && redirectCount < 2) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("unavailable");
+      const next = await assertIndependentPublicWebsiteUrl(new URL(location, url).toString());
+      return fetchPublicHtml(next.toString(), redirectCount + 1);
+    }
     const contentType = response.headers.get("content-type") ?? "";
     if (!response.ok || !contentType.includes("text/")) throw new Error("unavailable");
-    return await response.text();
+    return { html: await response.text(), pageUrl: url };
   } finally {
     clearTimeout(timeout);
   }
@@ -148,7 +154,8 @@ export async function crawlIndependentPublicWebsite(input: string) {
     if (visited.has(current)) continue;
     visited.add(current);
     try {
-      const page = extractIndependentWebsitePage(await fetchPublicHtml(current), current);
+      const fetched = await fetchPublicHtml(current);
+      const page = extractIndependentWebsitePage(fetched.html, fetched.pageUrl);
       pages.push(page);
       for (const link of page.links) {
         const next = new URL(link);

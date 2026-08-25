@@ -10,6 +10,8 @@ import {
 } from "./runtime";
 import { generateIndependentAgentReply } from "./chat";
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
+import { extractKnowledgeFromIndependentImage } from "./claude";
+import { getIndependentSupabaseServerClient } from "./supabase";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
   const value = headers.authorization;
@@ -37,6 +39,23 @@ function safeWebsiteUrl(value: unknown) {
   } catch {
     return undefined;
   }
+}
+
+const INDEPENDENT_ATTACHMENT_BUCKET = "neon-agent-attachments";
+
+async function storeIndependentAttachment(input: { tenantId: number; agentId: number; fileName: string; contentType: string; bytes: Uint8Array }) {
+  const supabase = getIndependentSupabaseServerClient();
+  if (!supabase) throw new Error("storage-unavailable");
+  await supabase.storage.createBucket(INDEPENDENT_ATTACHMENT_BUCKET, {
+    public: false,
+    fileSizeLimit: "5242880",
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "text/plain", "text/markdown", "text/csv", "application/json"],
+  });
+  const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "attachment";
+  const path = `${input.tenantId}/${input.agentId}/${Date.now()}-${safeName}`;
+  const { data, error } = await supabase.storage.from(INDEPENDENT_ATTACHMENT_BUCKET).upload(path, input.bytes, { contentType: input.contentType, upsert: false });
+  if (error || !data) throw new Error("storage-unavailable");
+  return `supabase://${INDEPENDENT_ATTACHMENT_BUCKET}/${data.path}`;
 }
 
 function agentProfile(req: Request) {
@@ -136,6 +155,70 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (knowledge === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
     if (!knowledge) return res.status(404).json({ error: "Agent not found" });
     return res.status(201).json(knowledge);
+  });
+
+  app.post("/api/external/agents/:agentId/image-knowledge", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const fileName = text(req.body?.fileName, 1, 160);
+    const mediaType = text(req.body?.mediaType, 1, 32);
+    const dataUrl = text(req.body?.dataUrl, 32, 7_000_000);
+    const supportedMediaType = mediaType === "image/jpeg" || mediaType === "image/png" || mediaType === "image/webp" || mediaType === "image/gif" ? mediaType : undefined;
+    const match = dataUrl?.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !fileName || !supportedMediaType || !match || match[1] !== supportedMediaType) return res.status(400).json({ error: "A supported image up to 5 MB is required" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
+    try {
+      const bytes = Buffer.from(match[2], "base64");
+      if (bytes.byteLength > 5 * 1024 * 1024) return res.status(400).json({ error: "A supported image up to 5 MB is required" });
+      const sourceUrl = await storeIndependentAttachment({ tenantId: session.workspace.id, agentId, fileName, contentType: supportedMediaType, bytes });
+      const content = await extractKnowledgeFromIndependentImage({ data: match[2], mediaType: supportedMediaType, fileName });
+      if (!content) return res.status(422).json({ error: "تعذر استخراج معرفة واضحة من الصورة." });
+      const knowledge = await addIndependentWorkspaceKnowledge(authorizationFromRequest(req.headers), agentId, {
+        title: `صورة مرفقة: ${fileName}`,
+        content,
+        category: "Uploaded image",
+        sourceUrl,
+        sourceTitle: fileName,
+      });
+      if (knowledge === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+      if (!knowledge) return res.status(404).json({ error: "Agent not found" });
+      return res.status(201).json({ knowledge, extractedText: content });
+    } catch (error) {
+      console.error("[Independent Image Knowledge] Extraction failed", error instanceof Error ? error.name : "unknown");
+      return res.status(503).json({ error: "Independent image analysis is unavailable" });
+    }
+  });
+
+  app.post("/api/external/agents/:agentId/file-knowledge", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const fileName = text(req.body?.fileName, 1, 160);
+    const mediaType = text(req.body?.mediaType, 1, 48);
+    const dataUrl = text(req.body?.dataUrl, 32, 7_000_000);
+    const supportedMediaType = mediaType === "text/plain" || mediaType === "text/markdown" || mediaType === "text/csv" || mediaType === "application/json" ? mediaType : undefined;
+    const match = dataUrl?.match(/^data:(text\/(?:plain|markdown|csv)|application\/json);base64,([A-Za-z0-9+/=]+)$/);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !fileName || !supportedMediaType || !match || match[1] !== supportedMediaType) return res.status(400).json({ error: "A supported text file up to 5 MB is required" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
+    try {
+      const bytes = Buffer.from(match[2], "base64");
+      if (bytes.byteLength > 5 * 1024 * 1024) return res.status(400).json({ error: "A supported text file up to 5 MB is required" });
+      const content = bytes.toString("utf8").trim();
+      if (!content) return res.status(422).json({ error: "The file contains no readable text" });
+      const sourceUrl = await storeIndependentAttachment({ tenantId: session.workspace.id, agentId, fileName, contentType: supportedMediaType, bytes });
+      const knowledge = await addIndependentWorkspaceKnowledge(authorizationFromRequest(req.headers), agentId, {
+        title: fileName,
+        content: content.slice(0, 16_000),
+        category: "Uploaded text",
+        sourceUrl,
+        sourceTitle: fileName,
+      });
+      if (knowledge === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+      if (!knowledge) return res.status(404).json({ error: "Agent not found" });
+      return res.status(201).json({ knowledge });
+    } catch (error) {
+      console.error("[Independent Text Knowledge] Storage failed", error instanceof Error ? error.name : "unknown");
+      return res.status(503).json({ error: "Independent attachment storage is unavailable" });
+    }
   });
 
   app.post("/api/external/agents/:agentId/apply-website-proposal", async (req, res) => {

@@ -48,3 +48,29 @@ export async function completeWithIndependentClaude(
     .join("\n")
     .trim();
 }
+
+export async function extractKnowledgeFromIndependentImage(
+  input: { data: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; fileName: string },
+  config: IndependentClaudeConfig | undefined = getIndependentClaudeConfig(),
+  createMessage?: (input: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>,
+): Promise<string> {
+  if (!config) throw new Error("Independent Claude is not configured");
+  const create = createMessage ?? ((request) => new Anthropic({ apiKey: config.apiKey }).messages.create(request));
+  const response = await create({
+    model: config.model,
+    max_tokens: 1_200,
+    system: "أنت تستخرج معرفة تجارية من صورة يرفعها مالك الشركة إلى وكيله. اكتب فقط النص والحقائق المرئية القابلة للقراءة: أسماء خدمات أو منتجات، أسعار، تفاصيل، عناوين، وشروط. لا تخترع أي معلومة، ولا تفسر بيانات شخصية أو حساسة. أعد نصاً عربياً منظماً قابلاً للحفظ في قاعدة معرفة الوكيل.",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: input.mediaType, data: input.data } },
+        { type: "text", text: `استخرج المعرفة التجارية المعتمدة من الصورة المرفوعة باسم ${input.fileName}.` },
+      ],
+    }],
+  });
+  return response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentKnowledgeItem, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentWorkspaceAgent, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentWorkspaceAgent, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -59,6 +59,28 @@ describe("independent setup requests", () => {
     expect(request.mock.calls[0]?.[1]?.headers.Authorization).toBe("Bearer supabase-token");
     expect(request.mock.calls[1]?.[0]).toBe("/api/external/agents/7/apply-website-proposal");
     expect(request.mock.calls[1]?.[1]?.body).toBe(JSON.stringify(proposal));
+  });
+
+  it("sends an image only to the protected tenant agent knowledge route", async () => {
+    const image = { fileName: "services.png", mediaType: "image/png" as const, dataUrl: "data:image/png;base64,aW1hZ2U=" };
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ knowledge: { id: 9 } }) });
+    await addIndependentImageKnowledge("supabase-token", 7, image, request);
+    expect(request).toHaveBeenCalledWith("/api/external/agents/7/image-knowledge", {
+      method: "POST",
+      headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
+      body: JSON.stringify(image),
+    });
+  });
+
+  it("sends a text file only to the protected private-storage route", async () => {
+    const file = { fileName: "services.txt", mediaType: "text/plain" as const, dataUrl: "data:text/plain;base64,c2VydmljZXM=" };
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ knowledge: { id: 10 } }) });
+    await addIndependentTextFileKnowledge("supabase-token", 7, file, request);
+    expect(request).toHaveBeenCalledWith("/api/external/agents/7/file-knowledge", {
+      method: "POST",
+      headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
+      body: JSON.stringify(file),
+    });
   });
 
   it("returns the server-safe setup error", async () => {
