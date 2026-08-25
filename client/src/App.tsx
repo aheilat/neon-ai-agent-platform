@@ -35,7 +35,7 @@ function AppRoutes() {
       <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/external" component={IndependentStaging} />
-      <Route path="/start" component={Home} />
+      <Route path="/start" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Home} />
       <Route path="/agents" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Agents} />
       <Route path="/knowledge" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Knowledge} />
       <Route path="/conversations" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Conversations} />
