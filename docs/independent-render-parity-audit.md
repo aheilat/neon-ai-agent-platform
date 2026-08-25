@@ -32,6 +32,8 @@ The public `/widget/10` route was validated after the session-bound close-out re
 
 The isolated Supabase project was then queried with a bounded schema check. It confirmed that `public.conversations.publicSessionTokenHash` exists as a `text` column, matching the additive migration used by the public Widget close-out flow. The server retains only the token hash; the raw opaque token remains in the visitor’s current browser state.
 
+After the independent focused-view rollout, the live `/knowledge` route was rechecked on Render. It showed only the selected agent’s backed knowledge editor, current knowledge items, and supported attachment controls. The unrelated agent-profile editor was not present on that route.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |

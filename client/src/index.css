@@ -83,7 +83,10 @@ button { cursor: pointer; }
 [data-independent-view="agents"] #independent-conversations,
 [data-independent-view="agents"] #independent-overview,
 [data-independent-view="agents"] #independent-widget,
-[data-independent-view="agents"] #independent-widget ~ section { display: none; }
+[data-independent-view="agents"] #independent-widget ~ section:not(#independent-knowledge) { display: none; }
+
+[data-independent-view="agents"] #independent-knowledge { display: block; }
+[data-independent-view="agents"] #independent-knowledge > article:not(#independent-agent-profile) { display: none; }
 
 [data-independent-view="knowledge"] #independent-conversations,
 [data-independent-view="knowledge"] #independent-overview,
