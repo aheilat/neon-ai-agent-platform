@@ -221,10 +221,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     }
   });
 
-  app.post("/api/external/agents/:agentId/apply-website-proposal", async (req, res) => {
-    const agentId = Number(req.params.agentId);
+  app.post("/api/external/website/apply-proposal", async (req, res) => {
     const websiteUrl = safeWebsiteUrl(req.body?.websiteUrl);
-    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !websiteUrl || !Array.isArray(req.body?.pages) || req.body.pages.length < 1 || req.body.pages.length > 5) {
+    if (!websiteUrl || !Array.isArray(req.body?.pages) || req.body.pages.length < 1 || req.body.pages.length > 5) {
       return res.status(400).json({ error: "A valid website proposal is required" });
     }
     try {
@@ -235,9 +234,8 @@ export function registerIndependentRuntimeRoutes(app: Express) {
         return { url: candidate.url, title: candidate.title, description: candidate.description, headings: candidate.headings };
       });
       const analysis = assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(req.body?.analysis), pages);
-      const result = await applyIndependentWebsiteProposal(authorizationFromRequest(req.headers), agentId, { websiteUrl, pages, analysis });
+      const result = await applyIndependentWebsiteProposal(authorizationFromRequest(req.headers), { websiteUrl, pages, analysis });
       if (result === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
-      if (!result) return res.status(404).json({ error: "Agent not found" });
       return res.status(201).json(result);
     } catch {
       return res.status(400).json({ error: "A valid website proposal is required" });

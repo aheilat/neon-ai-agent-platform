@@ -130,18 +130,16 @@ export async function addIndependentWorkspaceKnowledge(
 
 export async function applyIndependentWebsiteProposal(
   authorization: string | undefined,
-  agentId: number,
   proposal: IndependentWebsiteProposal,
   dependencies: IndependentSetupDependencies = defaultSetupDependencies,
 ) {
   const session = await resolveIndependentWorkspaceSession(authorization, dependencies);
   const pool = dependencies.getPool();
   if (!session || !pool) return undefined;
-  const existing = await dependencies.getAgent(pool, session.workspace.id, agentId);
-  if (!existing) return null;
 
   const analysis = proposal.analysis;
-  const agent = await dependencies.updateWebsiteProposal(pool, session.workspace.id, agentId, {
+  const agent = await dependencies.createAgent(pool, {
+    tenantId: session.workspace.id,
     name: analysis.businessName,
     description: analysis.businessSummary,
     persona: analysis.persona,
@@ -151,8 +149,9 @@ export async function applyIndependentWebsiteProposal(
     decisionRules: analysis.guardrails.join(" "),
     fallbackMessage: "أحتاج تفاصيل إضافية حتى أجيب بدقة، أو أقدر أحوّلك إلى فريق الشركة.",
     escalationKeyword: "موظف,موظفة,إنسان,شكوى,عاجل,human,agent",
+    llmModel: "claude-haiku-4-5",
+    capabilitiesJson: { enabled: ["answer", "qualify", "capture", "escalate"] },
   });
-  if (!agent) return null;
 
   const pageTitles = new Map(proposal.pages.map((page) => [page.url, page.title]));
   const knowledge = [
@@ -160,6 +159,6 @@ export async function applyIndependentWebsiteProposal(
     ...analysis.faqs.map((faq) => ({ title: `FAQ: ${faq.question}`.slice(0, 160), content: faq.answer, category: "Website FAQ", sourceUrl: faq.sourceUrl, sourceTitle: pageTitles.get(faq.sourceUrl) ?? analysis.businessName })),
   ];
   if (!knowledge.length) knowledge.push({ title: "ملخص النشاط من الموقع", content: analysis.businessSummary, category: "Website summary", sourceUrl: proposal.websiteUrl, sourceTitle: analysis.businessName });
-  for (const item of knowledge) await dependencies.createKnowledge(pool, { ...item, tenantId: session.workspace.id, agentId });
+  for (const item of knowledge) await dependencies.createKnowledge(pool, { ...item, tenantId: session.workspace.id, agentId: agent.id });
   return { agent, knowledgeCount: knowledge.length };
 }

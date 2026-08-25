@@ -94,11 +94,10 @@ export function analyzeIndependentCompanyWebsite(
 
 export function applyIndependentWebsiteProposal<T>(
   accessToken: string,
-  agentId: number,
   proposal: IndependentWebsiteProposal,
   fetchImplementation: FetchImplementation = fetch,
 ) {
-  return requestJson<T>(`/api/external/agents/${agentId}/apply-website-proposal`, "POST", accessToken, proposal, fetchImplementation);
+  return requestJson<T>("/api/external/website/apply-proposal", "POST", accessToken, proposal, fetchImplementation);
 }
 
 export function addIndependentImageKnowledge<T>(

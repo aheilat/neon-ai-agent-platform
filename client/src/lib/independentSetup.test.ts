@@ -53,11 +53,11 @@ describe("independent setup requests", () => {
     };
     const request = vi.fn().mockResolvedValue({ ok: true, json: async () => proposal });
     await analyzeIndependentCompanyWebsite("supabase-token", proposal.websiteUrl, request);
-    await applyIndependentWebsiteProposal("supabase-token", 7, proposal, request);
+    await applyIndependentWebsiteProposal("supabase-token", proposal, request);
 
     expect(request.mock.calls[0]?.[0]).toBe("/api/external/website/analysis");
     expect(request.mock.calls[0]?.[1]?.headers.Authorization).toBe("Bearer supabase-token");
-    expect(request.mock.calls[1]?.[0]).toBe("/api/external/agents/7/apply-website-proposal");
+    expect(request.mock.calls[1]?.[0]).toBe("/api/external/website/apply-proposal");
     expect(request.mock.calls[1]?.[1]?.body).toBe(JSON.stringify(proposal));
   });
 

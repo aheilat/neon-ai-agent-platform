@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   addIndependentWorkspaceKnowledge,
+  applyIndependentWebsiteProposal,
   getIndependentAgentKnowledge,
   getIndependentWorkspaceAgents,
   resolveIndependentWorkspaceSession,
@@ -113,5 +114,43 @@ describe("independent runtime", () => {
 
     expect(result).toBeNull();
     expect(createKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("creates a separate company agent from an approved website proposal instead of updating Neon Concierge", async () => {
+    const createAgent = vi.fn().mockResolvedValue({ id: 77, tenantId: 9, name: "Joa Academy" });
+    const createKnowledge = vi.fn().mockResolvedValue({ id: 301 });
+    const updateWebsiteProposal = vi.fn();
+    const proposal = {
+      websiteUrl: "https://joacademy.com/",
+      pages: [{ url: "https://joacademy.com/", title: "Joa", description: "Education", headings: ["Courses"] }],
+      analysis: {
+        businessName: "Joa Academy",
+        businessSummary: "منصة تعليمية",
+        industry: "Education",
+        audience: "Students",
+        language: "ar" as const,
+        tone: "friendly" as const,
+        persona: "مساعد أكاديمي واضح",
+        goals: ["answer"],
+        suggestedChannels: ["web"],
+        services: [{ name: "الدورات", description: "دورات تعليمية", sourceUrl: "https://joacademy.com/" }],
+        faqs: [],
+        guardrails: ["لا تخترع معلومات"],
+      },
+    };
+    const result = await applyIndependentWebsiteProposal("Bearer token", proposal, {
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
+      getPool: () => pool,
+      getAgent: vi.fn(),
+      createAgent,
+      updateAgent: vi.fn(),
+      updateWebsiteProposal,
+      createKnowledge,
+    });
+
+    expect(result?.agent.id).toBe(77);
+    expect(createAgent).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: 9, name: "Joa Academy" }));
+    expect(createKnowledge).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: 9, agentId: 77, title: "الدورات" }));
+    expect(updateWebsiteProposal).not.toHaveBeenCalled();
   });
 });
