@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, listIndependentHandoffRequests, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -95,6 +95,16 @@ describe("independent setup requests", () => {
     expect(request.mock.calls[1]?.[1]?.method).toBe("PATCH");
     expect(request.mock.calls[2]?.[0]).toBe("/api/external/agents/7/handoff-requests");
     expect(request.mock.calls[2]?.[1]?.body).toContain('"consent":true');
+  });
+
+  it("loads handoff requests through the authenticated selected-agent route without a request body", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ leads: [] }) });
+    await listIndependentHandoffRequests("supabase-token", 7, request);
+
+    expect(request).toHaveBeenCalledWith("/api/external/agents/7/handoff-requests", {
+      method: "GET",
+      headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
+    });
   });
 
   it("returns the server-safe setup error", async () => {

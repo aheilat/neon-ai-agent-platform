@@ -10,6 +10,18 @@ The Render deployment is healthy and is connected to the separate Supabase proje
 
 The product mismatch comes from the server and client integration boundary. In the independent runtime, the server starts `server/external/app.ts`, which deliberately exposes a narrow Supabase/Claude API and rejects unrecognised API paths. The original full dashboard still calls the managed tRPC service at `/api/trpc`; a direct public request to that route on Render returns `404 Independent API route not found`.
 
+### 25 August 2026 — human-handoff inbox rollout observation
+
+The authenticated disposable workspace at `https://agent.neonadai.com/external` loaded correctly with two isolated agents and the selected second agent’s approved manual knowledge. Immediately after the GitHub push for the independent human-handoff inbox, that inbox was not yet present in the rendered page. This is recorded as an in-progress Render deployment observation, not as a product regression. No customer workspace, WhatsApp asset, or credential was accessed.
+
+After the Render rollout completed, the same authenticated isolated workspace showed the selected agent’s **طلبات التحويل البشري** panel with its refresh control, empty-state guidance, agent-specific scope statement, and an explicit notice that it does not send a WhatsApp, email, or telephone notification. The empty state was expected for the selected second agent. This validates the live Render UI surface; the endpoint’s tenant/agent ownership checks are covered by automated tests.
+
+The selected second agent was then asked in the live Claude test chat for its operating days. It answered that the service is available **from Sunday to Thursday only**, matching the manually saved knowledge item attached solely to that agent. This confirms the manual knowledge control is not merely storing a record: the direct independent Claude route retrieves and uses it in the agent’s answer.
+
+For a separate live website-to-agent validation, the isolated workspace submitted the public URL `https://neonadai.com` and the analysis state started successfully. This test uses only the disposable workspace; proposal review and approval are being kept separate from the previously selected agent and its manual knowledge.
+
+The live analysis returned a reviewable proposal from one public page, including an `AdCreative AI` agent name, a business summary, one service, and three source-linked FAQs. After approval in the disposable workspace, the platform created and selected a **new active AdCreative AI agent**, showed its own extracted knowledge items, and issued a distinct Widget URL at `/widget/10`. The prior second agent and its manual knowledge remained a separate agent surface. This completes the previously pending live approval step without modifying any customer agent or production channel asset.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
