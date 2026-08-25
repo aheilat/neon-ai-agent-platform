@@ -41,3 +41,11 @@ The correct repair is not to re-enable managed OAuth, Forge, MySQL, or the Oman 
 ## Non-negotiable safety constraints
 
 The restoration must not copy managed customer data without explicit migration approval. It must not add managed Manus credentials to Render. It must not change the Oman Drive WhatsApp webhook or number while Meta is inactive.
+
+## Newly verified control failures
+
+The public independent registration page is visible and accepts an email/password, but it requires a confirmation email before a fresh workspace can be entered. The browser-control handoff used for an authenticated review was not visible to the user, so it cannot be relied on as the sole validation method.
+
+The existing `Widget.tsx` is a managed-runtime component, not an independent widget. It calls managed `trpc.chat.*` APIs that are unavailable in Render independent mode and it contains Oman Drive-specific copy and phone routing. It therefore must not be exposed as the independent product widget, and no generic customer agent may ever inherit that contact detail. The independent replacement needs its own public, tenant-scoped chat and handoff routes plus an embed-preview UI.
+
+The same distinction applies to the prior full dashboard controls: a visible button is not a functional independent feature unless its client request and backend route use the Supabase/Claude runtime. Any managed-only route must be removed from the independent surface or replaced before it is shown as available.

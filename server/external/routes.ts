@@ -8,11 +8,11 @@ import {
   resolveIndependentWorkspaceSession,
   updateIndependentWorkspaceAgent,
 } from "./runtime";
-import { generateIndependentAgentReply } from "./chat";
+import { generateIndependentAgentReply, generateIndependentAgentReplyForTenant } from "./chat";
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
 import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
-import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, getIndependentAgentInTenant, getIndependentConversationInTenant, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
+import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
@@ -104,6 +104,46 @@ function agentProfile(req: Request) {
  * from the browser.
  */
 export function registerIndependentRuntimeRoutes(app: Express) {
+  app.get("/api/public/agents/:agentId", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const pool = getIndependentPostgresPool();
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+    const agent = await getIndependentPublicActiveAgent(pool, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    return res.json({ agent: { id: agent.id, name: agent.name, description: agent.description, language: agent.language, tone: agent.tone } });
+  });
+
+  app.post("/api/public/agents/:agentId/chat", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    const requestedConversationId = Number(req.body?.conversationId);
+    const pool = getIndependentPostgresPool();
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    if (!message || message.length > 8_000) return res.status(400).json({ error: "A message of up to 8,000 characters is required" });
+    if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+    const agent = await getIndependentPublicActiveAgent(pool, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const conversation = Number.isSafeInteger(requestedConversationId) && requestedConversationId > 0
+      ? await getIndependentConversationInTenant(pool, agent.tenantId, agent.id, requestedConversationId)
+      : await createIndependentConversation(pool, { tenantId: agent.tenantId, agentId: agent.id, channel: "widget" });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.status !== "active") return res.status(409).json({ error: "This conversation is no longer active" });
+    try {
+      await addIndependentConversationMessage(pool, conversation.id, "customer", message);
+      const result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history: Array.isArray(req.body?.history) ? req.body.history : undefined });
+      if (result.kind === "not-found") return res.status(404).json({ error: "Agent not found" });
+      if (result.kind !== "success") return res.status(503).json({ error: "Independent AI service is unavailable" });
+      const reply = result.reply;
+      if (typeof reply !== "string" || !reply.trim()) return res.status(503).json({ error: "Independent AI service is unavailable" });
+      await addIndependentConversationMessage(pool, conversation.id, "agent", reply);
+      return res.json({ reply, conversation: { id: conversation.id, status: conversation.status } });
+    } catch (error) {
+      console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? error.name : "unknown");
+      return res.status(503).json({ error: "Independent AI service is unavailable" });
+    }
+  });
+
   app.get("/api/external/auth/me", async (req, res) => {
     const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
     if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
@@ -373,6 +413,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       });
       if (result.kind === "unauthorized") return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
       if (result.kind === "not-found") return res.status(404).json({ error: "Agent not found" });
+      if (result.kind !== "success") return res.status(503).json({ error: "Independent AI service is unavailable" });
       await addIndependentConversationMessage(pool, conversation.id, "agent", result.reply);
       return res.json({ reply: result.reply, agentId: result.agentId, conversation: { id: conversation.id, status: conversation.status } });
     } catch (error) {

@@ -17,16 +17,18 @@ import NotificationSettings from "./pages/NotificationSettings";
 import Knowledge from "./pages/Knowledge";
 import Settings from "./pages/Settings";
 import Widget from "./pages/Widget";
+import IndependentWidget from "./pages/IndependentWidget";
 import PublicLanding from "./pages/PublicLanding";
 import Access from "./pages/Access";
 import Pricing from "./pages/Pricing";
 import Quality from "./pages/Quality";
 import IndependentStaging from "./pages/IndependentStaging";
+import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 
 function AppRoutes() {
   return (
     <Switch>
-      <Route path="/widget/:agentId" component={Widget} />
+      <Route path="/widget/:agentId" component={hasIndependentSupabaseBrowserConfig() ? IndependentWidget : Widget} />
       <Route path="/" component={PublicLanding} />
       <Route path="/login" component={Access} />
       <Route path="/register" component={Access} />

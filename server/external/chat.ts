@@ -35,6 +35,25 @@ function systemPrompt(agent: IndependentAgent, knowledge: IndependentKnowledgeIt
   ].join("\n\n");
 }
 
+export async function generateIndependentAgentReplyForTenant(
+  tenantId: number,
+  input: { agentId: number; message: string; history?: IndependentClaudeMessage[] },
+  dependencies: Omit<IndependentChatDependencies, "createContext"> = defaultDependencies,
+) {
+  const pool = dependencies.getPool();
+  if (!pool) return { kind: "unavailable" as const };
+  const agent = await dependencies.getAgent(pool, tenantId, input.agentId);
+  if (!agent || agent.status !== "active") return { kind: "not-found" as const };
+  const knowledge = await dependencies.getKnowledge(pool, tenantId, agent.id);
+  const history = (input.history ?? []).filter(item => item.role === "user" || item.role === "assistant").slice(-10);
+  const reply = await dependencies.complete({
+    system: systemPrompt(agent, knowledge),
+    messages: [...history, { role: "user", content: input.message }],
+    maxTokens: 800,
+  });
+  return { kind: "success" as const, reply, agentId: agent.id };
+}
+
 export async function generateIndependentAgentReply(
   authorization: string | undefined,
   input: { agentId: number; message: string; history?: IndependentClaudeMessage[] },
@@ -44,15 +63,5 @@ export async function generateIndependentAgentReply(
   const pool = dependencies.getPool();
   if (!session || !pool) return { kind: "unauthorized" as const };
 
-  const agent = await dependencies.getAgent(pool, session.workspace.id, input.agentId);
-  if (!agent || agent.status !== "active") return { kind: "not-found" as const };
-
-  const knowledge = await dependencies.getKnowledge(pool, session.workspace.id, agent.id);
-  const history = (input.history ?? []).filter(item => item.role === "user" || item.role === "assistant").slice(-10);
-  const reply = await dependencies.complete({
-    system: systemPrompt(agent, knowledge),
-    messages: [...history, { role: "user", content: input.message }],
-    maxTokens: 800,
-  });
-  return { kind: "success" as const, reply, agentId: agent.id };
+  return generateIndependentAgentReplyForTenant(session.workspace.id, input, dependencies);
 }

@@ -180,7 +180,68 @@ export function assertIndependentAnalysisSources(analysis: IndependentWebsiteAna
 
 function extractJson(content: string) {
   const trimmed = content.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-  return JSON.parse(trimmed);
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("invalid-json");
+    return JSON.parse(trimmed.slice(start, end + 1));
+  }
+}
+
+function normalizedEnum(value: unknown, allowed: readonly string[], fallback: string, aliases: Record<string, string> = {}) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const candidate = aliases[normalized] ?? normalized;
+  return allowed.includes(candidate) ? candidate : fallback;
+}
+
+function boundedText(value: unknown, fallback: string, max: number) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback.slice(0, max);
+}
+
+function normalizeIndependentWebsiteAnalysis(raw: unknown, pages: IndependentWebsitePage[]) {
+  const sourceUrls = pages.map((page) => page.url);
+  const defaultSourceUrl = sourceUrls[0];
+  const sourceFor = (value: unknown) => {
+    if (typeof value !== "string") return defaultSourceUrl;
+    try {
+      const matching = sourceUrls.find((sourceUrl) => canonicalUrl(sourceUrl) === canonicalUrl(value));
+      return matching ?? defaultSourceUrl;
+    } catch {
+      return defaultSourceUrl;
+    }
+  };
+  const candidate = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const services = Array.isArray(candidate.services) ? candidate.services.slice(0, 20).flatMap((item) => {
+    const service = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const name = boundedText(service.name, "خدمة من الموقع", 160);
+    const description = boundedText(service.description, "تُراجع تفاصيلها في الموقع الرسمي للشركة.", 1_000);
+    return [{ name, description, sourceUrl: sourceFor(service.sourceUrl) }];
+  }) : [];
+  const faqs = Array.isArray(candidate.faqs) ? candidate.faqs.slice(0, 20).flatMap((item) => {
+    const faq = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const question = boundedText(faq.question, "ما المعلومات المتاحة عن هذه الخدمة؟", 500);
+    const answer = boundedText(faq.answer, "يستند الوكيل إلى المعلومات العامة المنشورة في موقع الشركة.", 1_500);
+    return [{ question, answer, sourceUrl: sourceFor(faq.sourceUrl) }];
+  }) : [];
+  const goalsValue = Array.isArray(candidate.goals) ? candidate.goals.map((value) => normalizedEnum(value, goals, "")).filter((value): value is typeof goals[number] => Boolean(value)) : [];
+  const channelValue = Array.isArray(candidate.suggestedChannels) ? candidate.suggestedChannels.map((value) => normalizedEnum(value, channels, "", { "live chat": "web", website: "web" })).filter((value): value is typeof channels[number] => Boolean(value)) : [];
+  const guardrails = Array.isArray(candidate.guardrails) ? candidate.guardrails.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim().slice(0, 500)).slice(0, 10) : [];
+  return {
+    businessName: boundedText(candidate.businessName, pages[0]?.title ?? "شركة العميل", 120),
+    businessSummary: boundedText(candidate.businessSummary, pages[0]?.content || "معلومات مستخرجة من الموقع العام للشركة.", 1_200),
+    industry: boundedText(candidate.industry, "نشاط تجاري", 120),
+    audience: boundedText(candidate.audience, "عملاء الشركة المحتملون والحاليون", 800),
+    language: normalizedEnum(candidate.language, ["ar", "en", "bilingual"], "bilingual", { arabic: "ar", العربية: "ar", english: "en", mixed: "bilingual", "arabic and english": "bilingual" }) as "ar" | "en" | "bilingual",
+    tone: normalizedEnum(candidate.tone, ["friendly", "professional", "direct"], "professional", { ودود: "friendly", احترافي: "professional", مباشر: "direct" }) as "friendly" | "professional" | "direct",
+    persona: boundedText(candidate.persona, "وكيل خدمة عملاء مهني يجيب من معلومات الشركة العامة فقط ويصعّد الحالات التي تتطلب فريقاً بشرياً.", 2_000),
+    goals: goalsValue.length ? goalsValue.slice(0, 7) : ["questions", "leads", "human"],
+    suggestedChannels: channelValue.length ? channelValue.slice(0, 5) : ["web"],
+    services,
+    faqs,
+    guardrails: guardrails.length ? guardrails : ["لا تدّعِ معلومات غير منشورة في الموقع.", "اطلب من العميل تفاصيل إضافية أو حوّل الحالة الخاصة إلى فريق الشركة."],
+  };
 }
 
 export async function analyzeIndependentWebsitePages(
@@ -194,7 +255,7 @@ export async function analyzeIndependentWebsitePages(
     maxTokens: 3_500,
   });
   try {
-    return assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(extractJson(response)), snapshot.pages);
+    return assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(normalizeIndependentWebsiteAnalysis(extractJson(response), snapshot.pages)), snapshot.pages);
   } catch {
     throw new Error("تعذر قراءة تحليل الموقع بشكل منظم. أعد المحاولة أو راجع الرابط.");
   }

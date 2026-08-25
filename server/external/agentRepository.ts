@@ -130,6 +130,17 @@ export async function getIndependentAgentInTenant(client: Queryable, tenantId: n
   return result.rows[0];
 }
 
+export async function getIndependentPublicActiveAgent(client: Queryable, agentId: number) {
+  const result = await client.query<IndependentAgent>(
+    `select ${agentColumns}
+     from public.agents
+     where id = $1 and status = 'active'
+     limit 1`,
+    [agentId],
+  );
+  return result.rows[0];
+}
+
 export async function createIndependentAgent(client: Queryable, input: CreateIndependentAgentInput) {
   const result = await client.query<IndependentAgent>(
     `insert into public.agents (

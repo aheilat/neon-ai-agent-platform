@@ -29,4 +29,15 @@ describe("independent website discovery", () => {
     expect(analysis.businessName).toBe("Example");
     expect(complete).toHaveBeenCalledTimes(1);
   });
+
+  it("normalizes wrapped analysis JSON and common language or tone labels to the independent contract", async () => {
+    const complete = vi.fn().mockResolvedValue(`Analysis follows:\n\n\`\`\`json
+      {"businessName":"Example","businessSummary":"Business summary","industry":"Services","audience":"Customers","language":"Arabic","tone":"احترافي","persona":"Helpful agent","goals":["questions"],"suggestedChannels":["live chat"],"services":[{"name":"Consulting","description":"Consulting service","sourceUrl":"https://example.com"}],"faqs":[],"guardrails":["Use approved knowledge only"]}
+      \`\`\``);
+    const analysis = await analyzeIndependentWebsitePages({ websiteUrl: "https://example.com/", pages: [{ url: "https://example.com/", title: "Example", description: "", headings: [], content: "Consulting", links: [] }] }, complete);
+    expect(analysis.language).toBe("ar");
+    expect(analysis.tone).toBe("professional");
+    expect(analysis.suggestedChannels).toEqual(["web"]);
+    expect(analysis.services[0]?.sourceUrl).toBe("https://example.com/");
+  });
 });
