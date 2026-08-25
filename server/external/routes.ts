@@ -4,6 +4,7 @@ import {
   addIndependentWorkspaceKnowledge,
   applyIndependentWebsiteProposal,
   createIndependentWorkspaceAgent,
+  IndependentPaidAgentRequiredError,
   getIndependentAgentKnowledge,
   getIndependentWorkspaceAgents,
   resolveIndependentWorkspaceSession,
@@ -293,7 +294,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const template = getIndependentTemplate(req.params.templateId);
     if (!template) return res.status(404).json({ error: "Template not found" });
     const authorization = authorizationFromRequest(req.headers);
-    const agent = await createIndependentWorkspaceAgent(authorization, {
+    let agent;
+    try {
+      agent = await createIndependentWorkspaceAgent(authorization, {
       name: template.name,
       description: template.description,
       persona: template.persona,
@@ -305,7 +308,11 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       fallbackMessage: "لا أملك هذه المعلومة المعتمدة بعد؛ يمكنني تحويل طلبك إلى الفريق.",
       escalationKeyword: "موظف,موظفة,human,agent",
       capabilitiesJson: { enabled: ["answer", "qualify", "capture", "escalate"], templateId: template.id },
-    });
+      });
+    } catch (error) {
+      if (error instanceof IndependentPaidAgentRequiredError) return res.status(402).json({ error: "إنشاء وكيل ثانٍ يحتاج إلى تفعيل باقة مدفوعة.", code: "PAID_AGENT_REQUIRED" });
+      throw error;
+    }
     if (!agent) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
     for (const item of template.knowledge) {
       const knowledge = await addIndependentWorkspaceKnowledge(authorization, agent.id, { title: item.title, content: item.content, category: "Ready-made template", sourceUrl: null, sourceTitle: template.name });
@@ -329,14 +336,20 @@ export function registerIndependentRuntimeRoutes(app: Express) {
   app.post("/api/external/agents", async (req, res) => {
     const profile = agentProfile(req);
     if (!profile) return res.status(400).json({ error: "A valid agent profile is required" });
-    const agent = await createIndependentWorkspaceAgent(authorizationFromRequest(req.headers), {
+    let agent;
+    try {
+      agent = await createIndependentWorkspaceAgent(authorizationFromRequest(req.headers), {
       ...profile,
       llmModel: "claude-haiku-4-5",
       decisionRules: "أجب من المعرفة المعتمدة فقط. إذا كانت المعلومة غير متاحة أو احتاج العميل قراراً بشرياً، اطلب التفاصيل أو صعّد المحادثة.",
       fallbackMessage: "أحتاج تفاصيل إضافية حتى أجيب بدقة، أو أقدر أحوّلك إلى الفريق.",
       escalationKeyword: "موظف,موظفة,human,agent",
       capabilitiesJson: { enabled: ["answer", "qualify", "capture", "escalate"] },
-    });
+      });
+    } catch (error) {
+      if (error instanceof IndependentPaidAgentRequiredError) return res.status(402).json({ error: "إنشاء وكيل ثانٍ يحتاج إلى تفعيل باقة مدفوعة.", code: "PAID_AGENT_REQUIRED" });
+      throw error;
+    }
     if (!agent) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
     return res.status(201).json(agent);
   });

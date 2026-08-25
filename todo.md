@@ -401,3 +401,6 @@
 - [x] Add loading, persistence, and custom error states for the Meta connection test flow
 - [x] Add reset/cancel control for saved Meta simulation data
 - [x] Show simulated connection time and current activity status in the Meta card
+- [x] Reuse the existing default agent for returning email users instead of creating a new agent
+- [x] Enforce a server-side one-agent limit for free workspaces and gate additional agents behind paid entitlement
+- [x] Add clear upgrade/payment messaging for attempts to create a second agent

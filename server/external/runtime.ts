@@ -4,6 +4,8 @@ import {
   createIndependentAgent,
   createIndependentKnowledgeItem,
   ensureIndependentDefaultAgent,
+  countIndependentTenantAgents,
+  hasIndependentPaidEntitlement,
   getIndependentAgentInTenant,
   listIndependentKnowledgeForAgent,
   listIndependentTenantAgents,
@@ -74,7 +76,10 @@ export async function getIndependentAgentKnowledge(
 export type IndependentSetupDependencies = Pick<IndependentRuntimeDependencies, "createContext"> & {
   getPool: typeof getIndependentPostgresPool;
   getAgent: typeof getIndependentAgentInTenant;
+  listAgents?: typeof listIndependentTenantAgents;
   createAgent: typeof createIndependentAgent;
+  countAgents?: typeof countIndependentTenantAgents;
+  hasPaidEntitlement?: typeof hasIndependentPaidEntitlement;
   updateAgent: typeof updateIndependentAgentProfile;
   updateWebsiteProposal: typeof updateIndependentAgentFromWebsiteProposal;
   createKnowledge: typeof createIndependentKnowledgeItem;
@@ -84,11 +89,21 @@ const defaultSetupDependencies: IndependentSetupDependencies = {
   createContext: createIndependentRequestContext,
   getPool: getIndependentPostgresPool,
   getAgent: getIndependentAgentInTenant,
+  listAgents: listIndependentTenantAgents,
   createAgent: createIndependentAgent,
+  countAgents: countIndependentTenantAgents,
+  hasPaidEntitlement: hasIndependentPaidEntitlement,
   updateAgent: updateIndependentAgentProfile,
   updateWebsiteProposal: updateIndependentAgentFromWebsiteProposal,
   createKnowledge: createIndependentKnowledgeItem,
 };
+
+export class IndependentPaidAgentRequiredError extends Error {
+  constructor() {
+    super("PAID_AGENT_REQUIRED");
+    this.name = "IndependentPaidAgentRequiredError";
+  }
+}
 
 export async function createIndependentWorkspaceAgent(
   authorization: string | undefined,
@@ -98,6 +113,8 @@ export async function createIndependentWorkspaceAgent(
   const session = await resolveIndependentWorkspaceSession(authorization, dependencies);
   const pool = dependencies.getPool();
   if (!session || !pool) return undefined;
+  const agentCount = await (dependencies.countAgents ?? countIndependentTenantAgents)(pool, session.workspace.id);
+  if (agentCount >= 1 && !(await (dependencies.hasPaidEntitlement ?? hasIndependentPaidEntitlement)(pool, session.workspace.id))) throw new IndependentPaidAgentRequiredError();
   return dependencies.createAgent(pool, { ...input, tenantId: session.workspace.id });
 }
 
@@ -138,7 +155,21 @@ export async function applyIndependentWebsiteProposal(
   if (!session || !pool) return undefined;
 
   const analysis = proposal.analysis;
-  const agent = await dependencies.createAgent(pool, {
+  const existingAgents = await (dependencies.listAgents ?? listIndependentTenantAgents)(pool, session.workspace.id);
+  const existingAgent = existingAgents[0];
+  const agent = existingAgent
+    ? await dependencies.updateWebsiteProposal(pool, session.workspace.id, existingAgent.id, {
+      name: analysis.businessName,
+      description: analysis.businessSummary,
+      persona: analysis.persona,
+      tone: analysis.tone,
+      language: analysis.language,
+      status: "active",
+      decisionRules: analysis.guardrails.join(" "),
+      fallbackMessage: "أحتاج تفاصيل إضافية حتى أجيب بدقة، أو أقدر أحوّلك إلى فريق الشركة.",
+      escalationKeyword: "موظف,موظفة,إنسان,شكوى,عاجل,human,agent",
+    })
+    : await dependencies.createAgent(pool, {
     tenantId: session.workspace.id,
     name: analysis.businessName,
     description: analysis.businessSummary,

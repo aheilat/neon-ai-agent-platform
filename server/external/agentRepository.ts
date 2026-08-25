@@ -156,6 +156,27 @@ export async function listIndependentTenantAgents(client: Queryable, tenantId: n
   return result.rows;
 }
 
+export async function countIndependentTenantAgents(client: Queryable, tenantId: number) {
+  const result = await client.query<{ count: string }>(
+    `select count(*)::text as count from public.agents where "tenantId" = $1`,
+    [tenantId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function hasIndependentPaidEntitlement(client: Queryable, tenantId: number) {
+  const result = await client.query<{ id: number }>(
+    `select id from public.subscriptions
+     where "tenantId" = $1
+       and status in ('active', 'trialing')
+       and lower("planName") not in ('starter', 'free', 'trial')
+     order by "createdAt" desc
+     limit 1`,
+    [tenantId],
+  );
+  return Boolean(result.rows[0]);
+}
+
 export async function getIndependentAgentInTenant(client: Queryable, tenantId: number, agentId: number) {
   const result = await client.query<IndependentAgent>(
     `select ${agentColumns}

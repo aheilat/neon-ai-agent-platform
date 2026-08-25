@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   addIndependentWorkspaceKnowledge,
   applyIndependentWebsiteProposal,
+  createIndependentWorkspaceAgent,
+  IndependentPaidAgentRequiredError,
   getIndependentAgentKnowledge,
   getIndependentWorkspaceAgents,
   resolveIndependentWorkspaceSession,
@@ -116,10 +118,39 @@ describe("independent runtime", () => {
     expect(createKnowledge).not.toHaveBeenCalled();
   });
 
-  it("creates a separate company agent from an approved website proposal instead of updating Neon Concierge", async () => {
-    const createAgent = vi.fn().mockResolvedValue({ id: 77, tenantId: 9, name: "Joa Academy" });
+  it("blocks a second agent for a workspace without a paid entitlement", async () => {
+    const createAgent = vi.fn();
+    await expect(createIndependentWorkspaceAgent("Bearer token", {
+      name: "Second agent",
+      description: null,
+      persona: null,
+      tone: "friendly",
+      language: "ar",
+      status: "active",
+      llmModel: "claude-haiku-4-5",
+      decisionRules: null,
+      fallbackMessage: null,
+      escalationKeyword: "human",
+      capabilitiesJson: { enabled: ["answer"] },
+    }, {
+      createContext: vi.fn().mockResolvedValue(authenticatedContext),
+      getPool: () => pool,
+      getAgent: vi.fn(),
+      createAgent,
+      countAgents: vi.fn().mockResolvedValue(1),
+      hasPaidEntitlement: vi.fn().mockResolvedValue(false),
+      updateAgent: vi.fn(),
+      updateWebsiteProposal: vi.fn(),
+      createKnowledge: vi.fn(),
+    })).rejects.toBeInstanceOf(IndependentPaidAgentRequiredError);
+    expect(createAgent).not.toHaveBeenCalled();
+  });
+
+  it("reuses the durable default agent when applying an approved website proposal", async () => {
+    const existingAgent = { id: 21, tenantId: 9, name: "Neon Concierge" };
+    const createAgent = vi.fn();
     const createKnowledge = vi.fn().mockResolvedValue({ id: 301 });
-    const updateWebsiteProposal = vi.fn();
+    const updateWebsiteProposal = vi.fn().mockResolvedValue({ id: 21, tenantId: 9, name: "Joa Academy" });
     const proposal = {
       websiteUrl: "https://joacademy.com/",
       pages: [{ url: "https://joacademy.com/", title: "Joa", description: "Education", headings: ["Courses"] }],
@@ -142,15 +173,16 @@ describe("independent runtime", () => {
       createContext: vi.fn().mockResolvedValue(authenticatedContext),
       getPool: () => pool,
       getAgent: vi.fn(),
+      listAgents: vi.fn().mockResolvedValue([existingAgent]),
       createAgent,
       updateAgent: vi.fn(),
       updateWebsiteProposal,
       createKnowledge,
     });
 
-    expect(result?.agent.id).toBe(77);
-    expect(createAgent).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: 9, name: "Joa Academy" }));
-    expect(createKnowledge).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: 9, agentId: 77, title: "الدورات" }));
-    expect(updateWebsiteProposal).not.toHaveBeenCalled();
+    expect(result?.agent.id).toBe(21);
+    expect(createAgent).not.toHaveBeenCalled();
+    expect(updateWebsiteProposal).toHaveBeenCalledWith(pool, 9, 21, expect.objectContaining({ name: "Joa Academy" }));
+    expect(createKnowledge).toHaveBeenCalledWith(pool, expect.objectContaining({ tenantId: 9, agentId: 21, title: "الدورات" }));
   });
 });
