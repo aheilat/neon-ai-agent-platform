@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
 
   createIndependentKnowledgeItem,
+  createIndependentHandoffLead,
   createIndependentAgent,
   ensureIndependentDefaultAgent,
   getIndependentAgentInTenant,
   listIndependentKnowledgeForAgent,
   listIndependentTenantAgents,
   updateIndependentAgentProfile,
+  updateIndependentAgentHandoffContact,
 } from "./agentRepository";
 
 const createdAgent = {
@@ -114,5 +116,22 @@ describe("independent agent repository", () => {
 
     expect(query.mock.calls[0]?.[0]).toContain('"tenantId", "agentId"');
     expect(query.mock.calls[0]?.[1]?.slice(0, 2)).toEqual([8, 31]);
+  });
+
+  it("stores a company-owned handoff contact only on the selected tenant agent", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [createdAgent] });
+    await updateIndependentAgentHandoffContact({ query } as never, 8, 31, { name: "فريق المبيعات", phone: "+962700000000", email: "sales@example.com" });
+
+    expect(query.mock.calls[0]?.[0]).toContain('where "tenantId" = $1 and id = $2');
+    expect(query.mock.calls[0]?.[0]).toContain("handoffContact");
+    expect(query.mock.calls[0]?.[1]).toEqual([8, 31, "فريق المبيعات", "+962700000000", "sales@example.com"]);
+  });
+
+  it("creates a human handoff lead with tenant and agent-bound values", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 19, createdAt: new Date() }] });
+    await createIndependentHandoffLead({ query } as never, { tenantId: 8, agentId: 31, name: "عبدالله", phone: "+962700000000", email: null, notes: "يسأل عن الأسعار" });
+
+    expect(query.mock.calls[0]?.[0]).toContain('insert into public.leads ("tenantId", "agentId"');
+    expect(query.mock.calls[0]?.[1]).toEqual([8, 31, "عبدالله", null, "+962700000000", "يسأل عن الأسعار"]);
   });
 });

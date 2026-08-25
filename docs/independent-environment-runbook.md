@@ -23,6 +23,17 @@ They are tied to the current managed Neon runtime. The external version will rep
 
 The staging deployment must use a separate test configuration until Meta activates the application. Keep the existing webhook URL for the Oman Drive production phone unchanged. Only after a health check, signature verification, and a narrow test message succeed may a new staging endpoint be considered.
 
+## Meta activation gate for customer self-connect
+
+The observed Meta dashboard status is **App not active**. Until that status changes, the independent product must keep customer WhatsApp Embedded Signup disabled and must not add, replace, or redirect the Oman Drive production phone, webhook, or tokens.
+
+For a platform that lets other companies connect their own WhatsApp assets, the operator must complete the following work in the Meta dashboard: first complete the App Dashboard basic information required before switching an app to Live; then submit only the required Advanced Access permissions — normally `whatsapp_business_management` and `whatsapp_business_messaging` — with a written explanation and a separate screen recording for each permission; finally switch the approved app to **Live**. Meta’s guidance states that development-mode apps cannot manage assets belonging to other businesses, and that client onboarding requires Advanced Access through App Review.
+
+> Do not rotate a token, paste a secret, change the current Oman Drive webhook, or register a production number to resolve this status. Those are separate production changes that remain blocked until the app is active and the required review is approved.
+
+- [Meta: Live Mode for production use](https://developers.facebook.com/blog/post/2019/09/23/live-mode-for-production-use/)
+- [Meta: WhatsApp Business Platform App Review](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/app-review)
+
 ## Safe operator workflow
 
 Use the platform's encrypted environment-variable panel to enter values directly. A screenshot may be shared only when every token and password is obscured. Never save secrets in `.env` files, source code, issue comments, or GitHub commits.

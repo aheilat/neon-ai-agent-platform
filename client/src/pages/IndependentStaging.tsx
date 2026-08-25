@@ -6,7 +6,9 @@ import {
   analyzeIndependentCompanyWebsite,
   applyIndependentWebsiteProposal,
   addIndependentTextFileKnowledge,
+  createIndependentHandoffRequest,
   createIndependentWorkspaceAgent,
+  saveIndependentHandoffContact,
   updateIndependentAgentProfile,
   type IndependentAgentProfile,
   type IndependentWebsiteProposal,
@@ -26,6 +28,7 @@ type IndependentAgent = {
   language: "ar" | "en" | "bilingual";
   llmModel: string;
   status: "active" | "paused" | "draft";
+  capabilitiesJson?: Record<string, unknown> | null;
 };
 
 type IndependentKnowledgeItem = {
@@ -109,8 +112,15 @@ export default function IndependentStaging() {
   const [chatMessages, setChatMessages] = useState<WorkspaceChatMessage[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
   const [addingAttachment, setAddingAttachment] = useState(false);
+  const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [handoffContact, setHandoffContact] = useState({ name: "", phone: "", email: "" });
+  const [savingHandoffContact, setSavingHandoffContact] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [handoffRequest, setHandoffRequest] = useState({ name: "", phone: "", email: "", notes: "", consent: false });
+  const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -183,6 +193,10 @@ export default function IndependentStaging() {
     setChatDraft("");
     setChatMessages([]);
     setChatError(null);
+    const contact = (selectedAgent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
+    setHandoffContact({ name: typeof contact.name === "string" ? contact.name : "", phone: typeof contact.phone === "string" ? contact.phone : "", email: typeof contact.email === "string" ? contact.email : "" });
+    setHandoffOpen(false);
+    setHandoffStatus(null);
   }, [loadKnowledge, selectedAgent]);
 
   const signOut = async () => {
@@ -298,10 +312,11 @@ export default function IndependentStaging() {
 
   const addKnowledgeAttachment = async (file: File) => {
     if (!selectedAgent) return;
-    if (file.size > 5 * 1024 * 1024) return setError("الحد الأقصى للمرفق 5 MB.");
+    if (file.size > 5 * 1024 * 1024) return setAttachmentStatus("تعذر رفع المرفق: الحد الأقصى 5 MB.");
     const token = await accessToken();
     if (!token) return setLocation("/login");
     setAddingAttachment(true);
+    setAttachmentStatus(`جارٍ حفظ ${file.name} ضمن معرفة الوكيل…`);
     setError(null);
     try {
       if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
@@ -314,6 +329,7 @@ export default function IndependentStaging() {
         const result = await addIndependentImageKnowledge<{ knowledge: IndependentKnowledgeItem; extractedText: string }>(token, selectedAgent.id, { fileName: file.name, mediaType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif", dataUrl });
         setKnowledge((current) => [result.knowledge, ...current]);
         setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة المعرفة المستخرجة من الصورة **${file.name}** إلى معرفة الوكيل.` }]);
+        setAttachmentStatus(`تم حفظ ${file.name} واستخراج معرفة منه بنجاح.`);
         return;
       }
       const isText = file.type.startsWith("text/") || /\.(txt|md|csv|json)$/i.test(file.name);
@@ -330,8 +346,9 @@ export default function IndependentStaging() {
       });
       setKnowledge((current) => [result.knowledge, ...current]);
       setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة محتوى الملف **${file.name}** إلى معرفة الوكيل.` }]);
+      setAttachmentStatus(`تم حفظ ${file.name} ضمن معرفة الوكيل بنجاح.`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر إضافة المرفق إلى معرفة الوكيل.");
+      setAttachmentStatus(reason instanceof Error ? `تعذر إضافة المرفق: ${reason.message}` : "تعذر إضافة المرفق إلى معرفة الوكيل.");
     } finally {
       setAddingAttachment(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -345,6 +362,7 @@ export default function IndependentStaging() {
     if (!Recognition) return setChatError("استخدم Chrome على الهاتف لتفعيل تحويل الصوت إلى نص قبل الإرسال.");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setVoiceTranscript("");
       const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : undefined });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
@@ -362,7 +380,7 @@ export default function IndependentStaging() {
       recognition.lang = selectedAgent?.language === "en" ? "en-US" : "ar-SA";
       recognition.onresult = (event) => {
         const transcript = Array.from(event.results).slice(event.resultIndex).filter((result) => result.isFinal).map((result) => result[0]?.transcript ?? "").join(" ").trim();
-        if (transcript) setChatDraft((current) => current ? `${current} ${transcript}` : transcript);
+        if (transcript) setVoiceTranscript((current) => current ? `${current} ${transcript}` : transcript);
       };
       recognition.onerror = () => setChatError("تعذر تحويل الصوت إلى نص. يمكنك كتابة الرسالة أو المحاولة مجدداً.");
       recognition.onend = () => {
@@ -390,6 +408,14 @@ export default function IndependentStaging() {
   const cancelVoiceCapture = () => {
     stopVoiceCapture();
     setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+    setVoiceTranscript("");
+  };
+
+  const useVoiceTranscript = () => {
+    const transcript = voiceTranscript.trim();
+    if (!transcript) return setChatError("لم يصل نص مسموع من المتصفح. جرّب Chrome أو اكتب رسالتك.");
+    setChatDraft((current) => current ? `${current} ${transcript}` : transcript);
+    setChatError(null);
   };
 
   const sendTestMessage = async (quickMessage?: string) => {
@@ -409,6 +435,46 @@ export default function IndependentStaging() {
       setChatError(reason instanceof Error ? reason.message : "تعذر الحصول على رد Claude.");
     } finally {
       setSendingAgentId(null);
+    }
+  };
+
+  const sendVoiceTranscript = async () => {
+    const transcript = voiceTranscript.trim();
+    if (!transcript) return setChatError("لم يصل نص مسموع من المتصفح. استخدم زر «استخدم النص في المحادثة» بعد ظهور النص.");
+    await sendTestMessage(transcript);
+  };
+
+  const saveHandoffSettings = async () => {
+    if (!selectedAgent || (!handoffContact.phone.trim() && !handoffContact.email.trim())) return setError("أضف رقم هاتف أو بريد العمل قبل حفظ التحويل البشري.");
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setSavingHandoffContact(true);
+    setError(null);
+    try {
+      await saveIndependentHandoffContact(token, selectedAgent.id, handoffContact);
+      await loadWorkspace();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر حفظ معلومات التحويل البشري.");
+    } finally {
+      setSavingHandoffContact(false);
+    }
+  };
+
+  const submitHandoffRequest = async () => {
+    if (!selectedAgent || !handoffRequest.name.trim() || (!handoffRequest.phone.trim() && !handoffRequest.email.trim()) || !handoffRequest.consent) return setHandoffStatus("اكتب الاسم ورقم الهاتف أو البريد، ثم وافق على مشاركة البيانات مع هذه الشركة.");
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setHandoffStatus("جارٍ تسجيل طلب التواصل…");
+    try {
+      const result = await createIndependentHandoffRequest<{ contact: { name: string | null; phone: string | null; email: string | null } }>(token, selectedAgent.id, handoffRequest);
+      const directContact = [result.contact.name, result.contact.phone, result.contact.email].filter(Boolean).join(" · ");
+      const confirmation = directContact ? `تم تسجيل طلبك وسيتم التواصل معك عبر فريق ${directContact}.` : "تم تسجيل طلبك لفريق هذه الشركة. لم تُضبط وسيلة تواصل مباشرة بعد.";
+      setChatMessages((current) => [...current, { id: `handoff-${Date.now()}`, role: "assistant", content: confirmation }]);
+      setHandoffStatus("تم حفظ طلب التواصل بنجاح.");
+      setHandoffOpen(false);
+      setHandoffRequest({ name: "", phone: "", email: "", notes: "", consent: false });
+    } catch (reason) {
+      setHandoffStatus(reason instanceof Error ? reason.message : "تعذر حفظ طلب التواصل الآن.");
     }
   };
 
@@ -449,9 +515,13 @@ export default function IndependentStaging() {
             </article>
           </section>
 
-          <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.025] p-4 sm:p-5"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void addKnowledgeAttachment(file); }} /><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={addingAttachment} className="border-white/15 text-white hover:bg-white/10">{addingAttachment ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Paperclip className="ml-2 h-4 w-4" />}إرفاق معرفة</Button><Button type="button" variant="outline" onClick={() => isRecording ? stopVoiceCapture() : void startVoiceCapture()} className={isRecording ? "border-rose-300/40 text-rose-100 hover:bg-rose-300/10" : "border-white/15 text-white hover:bg-white/10"}>{isRecording ? <><Square className="ml-2 h-4 w-4" />إيقاف التسجيل</> : <><Mic className="ml-2 h-4 w-4" />رسالة صوتية</>}</Button><span className="text-xs leading-6 text-slate-400">الصور وملفات TXT وMD وCSV وJSON تُضاف إلى معرفة الوكيل. حد المرفق 5 MB.</span></div>{isRecording && <p className="mt-3 flex items-center gap-2 text-sm text-rose-100"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-300" />جارٍ التسجيل وتحويل كلامك إلى نص…</p>}{audioPreviewUrl && <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.08] p-3"><Mic className="h-4 w-4 text-cyan-200" /><audio controls src={audioPreviewUrl} className="h-9 max-w-full" /><Button type="button" variant="ghost" size="sm" onClick={cancelVoiceCapture} className="text-slate-200 hover:bg-white/10 hover:text-white"><X className="ml-1 h-4 w-4" />إلغاء التسجيل</Button><span className="text-xs text-slate-400">تمت إضافة النص المسموع إلى خانة الإرسال؛ راجعه ثم أرسله.</span></div>}</section>
+          <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.025] p-4 sm:p-5"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void addKnowledgeAttachment(file); }} /><div className="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={addingAttachment} className="border-white/15 text-white hover:bg-white/10">{addingAttachment ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Paperclip className="ml-2 h-4 w-4" />}إرفاق معرفة</Button><Button type="button" variant="outline" onClick={() => isRecording ? stopVoiceCapture() : void startVoiceCapture()} className={isRecording ? "border-rose-300/40 text-rose-100 hover:bg-rose-300/10" : "border-white/15 text-white hover:bg-white/10"}>{isRecording ? <><Square className="ml-2 h-4 w-4" />إيقاف التسجيل</> : <><Mic className="ml-2 h-4 w-4" />رسالة صوتية</>}</Button><span className="text-xs leading-6 text-slate-400">الصور وملفات TXT وMD وCSV وJSON تُضاف إلى معرفة الوكيل. حد المرفق 5 MB.</span></div>{attachmentStatus && <p className={`mt-3 rounded-xl border p-3 text-sm leading-6 ${attachmentStatus.startsWith("تم") ? "border-lime-300/20 bg-lime-300/10 text-lime-100" : attachmentStatus.startsWith("جار") ? "border-cyan-200/20 bg-cyan-300/10 text-cyan-100" : "border-amber-300/20 bg-amber-300/10 text-amber-100"}`}>{attachmentStatus}</p>}{isRecording && <p className="mt-3 flex items-center gap-2 text-sm text-rose-100"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-300" />جارٍ التسجيل وتحويل كلامك إلى نص…</p>}{audioPreviewUrl && <div className="mt-3 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.08] p-3"><div className="flex flex-wrap items-center gap-3"><Mic className="h-4 w-4 text-cyan-200" /><audio controls src={audioPreviewUrl} className="h-9 max-w-full" /><Button type="button" variant="ghost" size="sm" onClick={cancelVoiceCapture} className="text-slate-200 hover:bg-white/10 hover:text-white"><X className="ml-1 h-4 w-4" />إلغاء التسجيل</Button></div>{voiceTranscript ? <><div className="mt-3 rounded-xl border border-white/10 bg-slate-950/45 p-3"><p className="text-xs font-bold text-cyan-100">النص المسموع</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-white">{voiceTranscript}</p></div><div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={useVoiceTranscript} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">استخدم النص في المحادثة</Button><Button type="button" size="sm" onClick={() => void sendVoiceTranscript()} disabled={sendingAgentId === selectedAgent.id} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">إرسال النص الآن</Button></div><p className="mt-2 text-xs leading-6 text-slate-400">يرسل هذا الخيار النص الظاهر فقط إلى الوكيل؛ لا ندّعي إرسال الملف الصوتي أو تحويله خادمياً.</p></> : <p className="mt-3 text-xs leading-6 text-amber-100">تم حفظ معاينة الصوت، لكن المتصفح لم يعطِ نصاً. جرّب Chrome أو اكتب الرسالة بنفسك.</p>}</div>}</section>
 
-          <section className="mt-6 overflow-hidden rounded-3xl border border-cyan-200/20 bg-gradient-to-b from-cyan-300/[0.10] to-slate-950/40"><div className="border-b border-white/10 px-5 py-5 sm:px-6"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-bold">3. اختبر وكيل شركتك</h2></div><p className="mt-2 text-sm leading-6 text-slate-300">محادثة اختبار حقيقية مع Claude من الخادم ومعرفة الوكيل المختار. راجع الإجابات قبل نشر الوكيل للعملاء.</p></div><div className="min-h-72 space-y-4 p-5 sm:p-6">{chatMessages.length ? chatMessages.map((message, index) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-start" : "justify-end"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-7 shadow-sm ${message.role === "user" ? "bg-cyan-300 text-slate-950" : "border border-white/10 bg-slate-950/70 text-slate-100"}`}>{message.role === "assistant" ? <><div className="prose prose-sm max-w-none break-words prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0"><Streamdown>{message.content}</Streamdown></div>{index === chatMessages.length - 1 && <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">{["أريد معرفة الأسعار والباقات", "أريد عرضاً توضيحياً", "أريد التحدث مع موظف"].map((prompt) => <button key={prompt} onClick={() => void sendTestMessage(prompt)} disabled={sendingAgentId === selectedAgent.id} className="rounded-full border border-cyan-200/30 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/20 disabled:opacity-50">{prompt}</button>)}</div>}</> : <p className="whitespace-pre-wrap">{message.content}</p>}</div></div>) : <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-slate-950/25 p-5 text-center"><Sparkles className="h-7 w-7 text-lime-200" /><p className="mt-3 font-bold">جرّب أول سؤال كعميل</p><p className="mt-1 max-w-md text-sm leading-6 text-slate-400">اكتب سؤالاً من نوع الأسئلة التي يسألها عملاء شركتك عادةً، وتحقق أن الوكيل يعتمد على المعلومات التي راجعتها.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{["ما الخدمات التي تقدمونها؟", "كيف أبدأ معكم؟", "هل يمكن التحدث مع موظف؟"].map((prompt) => <button key={prompt} onClick={() => void sendTestMessage(prompt)} className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-2 text-xs text-cyan-100 transition hover:border-cyan-200/50 hover:bg-cyan-300/10">{prompt}</button>)}</div></div>}{sendingAgentId === selectedAgent.id && <div className="flex justify-end"><div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-300"><Loader2 className="h-4 w-4 animate-spin text-cyan-200" />يفكّر الوكيل…</div></div>}</div><div className="border-t border-white/10 bg-slate-950/45 p-4 sm:p-5"><div className="flex items-end gap-3 rounded-2xl border border-white/15 bg-slate-950/70 p-2 focus-within:border-cyan-200/50"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendTestMessage(); } }} placeholder="اكتب رسالتك إلى وكيل شركتك…" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500" disabled={sendingAgentId === selectedAgent.id} /><Button onClick={() => void sendTestMessage()} size="icon" disabled={!chatDraft.trim() || sendingAgentId === selectedAgent.id} className="h-11 w-11 shrink-0 rounded-xl bg-cyan-300 text-slate-950 hover:bg-cyan-200" aria-label="إرسال الرسالة">{sendingAgentId === selectedAgent.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}</Button></div>{chatError && <p className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{chatError}</p>}</div></section>
+          <section className="mt-6 overflow-hidden rounded-3xl border border-cyan-200/20 bg-gradient-to-b from-cyan-300/[0.10] to-slate-950/40"><div className="border-b border-white/10 px-5 py-5 sm:px-6"><div className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-bold">3. اختبر وكيل شركتك</h2></div><p className="mt-2 text-sm leading-6 text-slate-300">محادثة اختبار حقيقية مع Claude من الخادم ومعرفة الوكيل المختار. راجع الإجابات قبل نشر الوكيل للعملاء.</p></div><div className="min-h-72 space-y-4 p-5 sm:p-6">{chatMessages.length ? chatMessages.map((message, index) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-start" : "justify-end"}`}><div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-7 shadow-sm ${message.role === "user" ? "bg-cyan-300 text-slate-950" : "border border-white/10 bg-slate-950/70 text-slate-100"}`}>{message.role === "assistant" ? <><div className="prose prose-sm max-w-none break-words prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0"><Streamdown>{message.content}</Streamdown></div>{index === chatMessages.length - 1 && <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">{["أريد معرفة الأسعار والباقات", "أريد عرضاً توضيحياً"].map((prompt) => <button key={prompt} onClick={() => void sendTestMessage(prompt)} disabled={sendingAgentId === selectedAgent.id} className="rounded-full border border-cyan-200/30 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/20 disabled:opacity-50">{prompt}</button>)}<button onClick={() => setHandoffOpen(true)} className="rounded-full border border-lime-300/30 bg-lime-300/10 px-3 py-2 text-xs text-lime-100 transition hover:bg-lime-300/20">أريد التحدث مع موظف</button></div>}</> : <p className="whitespace-pre-wrap">{message.content}</p>}</div></div>) : <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-slate-950/25 p-5 text-center"><Sparkles className="h-7 w-7 text-lime-200" /><p className="mt-3 font-bold">جرّب أول سؤال كعميل</p><p className="mt-1 max-w-md text-sm leading-6 text-slate-400">اكتب سؤالاً من نوع الأسئلة التي يسألها عملاء شركتك عادةً، وتحقق أن الوكيل يعتمد على المعلومات التي راجعتها.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{["ما الخدمات التي تقدمونها؟", "كيف أبدأ معكم؟"].map((prompt) => <button key={prompt} onClick={() => void sendTestMessage(prompt)} className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-2 text-xs text-cyan-100 transition hover:border-cyan-200/50 hover:bg-cyan-300/10">{prompt}</button>)}<button onClick={() => setHandoffOpen(true)} className="rounded-full border border-lime-300/30 bg-lime-300/10 px-3 py-2 text-xs text-lime-100 transition hover:bg-lime-300/20">أريد التحدث مع موظف</button></div></div>}{sendingAgentId === selectedAgent.id && <div className="flex justify-end"><div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-300"><Loader2 className="h-4 w-4 animate-spin text-cyan-200" />يفكّر الوكيل…</div></div>}</div><div className="border-t border-white/10 bg-slate-950/45 p-4 sm:p-5"><div className="flex items-end gap-3 rounded-2xl border border-white/15 bg-slate-950/70 p-2 focus-within:border-cyan-200/50"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendTestMessage(); } }} placeholder="اكتب رسالتك إلى وكيل شركتك…" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500" disabled={sendingAgentId === selectedAgent.id} /><Button onClick={() => void sendTestMessage()} size="icon" disabled={!chatDraft.trim() || sendingAgentId === selectedAgent.id} className="h-11 w-11 shrink-0 rounded-xl bg-cyan-300 text-slate-950 hover:bg-cyan-200" aria-label="إرسال الرسالة">{sendingAgentId === selectedAgent.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}</Button></div>{chatError && <p className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{chatError}</p>}</div></section>
+
+          <section className="mt-6 rounded-3xl border border-lime-300/20 bg-lime-300/[0.06] p-5 sm:p-6"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-lime-200" /><div><h2 className="font-bold">إعداد التحويل البشري لهذا الوكيل</h2><p className="mt-1 text-sm leading-6 text-slate-300">أدخل جهة التواصل الخاصة بشركتك فقط. لا يظهر رقم Neon أو أي شركة أخرى لعملائك.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><input value={handoffContact.name} onChange={(event) => setHandoffContact((current) => ({ ...current, name: event.target.value }))} placeholder="اسم القسم أو الموظف" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffContact.phone} onChange={(event) => setHandoffContact((current) => ({ ...current, phone: event.target.value }))} placeholder="هاتف العمل" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffContact.email} onChange={(event) => setHandoffContact((current) => ({ ...current, email: event.target.value }))} placeholder="بريد العمل" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /></div><Button onClick={() => void saveHandoffSettings()} disabled={savingHandoffContact} className="mt-3 bg-lime-300 text-slate-950 hover:bg-lime-200">{savingHandoffContact ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}حفظ جهة التواصل</Button></section>
+
+          {handoffOpen && <section className="mt-6 rounded-3xl border border-cyan-200/25 bg-cyan-300/[0.08] p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="font-bold">طلب التواصل مع الفريق</h2><p className="mt-1 text-sm leading-6 text-slate-300">سيسجل الوكيل هذا الطلب ضمن مساحة عمل الشركة المختارة فقط.</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setHandoffOpen(false)} className="text-slate-200 hover:bg-white/10 hover:text-white" aria-label="إغلاق"><X className="h-5 w-5" /></Button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><input value={handoffRequest.name} onChange={(event) => setHandoffRequest((current) => ({ ...current, name: event.target.value }))} placeholder="الاسم" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffRequest.phone} onChange={(event) => setHandoffRequest((current) => ({ ...current, phone: event.target.value }))} placeholder="رقم الهاتف" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffRequest.email} onChange={(event) => setHandoffRequest((current) => ({ ...current, email: event.target.value }))} placeholder="البريد الإلكتروني" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input value={handoffRequest.notes} onChange={(event) => setHandoffRequest((current) => ({ ...current, notes: event.target.value }))} placeholder="ملاحظة مختصرة (اختياري)" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /></div><label className="mt-4 flex items-start gap-3 text-sm leading-6 text-slate-200"><input type="checkbox" checked={handoffRequest.consent} onChange={(event) => setHandoffRequest((current) => ({ ...current, consent: event.target.checked }))} className="mt-1 h-4 w-4 accent-lime-300" />أوافق على مشاركة بيانات التواصل أعلاه مع هذه الشركة فقط لغرض الرد على طلبي.</label><div className="mt-4 flex flex-wrap items-center gap-3"><Button onClick={() => void submitHandoffRequest()} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">إرسال طلب التواصل</Button>{handoffStatus && <p className="text-sm text-cyan-100">{handoffStatus}</p>}</div></section>}
         </>}
       </div>
     </main>

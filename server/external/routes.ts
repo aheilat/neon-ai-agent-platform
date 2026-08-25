@@ -12,6 +12,8 @@ import { generateIndependentAgentReply } from "./chat";
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
 import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
+import { createIndependentHandoffLead, getIndependentAgentInTenant, updateIndependentAgentHandoffContact } from "./agentRepository";
+import { getIndependentPostgresPool } from "./postgres";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
   const value = headers.authorization;
@@ -46,11 +48,12 @@ const INDEPENDENT_ATTACHMENT_BUCKET = "neon-agent-attachments";
 async function storeIndependentAttachment(input: { tenantId: number; agentId: number; fileName: string; contentType: string; bytes: Uint8Array }) {
   const supabase = getIndependentSupabaseServerClient();
   if (!supabase) throw new Error("storage-unavailable");
-  await supabase.storage.createBucket(INDEPENDENT_ATTACHMENT_BUCKET, {
+  const { error: bucketError } = await supabase.storage.createBucket(INDEPENDENT_ATTACHMENT_BUCKET, {
     public: false,
     fileSizeLimit: "5242880",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "text/plain", "text/markdown", "text/csv", "application/json"],
   });
+  if (bucketError && !/already exists|duplicate/i.test(bucketError.message)) throw new Error("storage-unavailable");
   const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "attachment";
   const path = `${input.tenantId}/${input.agentId}/${Date.now()}-${safeName}`;
   const { data, error } = await supabase.storage.from(INDEPENDENT_ATTACHMENT_BUCKET).upload(path, input.bytes, { contentType: input.contentType, upsert: false });
@@ -219,6 +222,62 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       console.error("[Independent Text Knowledge] Storage failed", error instanceof Error ? error.name : "unknown");
       return res.status(503).json({ error: "Independent attachment storage is unavailable" });
     }
+  });
+
+  app.post("/api/external/agents/:agentId/website-knowledge", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const websiteUrl = safeWebsiteUrl(req.body?.websiteUrl);
+    const category = optionalText(req.body?.category, 80) ?? "Website source";
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !websiteUrl || req.body?.consent !== true) return res.status(400).json({ error: "A public website URL and consent are required" });
+    try {
+      const proposal = await discoverIndependentWebsiteProposal(websiteUrl);
+      const analysis = proposal.analysis;
+      const services = analysis.services.slice(0, 8).map((service) => `- ${service.name}: ${service.description}`).join("\n");
+      const faqs = analysis.faqs.slice(0, 6).map((faq) => `- ${faq.question}: ${faq.answer}`).join("\n");
+      const knowledge = await addIndependentWorkspaceKnowledge(authorizationFromRequest(req.headers), agentId, {
+        title: `موقع: ${analysis.businessName}`.slice(0, 160),
+        content: [analysis.businessSummary, services && `الخدمات:\n${services}`, faqs && `الأسئلة الشائعة:\n${faqs}`].filter(Boolean).join("\n\n").slice(0, 16_000),
+        category,
+        sourceUrl: proposal.websiteUrl,
+        sourceTitle: analysis.businessName,
+      });
+      if (knowledge === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+      if (!knowledge) return res.status(404).json({ error: "Agent not found" });
+      return res.status(201).json({ knowledge });
+    } catch {
+      return res.status(422).json({ error: "تعذر قراءة الموقع العام وإضافته إلى معرفة الوكيل." });
+    }
+  });
+
+  app.patch("/api/external/agents/:agentId/handoff-contact", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const name = optionalText(req.body?.name, 120);
+    const phone = optionalText(req.body?.phone, 50);
+    const email = optionalText(req.body?.email, 320);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || (!phone && !email)) return res.status(400).json({ error: "A phone number or email is required for human handoff" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await updateIndependentAgentHandoffContact(pool, session.workspace.id, agentId, { name: name ?? null, phone: phone ?? null, email: email ?? null });
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    return res.json(agent);
+  });
+
+  app.post("/api/external/agents/:agentId/handoff-requests", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const name = text(req.body?.name, 1, 255);
+    const phone = optionalText(req.body?.phone, 50);
+    const email = optionalText(req.body?.email, 320);
+    const notes = optionalText(req.body?.notes, 2_000);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !name || (!phone && !email) || req.body?.consent !== true) return res.status(400).json({ error: "Name, a phone number or email, and consent are required" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const lead = await createIndependentHandoffLead(pool, { tenantId: session.workspace.id, agentId, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
+    return res.status(201).json({ lead, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
   });
 
   app.post("/api/external/website/apply-proposal", async (req, res) => {

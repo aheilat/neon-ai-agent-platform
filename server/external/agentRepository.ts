@@ -63,6 +63,21 @@ export type CreateIndependentKnowledgeInput = Pick<
   "tenantId" | "agentId" | "title" | "content" | "category" | "sourceUrl" | "sourceTitle"
 >;
 
+export type IndependentHandoffContact = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+};
+
+export type CreateIndependentLeadInput = {
+  tenantId: number;
+  agentId: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+};
+
 type Queryable = Pick<Pool, "query">;
 
 const agentColumns = `
@@ -165,6 +180,35 @@ export async function updateIndependentAgentFromWebsiteProposal(
      where "tenantId" = $1 and id = $2
      returning ${agentColumns}`,
     [tenantId, agentId, input.name, input.description, input.persona, input.tone, input.language, input.status, input.decisionRules, input.fallbackMessage, input.escalationKeyword],
+  );
+  return result.rows[0];
+}
+
+export async function updateIndependentAgentHandoffContact(
+  client: Queryable,
+  tenantId: number,
+  agentId: number,
+  contact: IndependentHandoffContact,
+) {
+  const result = await client.query<IndependentAgent>(
+    `update public.agents
+     set "capabilitiesJson" = coalesce("capabilitiesJson", '{}'::jsonb) || jsonb_build_object(
+       'handoffContact', jsonb_build_object('name', $3::text, 'phone', $4::text, 'email', $5::text)
+     ),
+     "updatedAt" = now()
+     where "tenantId" = $1 and id = $2
+     returning ${agentColumns}`,
+    [tenantId, agentId, contact.name, contact.phone, contact.email],
+  );
+  return result.rows[0];
+}
+
+export async function createIndependentHandoffLead(client: Queryable, input: CreateIndependentLeadInput) {
+  const result = await client.query<{ id: number; createdAt: Date }>(
+    `insert into public.leads ("tenantId", "agentId", name, email, phone, notes, status)
+     values ($1, $2, $3, $4, $5, $6, 'new')
+     returning id, "createdAt"`,
+    [input.tenantId, input.agentId, input.name, input.email, input.phone, input.notes],
   );
   return result.rows[0];
 }

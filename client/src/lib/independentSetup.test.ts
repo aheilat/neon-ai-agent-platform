@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentWorkspaceAgent, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -81,6 +81,20 @@ describe("independent setup requests", () => {
       headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
       body: JSON.stringify(file),
     });
+  });
+
+  it("uses protected tenant routes for website knowledge and the consented handoff request", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 10 }) });
+    await addIndependentWebsiteKnowledge("supabase-token", 7, { websiteUrl: "https://example.com", category: "Website source" }, request);
+    await saveIndependentHandoffContact("supabase-token", 7, { name: "فريق المبيعات", phone: "+962700000000", email: "sales@example.com" }, request);
+    await createIndependentHandoffRequest("supabase-token", 7, { name: "عبدالله", phone: "+962700000001", email: "", notes: "يريد عرضاً", consent: true }, request);
+
+    expect(request.mock.calls[0]?.[0]).toBe("/api/external/agents/7/website-knowledge");
+    expect(request.mock.calls[0]?.[1]?.headers.Authorization).toBe("Bearer supabase-token");
+    expect(request.mock.calls[1]?.[0]).toBe("/api/external/agents/7/handoff-contact");
+    expect(request.mock.calls[1]?.[1]?.method).toBe("PATCH");
+    expect(request.mock.calls[2]?.[0]).toBe("/api/external/agents/7/handoff-requests");
+    expect(request.mock.calls[2]?.[1]?.body).toContain('"consent":true');
   });
 
   it("returns the server-safe setup error", async () => {

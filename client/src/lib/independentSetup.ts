@@ -117,3 +117,30 @@ export function addIndependentTextFileKnowledge<T>(
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/file-knowledge`, "POST", accessToken, file, fetchImplementation);
 }
+
+export function addIndependentWebsiteKnowledge<T>(
+  accessToken: string,
+  agentId: number,
+  input: { websiteUrl: string; category: string },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/website-knowledge`, "POST", accessToken, input, fetchImplementation);
+}
+
+export function saveIndependentHandoffContact<T>(
+  accessToken: string,
+  agentId: number,
+  contact: { name: string; phone: string; email: string },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/handoff-contact`, "PATCH", accessToken, contact, fetchImplementation);
+}
+
+export function createIndependentHandoffRequest<T>(
+  accessToken: string,
+  agentId: number,
+  request: { name: string; phone: string; email: string; notes: string; consent: boolean },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/handoff-requests`, "POST", accessToken, request, fetchImplementation);
+}
