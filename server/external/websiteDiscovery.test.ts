@@ -1,0 +1,32 @@
+import { describe, expect, it, vi } from "vitest";
+import { analyzeIndependentWebsitePages, assertIndependentAnalysisSources, assertIndependentPublicWebsiteUrl, extractIndependentWebsitePage } from "./websiteDiscovery";
+
+describe("independent website discovery", () => {
+  it("extracts readable public content while excluding script text", () => {
+    const page = extractIndependentWebsitePage('<html><title>Neon Services</title><body><h1>Fleet rental</h1><p>Refrigerated trucks in Muscat.</p><script>secret-value</script><a href="/contact">Contact</a></body></html>', "https://example.com/");
+    expect(page.title).toBe("Neon Services");
+    expect(page.content).toContain("Refrigerated trucks");
+    expect(page.content).not.toContain("secret-value");
+    expect(page.links).toContain("https://example.com/contact");
+  });
+
+  it("rejects internal website locations before crawling", async () => {
+    await expect(assertIndependentPublicWebsiteUrl("http://127.0.0.1")).rejects.toThrow("مواقع HTTP وHTTPS العامة");
+  });
+
+  it("rejects analysis claims that cite pages outside the approved crawl", () => {
+    const analysis = {
+      businessName: "Test", businessSummary: "Summary", industry: "Services", audience: "Businesses", language: "bilingual" as const, tone: "friendly" as const, persona: "Helpful assistant", goals: ["questions"] as const, suggestedChannels: ["web"] as const, services: [{ name: "Service", description: "Description", sourceUrl: "https://outside.example/" }], faqs: [], guardrails: ["Do not invent facts"],
+    };
+    expect(() => assertIndependentAnalysisSources(analysis, [{ url: "https://example.com/" }])).toThrow("مصدر");
+  });
+
+  it("uses server-side Claude analysis and validates its cited public sources", async () => {
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({
+      businessName: "Example", businessSummary: "Business summary", industry: "Services", audience: "Customers", language: "bilingual", tone: "friendly", persona: "Helpful agent", goals: ["questions"], suggestedChannels: ["web"], services: [{ name: "Consulting", description: "Consulting service", sourceUrl: "https://example.com/" }], faqs: [], guardrails: ["Use approved knowledge only"],
+    }));
+    const analysis = await analyzeIndependentWebsitePages({ websiteUrl: "https://example.com/", pages: [{ url: "https://example.com/", title: "Example", description: "", headings: [], content: "Consulting", links: [] }] }, complete);
+    expect(analysis.businessName).toBe("Example");
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+});

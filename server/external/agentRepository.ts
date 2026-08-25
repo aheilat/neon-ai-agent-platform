@@ -53,6 +53,11 @@ export type UpdateIndependentAgentProfileInput = Pick<
   "name" | "description" | "persona" | "tone" | "language" | "status"
 >;
 
+export type UpdateIndependentAgentWebsiteProposalInput = UpdateIndependentAgentProfileInput & Pick<
+  IndependentAgent,
+  "decisionRules" | "fallbackMessage" | "escalationKeyword"
+>;
+
 export type CreateIndependentKnowledgeInput = Pick<
   IndependentKnowledgeItem,
   "tenantId" | "agentId" | "title" | "content" | "category" | "sourceUrl" | "sourceTitle"
@@ -135,6 +140,31 @@ export async function updateIndependentAgentProfile(
      where "tenantId" = $1 and id = $2
      returning ${agentColumns}`,
     [tenantId, agentId, input.name, input.description, input.persona, input.tone, input.language, input.status],
+  );
+  return result.rows[0];
+}
+
+export async function updateIndependentAgentFromWebsiteProposal(
+  client: Queryable,
+  tenantId: number,
+  agentId: number,
+  input: UpdateIndependentAgentWebsiteProposalInput,
+) {
+  const result = await client.query<IndependentAgent>(
+    `update public.agents
+     set name = $3,
+         description = $4,
+         persona = $5,
+         tone = $6,
+         language = $7,
+         status = $8,
+         "decisionRules" = $9,
+         "fallbackMessage" = $10,
+         "escalationKeyword" = $11,
+         "updatedAt" = now()
+     where "tenantId" = $1 and id = $2
+     returning ${agentColumns}`,
+    [tenantId, agentId, input.name, input.description, input.persona, input.tone, input.language, input.status, input.decisionRules, input.fallbackMessage, input.escalationKeyword],
   );
   return result.rows[0];
 }

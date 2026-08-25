@@ -17,6 +17,25 @@ export type IndependentKnowledgeInput = {
   sourceTitle: string | null;
 };
 
+export type IndependentWebsiteProposal = {
+  websiteUrl: string;
+  pages: Array<{ url: string; title: string; description: string; headings: string[] }>;
+  analysis: {
+    businessName: string;
+    businessSummary: string;
+    industry: string;
+    audience: string;
+    language: "ar" | "en" | "bilingual";
+    tone: "friendly" | "professional" | "direct";
+    persona: string;
+    goals: string[];
+    suggestedChannels: string[];
+    services: Array<{ name: string; description: string; sourceUrl: string }>;
+    faqs: Array<{ question: string; answer: string; sourceUrl: string }>;
+    guardrails: string[];
+  };
+};
+
 function serverError(payload: unknown) {
   if (typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string") return payload.error;
   return "تعذر حفظ إعدادات مساحة العمل المستقلة.";
@@ -63,4 +82,21 @@ export function addIndependentKnowledgeItem<T>(
   fetchImplementation: FetchImplementation = fetch,
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/knowledge`, "POST", accessToken, item, fetchImplementation);
+}
+
+export function analyzeIndependentCompanyWebsite(
+  accessToken: string,
+  websiteUrl: string,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<IndependentWebsiteProposal>("/api/external/website/analysis", "POST", accessToken, { websiteUrl, consent: true }, fetchImplementation);
+}
+
+export function applyIndependentWebsiteProposal<T>(
+  accessToken: string,
+  agentId: number,
+  proposal: IndependentWebsiteProposal,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/apply-website-proposal`, "POST", accessToken, proposal, fetchImplementation);
 }

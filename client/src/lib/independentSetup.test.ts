@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentKnowledgeItem, createIndependentWorkspaceAgent, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentKnowledgeItem, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentWorkspaceAgent, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -43,6 +43,22 @@ describe("independent setup requests", () => {
       headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
       body: JSON.stringify(item),
     });
+  });
+
+  it("analyzes and applies a company website through protected independent routes", async () => {
+    const proposal = {
+      websiteUrl: "https://example.com/",
+      pages: [{ url: "https://example.com/", title: "Example", description: "", headings: [] }],
+      analysis: { businessName: "Example", businessSummary: "Summary", industry: "Services", audience: "Customers", language: "bilingual" as const, tone: "friendly" as const, persona: "Helpful", goals: ["questions"], suggestedChannels: ["web"], services: [], faqs: [], guardrails: ["Use sources"] },
+    };
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => proposal });
+    await analyzeIndependentCompanyWebsite("supabase-token", proposal.websiteUrl, request);
+    await applyIndependentWebsiteProposal("supabase-token", 7, proposal, request);
+
+    expect(request.mock.calls[0]?.[0]).toBe("/api/external/website/analysis");
+    expect(request.mock.calls[0]?.[1]?.headers.Authorization).toBe("Bearer supabase-token");
+    expect(request.mock.calls[1]?.[0]).toBe("/api/external/agents/7/apply-website-proposal");
+    expect(request.mock.calls[1]?.[1]?.body).toBe(JSON.stringify(proposal));
   });
 
   it("returns the server-safe setup error", async () => {

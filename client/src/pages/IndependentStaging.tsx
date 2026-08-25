@@ -2,9 +2,12 @@ import { Button } from "@/components/ui/button";
 import { requestIndependentAgentReply } from "@/lib/independentChat";
 import {
   addIndependentKnowledgeItem,
+  analyzeIndependentCompanyWebsite,
+  applyIndependentWebsiteProposal,
   createIndependentWorkspaceAgent,
   updateIndependentAgentProfile,
   type IndependentAgentProfile,
+  type IndependentWebsiteProposal,
 } from "@/lib/independentSetup";
 import { getIndependentSupabaseBrowserClient } from "@/lib/supabase";
 import { Bot, CheckCircle2, CirclePlus, FileText, Globe2, Loader2, LogOut, MessageSquareText, RefreshCw, Save, Send, ShieldCheck, Sparkles } from "lucide-react";
@@ -77,6 +80,10 @@ export default function IndependentStaging() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [addingKnowledge, setAddingKnowledge] = useState(false);
   const [creatingAgent, setCreatingAgent] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteProposal, setWebsiteProposal] = useState<IndependentWebsiteProposal | null>(null);
+  const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
+  const [applyingWebsiteProposal, setApplyingWebsiteProposal] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [sendingAgentId, setSendingAgentId] = useState<number | null>(null);
   const [chatResult, setChatResult] = useState<{ agentId: number; reply: string } | null>(null);
@@ -224,6 +231,43 @@ export default function IndependentStaging() {
     }
   };
 
+  const analyzeCompanyWebsite = async () => {
+    const candidate = websiteUrl.trim();
+    if (!candidate) return setError("أدخل رابط موقع شركتك أولاً.");
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setAnalyzingWebsite(true);
+    setError(null);
+    setWebsiteProposal(null);
+    try {
+      const proposal = await analyzeIndependentCompanyWebsite(token, candidate);
+      setWebsiteProposal(proposal);
+      setWebsiteUrl(proposal.websiteUrl);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر تحليل موقع الشركة.");
+    } finally {
+      setAnalyzingWebsite(false);
+    }
+  };
+
+  const applyWebsiteProposal = async () => {
+    if (!selectedAgent || !websiteProposal) return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setApplyingWebsiteProposal(true);
+    setError(null);
+    try {
+      await applyIndependentWebsiteProposal(token, selectedAgent.id, websiteProposal);
+      await loadWorkspace();
+      await loadKnowledge(selectedAgent.id);
+      setWebsiteProposal(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر إنشاء وكيل شركتك من الموقع.");
+    } finally {
+      setApplyingWebsiteProposal(false);
+    }
+  };
+
   const sendTestMessage = async () => {
     if (!selectedAgent) return;
     const message = chatDraft.trim();
@@ -263,6 +307,13 @@ export default function IndependentStaging() {
           <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="flex items-center gap-2 font-bold"><Bot className="h-5 w-5 text-cyan-200" /> وكلاؤك</p><p className="mt-1 text-sm text-slate-400">اختر وكيلاً أو أنشئ وكيلاً جديداً لنشاط مختلف.</p></div><Button onClick={() => void createAdditionalAgent()} disabled={creatingAgent} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{creatingAgent ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CirclePlus className="ml-2 h-4 w-4" />}وكيل جديد</Button></div>
             <div className="mt-4 flex flex-wrap gap-2">{data.agents.map((agent) => <button key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-2xl border px-4 py-3 text-right transition ${selectedAgent.id === agent.id ? "border-cyan-200/60 bg-cyan-300/15 text-white" : "border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/25"}`}><span className="block text-sm font-bold">{agent.name}</span><span className="mt-1 block text-xs text-slate-400">{agent.status === "active" ? "نشط" : agent.status}</span></button>)}</div>
+          </section>
+
+          <section className="mt-6 rounded-3xl border border-lime-300/25 bg-gradient-to-l from-lime-300/[0.10] to-cyan-300/[0.06] p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="flex items-center gap-2 text-lg font-bold"><Globe2 className="h-5 w-5 text-lime-200" />ابدأ من موقع شركتك</p><p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">ضع رابط موقع شركتك العام. Neon يقرأ حتى خمس صفحات عامة فقط، ثم يقترح وكيل شركتك وقاعدة معرفته. لا يُنشأ أو يتغير الوكيل قبل مراجعتك وموافقتك.</p></div><span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 text-xs font-bold text-lime-100">موقع عام فقط · Claude من الخادم</span></div>
+            <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]"><input type="url" dir="ltr" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://your-company.com" className="h-12 w-full rounded-xl border border-white/15 bg-slate-950/60 px-4 text-left text-sm text-white outline-none ring-lime-200/70 placeholder:text-slate-500 focus:ring-2" /><Button onClick={() => void analyzeCompanyWebsite()} disabled={analyzingWebsite} className="h-12 bg-lime-300 text-slate-950 hover:bg-lime-200">{analyzingWebsite ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />جارٍ تحليل الموقع…</> : <><Sparkles className="ml-2 h-4 w-4" />حلّل موقعي واقترح الوكيل</>}</Button></div>
+            <p className="mt-3 text-xs leading-6 text-slate-400">بمتابعة التحليل أنت تؤكد أن لديك حق استخدام المحتوى العام لموقع الشركة لإعداد وكيلها. لا تُقرأ صفحات خاصة أو محمية بكلمة مرور.</p>
+            {websiteProposal && <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/45 p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold text-lime-100">راجع اقتراح وكيل شركتك قبل الإنشاء</p><p className="mt-1 text-xs text-slate-400">تمت قراءة {websiteProposal.pages.length} صفحة عامة من {new URL(websiteProposal.websiteUrl).hostname}.</p></div><span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">{websiteProposal.analysis.industry}</span></div><div className="mt-5 grid gap-4 lg:grid-cols-2"><label className="block text-sm font-bold">اسم الوكيل المقترح<input value={websiteProposal.analysis.businessName} onChange={(event) => setWebsiteProposal((current) => current ? { ...current, analysis: { ...current.analysis, businessName: event.target.value } } : current)} className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none ring-cyan-200/70 focus:ring-2" /></label><label className="block text-sm font-bold">نبرة الوكيل<select value={websiteProposal.analysis.tone} onChange={(event) => setWebsiteProposal((current) => current ? { ...current, analysis: { ...current.analysis, tone: event.target.value as IndependentWebsiteProposal["analysis"]["tone"] } } : current)} className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none"><option value="friendly">ودود</option><option value="professional">احترافي</option><option value="direct">مباشر</option></select></label></div><label className="mt-4 block text-sm font-bold">شخصية الوكيل وحدوده<textarea value={websiteProposal.analysis.persona} onChange={(event) => setWebsiteProposal((current) => current ? { ...current, analysis: { ...current.analysis, persona: event.target.value } } : current)} className="mt-2 min-h-28 w-full rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm leading-7 text-white outline-none ring-cyan-200/70 focus:ring-2" /></label><p className="mt-4 text-sm leading-7 text-slate-300">{websiteProposal.analysis.businessSummary}</p><div className="mt-4 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="font-bold">الخدمات المقترحة ({websiteProposal.analysis.services.length})</p><div className="mt-3 space-y-2">{websiteProposal.analysis.services.slice(0, 5).map((service) => <div key={`${service.name}-${service.sourceUrl}`} className="rounded-xl bg-slate-950/40 p-3"><p className="text-sm font-bold">{service.name}</p><p className="mt-1 text-xs leading-6 text-slate-400">{service.description}</p></div>) || <p className="text-sm text-slate-400">لم يحدد الموقع خدمات واضحة؛ سيستخدم الوكيل ملخص النشاط فقط.</p>}</div></div><div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="font-bold">الأسئلة الشائعة ({websiteProposal.analysis.faqs.length})</p><div className="mt-3 space-y-2">{websiteProposal.analysis.faqs.slice(0, 4).map((faq) => <div key={`${faq.question}-${faq.sourceUrl}`} className="rounded-xl bg-slate-950/40 p-3"><p className="text-sm font-bold">{faq.question}</p><p className="mt-1 text-xs leading-6 text-slate-400">{faq.answer}</p></div>) || <p className="text-sm text-slate-400">لم يعثر التحليل على أسئلة شائعة صريحة في الصفحات المقروءة.</p>}</div></div></div><div className="mt-5 flex flex-col gap-3 sm:flex-row"><Button onClick={() => void applyWebsiteProposal()} disabled={applyingWebsiteProposal} className="h-12 flex-1 bg-cyan-300 text-slate-950 hover:bg-cyan-200">{applyingWebsiteProposal ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />جارٍ إنشاء وكيل شركتك…</> : <><CheckCircle2 className="ml-2 h-4 w-4" />موافق: أنشئ وكيل شركتي من هذا الاقتراح</>}</Button><Button variant="outline" onClick={() => setWebsiteProposal(null)} disabled={applyingWebsiteProposal} className="h-12 border-white/15 text-white hover:bg-white/10">إلغاء ومراجعة الرابط</Button></div></div>}
           </section>
 
           <section className="mt-6 grid gap-6 lg:grid-cols-2">
