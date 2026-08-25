@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 
 export type IndependentAgent = {
@@ -41,6 +42,7 @@ export type IndependentConversation = {
   customerEmail: string | null;
   customerPhone: string | null;
   status: "active" | "escalated" | "resolved";
+  publicSessionTokenHash: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -123,7 +125,7 @@ export type IndependentLead = {
   updatedAt: Date;
 };
 
-export type CreateIndependentConversationInput = Pick<IndependentConversation, "tenantId" | "agentId" | "channel">;
+export type CreateIndependentConversationInput = Pick<IndependentConversation, "tenantId" | "agentId" | "channel"> & { publicSessionTokenHash?: string | null };
 
 type Queryable = Pick<Pool, "query">;
 
@@ -137,7 +139,7 @@ const knowledgeColumns = `
   "sourceFetchedAt", "createdAt", "updatedAt"`;
 
 const conversationColumns = `
-  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "createdAt", "updatedAt"`;
+  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "publicSessionTokenHash", "createdAt", "updatedAt"`;
 
 const leadColumns = `
   id, "tenantId", "agentId", "conversationId", name, email, phone, notes, status, "createdAt", "updatedAt"`;
@@ -291,10 +293,10 @@ export async function listIndependentHandoffLeadsForAgent(client: Queryable, ten
 
 export async function createIndependentConversation(client: Queryable, input: CreateIndependentConversationInput) {
   const result = await client.query<IndependentConversation>(
-    `insert into public.conversations ("tenantId", "agentId", channel)
-     values ($1, $2, $3)
+    `insert into public.conversations ("tenantId", "agentId", channel, "publicSessionTokenHash")
+     values ($1, $2, $3, $4)
      returning ${conversationColumns}`,
-    [input.tenantId, input.agentId, input.channel],
+    [input.tenantId, input.agentId, input.channel, input.publicSessionTokenHash ?? null],
   );
   return result.rows[0];
 }
@@ -306,6 +308,25 @@ export async function getIndependentConversationInTenant(client: Queryable, tena
      where "tenantId" = $1 and "agentId" = $2 and id = $3
      limit 1`,
     [tenantId, agentId, conversationId],
+  );
+  return result.rows[0];
+}
+
+export function createIndependentPublicConversationSessionToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashIndependentPublicConversationSessionToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export async function getIndependentPublicConversationForAgent(client: Queryable, tenantId: number, agentId: number, conversationId: number, sessionToken: string) {
+  const result = await client.query<IndependentConversation>(
+    `select ${conversationColumns}
+     from public.conversations
+     where "tenantId" = $1 and "agentId" = $2 and id = $3 and "publicSessionTokenHash" = $4
+     limit 1`,
+    [tenantId, agentId, conversationId, hashIndependentPublicConversationSessionToken(sessionToken)],
   );
   return result.rows[0];
 }

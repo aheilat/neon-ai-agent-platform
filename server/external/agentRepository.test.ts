@@ -146,7 +146,8 @@ describe("independent agent repository", () => {
     await updateIndependentConversationStatus({ query } as never, 8, 31, 19, "resolved");
     await getIndependentConversationInTenant({ query } as never, 8, 31, 19);
 
-    expect(query.mock.calls[0]?.[0]).toContain('insert into public.conversations ("tenantId", "agentId", channel)');
+    expect(query.mock.calls[0]?.[0]).toContain('insert into public.conversations ("tenantId", "agentId", channel, "publicSessionTokenHash")');
+    expect(query.mock.calls[0]?.[1]).toEqual([8, 31, "web", null]);
     expect(query.mock.calls[1]?.[1]).toEqual([19, "customer", "مرحبا"]);
     expect(query.mock.calls[2]?.[0]).toContain('where "tenantId" = $1 and "agentId" = $2 and id = $3');
     expect(query.mock.calls[3]?.[0]).toContain('where "tenantId" = $1 and "agentId" = $2 and id = $3');
