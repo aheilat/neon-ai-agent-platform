@@ -20,11 +20,15 @@ describe("production static delivery", () => {
       if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
       const missingAsset = await fetch(`http://127.0.0.1:${address.port}/assets/index-no-longer-present.js`);
       const spaRoute = await fetch(`http://127.0.0.1:${address.port}/widget/10`);
+      const unknownApi = await fetch(`http://127.0.0.1:${address.port}/api/unknown-route`);
 
       expect(missingAsset.status).toBe(404);
       expect(spaRoute.status).toBe(200);
       expect(spaRoute.headers.get("cache-control")).toContain("no-store");
       expect(spaRoute.headers.get("content-type")).toContain("text/html");
+      expect(unknownApi.status).toBe(404);
+      expect(unknownApi.headers.get("content-type")).toContain("application/json");
+      expect(await unknownApi.json()).toEqual({ error: "API route not found" });
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       await rm(path.resolve(import.meta.dirname, "../..", "dist"), { recursive: true, force: true });

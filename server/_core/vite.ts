@@ -67,6 +67,12 @@ export function serveStatic(app: Express) {
     },
   }));
 
+  // Unknown API paths must never receive the SPA document. A JSON response
+  // keeps clients from attempting to parse HTML as an API payload.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   // A missing fingerprinted bundle must be a real 404, not index.html with a
   // JavaScript URL. Returning HTML here leaves the React root blank and hides
   // the actual stale-deployment condition from the browser.

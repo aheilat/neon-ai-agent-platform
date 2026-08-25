@@ -394,3 +394,5 @@
 - [x] Diagnose and fix `A valid website proposal is required` during onboarding website analysis
 - [x] Verify the corrected proposal flow on the independent Render runtime
 - [x] Reproduce and eliminate the remaining live `A valid website proposal is required` error shown after website analysis
+- [x] Diagnose and fix the live agent-service HTML response instead of JSON
+- [ ] Diagnose and fix Meta onboarding return/callback behavior without claiming an unapproved WhatsApp connection
