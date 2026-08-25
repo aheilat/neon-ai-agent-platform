@@ -105,7 +105,7 @@ export default function IndependentWidget() {
     }
     let textContent: string | null = null;
     if (isText) {
-      try { textContent = (await file.text()).trim().slice(0, 12_000) || null; }
+      try { textContent = (await file.text()).trim().slice(0, 6_000) || null; }
       catch { setError("تعذر قراءة الملف النصي. جرّب حفظه بترميز UTF-8 ثم أعد المحاولة."); return; }
     }
     setPendingAttachment({ fileName: file.name, mediaType: file.type || (isImage ? "image/*" : "text/plain"), size: file.size, textContent });
