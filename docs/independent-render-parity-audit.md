@@ -36,6 +36,8 @@ After the independent focused-view rollout, the live `/knowledge` route was rech
 
 The live `/agents` route was also verified after its focused-view refinement. It showed only the tenant workspace’s agent selection controls, agent creation action, and the selected agent’s backed profile editor. Knowledge, chat, Widget, channel, and setup sections were not present on that route.
 
+After the public Widget rate-limit release, the live `/widget/10` route was opened without sending any new message. It loaded the active AdCreative AI agent and its standard public greeting normally, confirming that the deployed protection did not interrupt ordinary Widget availability.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
