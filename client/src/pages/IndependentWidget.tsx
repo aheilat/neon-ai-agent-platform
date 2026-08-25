@@ -182,7 +182,7 @@ export default function IndependentWidget() {
       : "";
     const requestMessage = `${displayMessage}${attachmentContext}`;
     const nextHistory = messages.map((item) => ({ role: item.role === "customer" ? "user" : "assistant", content: item.content }));
-    setMessages((current) => [...current, { role: "customer", content: attachment ? `${displayMessage}\n\nمرفق: ${attachment.fileName}` : displayMessage }]);
+    setMessages((current) => typedMessage ? [...current, { role: "customer", content: typedMessage }] : current);
     setDraft("");
     setPendingAttachment(null);
     setSending(true);
