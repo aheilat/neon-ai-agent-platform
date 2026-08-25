@@ -28,6 +28,10 @@ For that final live inbox check, the disposable AdCreative AI agent answered a t
 
 The live `/settings` route was also verified after the independent navigation rollout. It loaded the selected AdCreative AI agent’s dedicated handoff-contact configuration surface and explicitly stated that it stores company contact information only; it makes no claim to send a message, initiate a call, or use any production phone or WhatsApp asset.
 
+The public `/widget/10` route was validated after the session-bound close-out release. A disposable visitor message created a public Widget conversation and received an AdCreative AI response. Only after that real exchange did the Arabic control “هل تحتاج مساعدة أخرى؟ إنهاء المحادثة الآن” appear. Activating it ended the conversation, disabled the input, and displayed the final close-out message. No tenant identifier, contact data, secret, or production channel asset was exposed in the public Widget.
+
+The isolated Supabase project was then queried with a bounded schema check. It confirmed that `public.conversations.publicSessionTokenHash` exists as a `text` column, matching the additive migration used by the public Widget close-out flow. The server retains only the token hash; the raw opaque token remains in the visitor’s current browser state.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
