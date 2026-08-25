@@ -38,6 +38,8 @@ The live `/agents` route was also verified after its focused-view refinement. It
 
 After the public Widget rate-limit release, the live `/widget/10` route was opened without sending any new message. It loaded the active AdCreative AI agent and its standard public greeting normally, confirming that the deployed protection did not interrupt ordinary Widget availability.
 
+During the later feedback release, a cached HTML document referenced a removed fingerprinted JavaScript bundle and the Widget root stayed blank. The live response for that bundle was HTML, confirming an asset-fallback/cache mismatch rather than an agent or Claude failure. The static delivery repair was deployed; a fresh live `/widget/10` check then mounted AdCreative AI and its public greeting normally again.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
