@@ -404,3 +404,6 @@
 - [x] Reuse the existing default agent for returning email users instead of creating a new agent
 - [x] Enforce a server-side one-agent limit for free workspaces and gate additional agents behind paid entitlement
 - [x] Add clear upgrade/payment messaging for attempts to create a second agent
+- [x] Add a simple primary-agent control panel for editing core settings
+- [x] Add save, loading, success, and error feedback for primary-agent settings
+- [x] Add regression coverage for primary-agent editing and tenant-scoped persistence
