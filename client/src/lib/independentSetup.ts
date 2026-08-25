@@ -152,3 +152,20 @@ export function listIndependentHandoffRequests<T>(
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/handoff-requests`, "GET", accessToken, undefined, fetchImplementation);
 }
+
+export function listIndependentAgentConversations<T>(
+  accessToken: string,
+  agentId: number,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/conversations`, "GET", accessToken, undefined, fetchImplementation);
+}
+
+export function getIndependentAgentConversation<T>(
+  accessToken: string,
+  agentId: number,
+  conversationId: number,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}`, "GET", accessToken, undefined, fetchImplementation);
+}

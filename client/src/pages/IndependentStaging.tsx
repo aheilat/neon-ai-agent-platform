@@ -8,6 +8,8 @@ import {
   addIndependentTextFileKnowledge,
   createIndependentHandoffRequest,
   createIndependentWorkspaceAgent,
+  getIndependentAgentConversation,
+  listIndependentAgentConversations,
   listIndependentHandoffRequests,
   saveIndependentHandoffContact,
   updateIndependentAgentProfile,
@@ -48,6 +50,33 @@ type IndependentHandoffLead = {
   email: string | null;
   notes: string | null;
   status: string;
+  createdAt: string;
+};
+
+type IndependentConversationSummary = {
+  id: number;
+  agentId: number;
+  tenantId: number;
+  channel: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  status: "active" | "escalated" | "resolved";
+  createdAt: string;
+  updatedAt: string;
+  agentName: string;
+  lastMessageContent: string | null;
+  lastMessageSender: "customer" | "agent" | "system" | "human" | null;
+  lastMessageCreatedAt: string | null;
+  leadId: number | null;
+  leadStatus: string | null;
+};
+
+type IndependentConversationMessage = {
+  id: number;
+  conversationId: number;
+  sender: "customer" | "agent" | "system" | "human";
+  content: string;
   createdAt: string;
 };
 
@@ -146,6 +175,13 @@ export default function IndependentStaging() {
   const [handoffLeads, setHandoffLeads] = useState<IndependentHandoffLead[]>([]);
   const [handoffLeadsLoading, setHandoffLeadsLoading] = useState(false);
   const [handoffLeadsError, setHandoffLeadsError] = useState<string | null>(null);
+  const [inboxConversations, setInboxConversations] = useState<IndependentConversationSummary[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
+  const [selectedInboxConversation, setSelectedInboxConversation] = useState<IndependentConversationSummary | null>(null);
+  const [inboxMessages, setInboxMessages] = useState<IndependentConversationMessage[]>([]);
+  const [inboxMessagesLoading, setInboxMessagesLoading] = useState(false);
+  const [closingInboxConversationId, setClosingInboxConversationId] = useState<number | null>(null);
   const [widgetCopyStatus, setWidgetCopyStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -226,6 +262,41 @@ export default function IndependentStaging() {
     }
   }, [accessToken, setLocation]);
 
+  const loadInboxConversations = useCallback(async (agentId: number) => {
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setInboxLoading(true);
+    setInboxError(null);
+    try {
+      const payload = await listIndependentAgentConversations<{ conversations: IndependentConversationSummary[] }>(token, agentId);
+      setInboxConversations(payload.conversations ?? []);
+    } catch (reason) {
+      setInboxConversations([]);
+      setInboxError(reason instanceof Error ? reason.message : "تعذر تحميل محادثات هذا الوكيل.");
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [accessToken, setLocation]);
+
+  const openInboxConversation = async (conversation: IndependentConversationSummary) => {
+    if (!selectedAgent) return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setSelectedInboxConversation(conversation);
+    setInboxMessagesLoading(true);
+    setInboxError(null);
+    try {
+      const payload = await getIndependentAgentConversation<{ conversation: IndependentConversationSummary; messages: IndependentConversationMessage[] }>(token, selectedAgent.id, conversation.id);
+      setSelectedInboxConversation((current) => current?.id === conversation.id ? { ...conversation, ...payload.conversation } : current);
+      setInboxMessages(payload.messages ?? []);
+    } catch (reason) {
+      setInboxMessages([]);
+      setInboxError(reason instanceof Error ? reason.message : "تعذر فتح رسائل المحادثة.");
+    } finally {
+      setInboxMessagesLoading(false);
+    }
+  };
+
   useEffect(() => { void loadWorkspace(); }, [loadWorkspace]);
 
   useEffect(() => {
@@ -240,6 +311,9 @@ export default function IndependentStaging() {
     setProfile(profileFromAgent(selectedAgent));
     void loadKnowledge(selectedAgent.id);
     void loadHandoffRequests(selectedAgent.id);
+    void loadInboxConversations(selectedAgent.id);
+    setSelectedInboxConversation(null);
+    setInboxMessages([]);
     setChatDraft("");
     setChatMessages([]);
     setChatError(null);
@@ -252,7 +326,7 @@ export default function IndependentStaging() {
     setHandoffContact({ name: typeof contact.name === "string" ? contact.name : "", phone: typeof contact.phone === "string" ? contact.phone : "", email: typeof contact.email === "string" ? contact.email : "" });
     setHandoffOpen(false);
     setHandoffStatus(null);
-  }, [loadHandoffRequests, loadKnowledge, selectedAgent]);
+  }, [loadHandoffRequests, loadInboxConversations, loadKnowledge, selectedAgent]);
 
   const signOut = async () => {
     await getIndependentSupabaseBrowserClient()?.auth.signOut();
@@ -487,6 +561,7 @@ export default function IndependentStaging() {
       setConversationId(result.conversation.id);
       setConversationStatus(result.conversation.status);
       setChatMessages((current) => [...current, { id: `assistant-${Date.now()}`, role: "assistant", content: result.reply }]);
+      void loadInboxConversations(selectedAgent.id);
     } catch (reason) {
       setChatError(reason instanceof Error ? reason.message : "تعذر الحصول على رد Claude.");
     } finally {
@@ -534,6 +609,7 @@ export default function IndependentStaging() {
         setConversationStatus("escalated");
       }
       await loadHandoffRequests(selectedAgent.id);
+      await loadInboxConversations(selectedAgent.id);
       setHandoffStatus(`${confirmation} تمت إزالة سجل الدردشة من شاشة الاختبار.`);
       setHandoffOpen(false);
       setHandoffRequest({ name: "", phone: "", email: "", notes: "", consent: false });
@@ -557,10 +633,28 @@ export default function IndependentStaging() {
       setVoiceTranscript("");
       setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
       setChatError("تم إغلاق المحادثة وحذف سجلها من شاشة الاختبار. اكتب رسالة جديدة لبدء اختبار جديد.");
+      await loadInboxConversations(selectedAgent.id);
     } catch (reason) {
       setChatError(reason instanceof Error ? reason.message : "تعذر إغلاق المحادثة الآن.");
     } finally {
       setClosingConversation(false);
+    }
+  };
+
+  const closeInboxConversation = async () => {
+    if (!selectedAgent || !selectedInboxConversation || selectedInboxConversation.status !== "active") return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setClosingInboxConversationId(selectedInboxConversation.id);
+    setInboxError(null);
+    try {
+      await closeIndependentConversation(token, selectedAgent.id, selectedInboxConversation.id);
+      setSelectedInboxConversation((current) => current ? { ...current, status: "resolved" } : current);
+      await loadInboxConversations(selectedAgent.id);
+    } catch (reason) {
+      setInboxError(reason instanceof Error ? reason.message : "تعذر إغلاق هذه المحادثة.");
+    } finally {
+      setClosingInboxConversationId(null);
     }
   };
 
@@ -576,6 +670,11 @@ export default function IndependentStaging() {
   };
 
   const handoffInbox = selectedAgent ? <section id="independent-conversations" className="mb-6 scroll-mt-5 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:p-6">
+    <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" />صندوق محادثات الوكيل</h2><p className="mt-1 text-sm leading-6 text-slate-300">سجل المحادثات المحفوظة للوكيل <strong>{selectedAgent.name}</strong> فقط. اختر محادثة لقراءة رسائلها.</p></div><Button type="button" variant="outline" size="sm" onClick={() => void loadInboxConversations(selectedAgent.id)} disabled={inboxLoading} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{inboxLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}تحديث المحادثات</Button></div>
+      {inboxError ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{inboxError}</p> : inboxLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل محادثات الوكيل…</p> : inboxConversations.length ? <div className="mt-4 grid gap-2 lg:grid-cols-2">{inboxConversations.map((conversation) => <button key={conversation.id} type="button" onClick={() => void openInboxConversation(conversation)} className={`rounded-2xl border p-3 text-right transition ${selectedInboxConversation?.id === conversation.id ? "border-cyan-200/60 bg-cyan-300/10" : "border-white/10 bg-slate-950/45 hover:border-white/25"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-white">{conversation.customerName || conversation.customerEmail || conversation.customerPhone || "زائر الـWidget"}</p><p className="mt-1 line-clamp-2 text-xs leading-6 text-slate-400">{conversation.lastMessageContent || "لا توجد رسالة محفوظة بعد."}</p></div><div className="shrink-0 text-left"><span className={`rounded-full px-2 py-1 text-xs font-bold ${conversation.status === "active" ? "bg-cyan-300/10 text-cyan-100" : conversation.status === "escalated" ? "bg-amber-300/10 text-amber-100" : "bg-slate-300/10 text-slate-300"}`}>{conversation.status === "active" ? "مفتوحة" : conversation.status === "escalated" ? "محوّلة" : "مغلقة"}</span><p className="mt-2 text-xs text-slate-500">{new Date(conversation.updatedAt).toLocaleString("ar")}</p></div></div>{conversation.leadStatus && <p className="mt-2 text-xs text-lime-100">طلب تواصل: {conversation.leadStatus === "new" ? "جديد" : conversation.leadStatus}</p>}</button>)}</div> : <p className="mt-4 rounded-2xl border border-dashed border-white/15 p-4 text-sm leading-7 text-slate-400">لا توجد محادثات محفوظة لهذا الوكيل بعد. ستظهر هنا محادثات الاختبار والـWidget التي تستخدم هذا الوكيل فقط.</p>}
+      {selectedInboxConversation && <div className="mt-4 rounded-2xl border border-cyan-200/20 bg-slate-950/55 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">رسائل المحادثة #{selectedInboxConversation.id}</p><p className="mt-1 text-xs text-slate-400">الحالة: {selectedInboxConversation.status === "active" ? "مفتوحة" : selectedInboxConversation.status === "escalated" ? "محوّلة إلى الفريق" : "مغلقة"}</p></div><div className="flex gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedInboxConversation(null); setInboxMessages([]); }} className="text-slate-300 hover:bg-white/10 hover:text-white">إخفاء</Button>{selectedInboxConversation.status === "active" && <Button type="button" variant="outline" size="sm" onClick={() => void closeInboxConversation()} disabled={closingInboxConversationId === selectedInboxConversation.id} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{closingInboxConversationId === selectedInboxConversation.id ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-1 h-4 w-4" />}إغلاق</Button>}</div></div>{inboxMessagesLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل الرسائل…</p> : inboxMessages.length ? <div className="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1">{inboxMessages.map((message) => <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.sender === "customer" ? "bg-cyan-300 text-slate-950" : message.sender === "human" ? "bg-lime-300/15 text-lime-50" : "border border-white/10 bg-white/[0.045] text-slate-100"}`}><div className="mb-1 flex items-center justify-between gap-2 text-xs opacity-75"><span>{message.sender === "customer" ? "الزائر" : message.sender === "agent" ? selectedAgent.name : message.sender === "human" ? "الفريق" : "النظام"}</span><time>{new Date(message.createdAt).toLocaleString("ar")}</time></div><p dir="auto" className="whitespace-pre-wrap">{message.content}</p></div>)}</div> : <p className="mt-4 text-sm text-slate-400">لا توجد رسائل قابلة للعرض في هذه المحادثة.</p>}</div>}
+    </div>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" />طلبات التحويل البشري</h2><p className="mt-1 text-sm leading-6 text-slate-300">طلبات الزوار المحفوظة للوكيل <strong>{selectedAgent.name}</strong> فقط. لا تُعرض بيانات وكلاء أو شركات أخرى.</p></div>
       <Button type="button" variant="outline" size="sm" onClick={() => void loadHandoffRequests(selectedAgent.id)} disabled={handoffLeadsLoading} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{handoffLeadsLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}تحديث الطلبات</Button>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, listIndependentHandoffRequests, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, getIndependentAgentConversation, listIndependentAgentConversations, listIndependentHandoffRequests, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -105,6 +105,15 @@ describe("independent setup requests", () => {
       method: "GET",
       headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" },
     });
+  });
+
+  it("loads the selected agent conversation list and a scoped message detail without request bodies", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ conversations: [] }) });
+    await listIndependentAgentConversations("supabase-token", 7, request);
+    await getIndependentAgentConversation("supabase-token", 7, 31, request);
+
+    expect(request.mock.calls[0]).toEqual(["/api/external/agents/7/conversations", { method: "GET", headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" } }]);
+    expect(request.mock.calls[1]).toEqual(["/api/external/agents/7/conversations/31", { method: "GET", headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" } }]);
   });
 
   it("returns the server-safe setup error", async () => {

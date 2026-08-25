@@ -45,6 +45,23 @@ export type IndependentConversation = {
   updatedAt: Date;
 };
 
+export type IndependentConversationSummary = IndependentConversation & {
+  agentName: string;
+  lastMessageContent: string | null;
+  lastMessageSender: "customer" | "agent" | "system" | "human" | null;
+  lastMessageCreatedAt: Date | null;
+  leadId: number | null;
+  leadStatus: string | null;
+};
+
+export type IndependentConversationMessage = {
+  id: number;
+  conversationId: number;
+  sender: "customer" | "agent" | "system" | "human";
+  content: string;
+  createdAt: Date;
+};
+
 export type CreateIndependentAgentInput = Pick<
   IndependentAgent,
   | "tenantId"
@@ -291,6 +308,46 @@ export async function getIndependentConversationInTenant(client: Queryable, tena
     [tenantId, agentId, conversationId],
   );
   return result.rows[0];
+}
+
+export async function listIndependentConversationsForAgent(client: Queryable, tenantId: number, agentId: number) {
+  const result = await client.query<IndependentConversationSummary>(
+    `select c.id, c."agentId", c."tenantId", c.channel, c."customerName", c."customerEmail", c."customerPhone", c.status, c."createdAt", c."updatedAt", a.name as "agentName",
+       last_message.content as "lastMessageContent", last_message.sender as "lastMessageSender", last_message."createdAt" as "lastMessageCreatedAt",
+       lead.id as "leadId", lead.status as "leadStatus"
+     from public.conversations c
+     join public.agents a on a.id = c."agentId" and a."tenantId" = c."tenantId"
+     left join lateral (
+       select sender, content, "createdAt" from public.messages
+       where "conversationId" = c.id
+       order by "createdAt" desc, id desc
+       limit 1
+     ) last_message on true
+     left join lateral (
+       select id, status from public.leads
+       where "conversationId" = c.id and "tenantId" = c."tenantId"
+       order by "createdAt" desc, id desc
+       limit 1
+     ) lead on true
+     where c."tenantId" = $1 and c."agentId" = $2
+     order by c."updatedAt" desc, c.id desc
+     limit 50`,
+    [tenantId, agentId],
+  );
+  return result.rows;
+}
+
+export async function listIndependentConversationMessages(client: Queryable, tenantId: number, agentId: number, conversationId: number) {
+  const result = await client.query<IndependentConversationMessage>(
+    `select m.id, m."conversationId", m.sender, m.content, m."createdAt"
+     from public.messages m
+     join public.conversations c on c.id = m."conversationId"
+     where c."tenantId" = $1 and c."agentId" = $2 and c.id = $3
+     order by m."createdAt" asc, m.id asc
+     limit 200`,
+    [tenantId, agentId, conversationId],
+  );
+  return result.rows;
 }
 
 export async function addIndependentConversationMessage(
