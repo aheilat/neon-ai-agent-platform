@@ -2,11 +2,13 @@ export type IndependentAgentChatRequest = {
   accessToken: string;
   agentId: number;
   message: string;
+  conversationId?: number;
 };
 
 export type IndependentAgentChatResponse = {
   agentId: number;
   reply: string;
+  conversation: { id: number; status: "active" | "escalated" | "resolved" };
 };
 
 type FetchImplementation = typeof fetch;
@@ -29,7 +31,7 @@ function getResponseError(payload: unknown) {
  * Supabase session. The browser sends a Bearer token, never an Anthropic key.
  */
 export async function requestIndependentAgentReply(
-  { accessToken, agentId, message }: IndependentAgentChatRequest,
+  { accessToken, agentId, message, conversationId }: IndependentAgentChatRequest,
   fetchImplementation: FetchImplementation = fetch,
 ): Promise<IndependentAgentChatResponse> {
   const response = await fetchImplementation(`/api/external/agents/${agentId}/chat`, {
@@ -38,7 +40,7 @@ export async function requestIndependentAgentReply(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, conversationId }),
   });
   const payload = await response.json() as unknown;
 
@@ -52,10 +54,36 @@ export async function requestIndependentAgentReply(
     !("reply" in payload) ||
     typeof payload.reply !== "string" ||
     !("agentId" in payload) ||
-    typeof payload.agentId !== "number"
+    typeof payload.agentId !== "number" ||
+    !("conversation" in payload) ||
+    typeof payload.conversation !== "object" ||
+    payload.conversation === null ||
+    !("id" in payload.conversation) ||
+    typeof payload.conversation.id !== "number" ||
+    !("status" in payload.conversation) ||
+    !["active", "escalated", "resolved"].includes(String(payload.conversation.status))
   ) {
     throw new Error("وصل رد غير صالح من خدمة Claude المستقلة.");
   }
 
-  return { reply: payload.reply, agentId: payload.agentId };
+  return { reply: payload.reply, agentId: payload.agentId, conversation: payload.conversation as IndependentAgentChatResponse["conversation"] };
+}
+
+export async function closeIndependentConversation(
+  accessToken: string,
+  agentId: number,
+  conversationId: number,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  const response = await fetchImplementation(`/api/external/agents/${agentId}/conversations/${conversationId}/close`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(getResponseError(payload));
+  if (typeof payload !== "object" || payload === null || !("conversation" in payload) || typeof payload.conversation !== "object" || payload.conversation === null || !("id" in payload.conversation) || typeof payload.conversation.id !== "number" || !("status" in payload.conversation) || payload.conversation.status !== "resolved") {
+    throw new Error("وصلت حالة إغلاق غير صالحة من خدمة المحادثة المستقلة.");
+  }
+  return payload.conversation as { id: number; status: "resolved" };
 }

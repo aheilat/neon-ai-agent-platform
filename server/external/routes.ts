@@ -12,7 +12,7 @@ import { generateIndependentAgentReply } from "./chat";
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
 import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
-import { createIndependentHandoffLead, getIndependentAgentInTenant, updateIndependentAgentHandoffContact } from "./agentRepository";
+import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, getIndependentAgentInTenant, getIndependentConversationInTenant, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
@@ -272,15 +272,24 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const phone = optionalText(req.body?.phone, 50);
     const email = optionalText(req.body?.email, 320);
     const notes = optionalText(req.body?.notes, 2_000);
+    const conversationId = Number(req.body?.conversationId);
     if (!Number.isSafeInteger(agentId) || agentId <= 0 || !name || (!phone && !email) || req.body?.consent !== true) return res.status(400).json({ error: "Name, a phone number or email, and consent are required" });
     const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
     const pool = getIndependentPostgresPool();
     if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
     const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
     if (!agent) return res.status(404).json({ error: "Agent not found" });
-    const lead = await createIndependentHandoffLead(pool, { tenantId: session.workspace.id, agentId, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    const conversation = Number.isSafeInteger(conversationId) && conversationId > 0
+      ? await getIndependentConversationInTenant(pool, session.workspace.id, agentId, conversationId)
+      : undefined;
+    if (Number.isSafeInteger(conversationId) && conversationId > 0 && !conversation) return res.status(404).json({ error: "Conversation not found" });
+    const lead = await createIndependentHandoffLead(pool, { tenantId: session.workspace.id, agentId, conversationId: conversation?.id ?? null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    if (conversation) {
+      await updateIndependentConversationStatus(pool, session.workspace.id, agentId, conversation.id, "escalated");
+      await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل الطلب إلى الفريق البشري بعد موافقة العميل.");
+    }
     const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
-    return res.status(201).json({ lead, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
+    return res.status(201).json({ lead, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
   });
 
   app.post("/api/external/website/apply-proposal", async (req, res) => {
@@ -307,21 +316,48 @@ export function registerIndependentRuntimeRoutes(app: Express) {
   app.post("/api/external/agents/:agentId/chat", async (req, res) => {
     const agentId = Number(req.params.agentId);
     const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    const requestedConversationId = Number(req.body?.conversationId);
     if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
     if (!message || message.length > 8_000) return res.status(400).json({ error: "A message of up to 8,000 characters is required" });
+    const authorization = authorizationFromRequest(req.headers);
+    const session = await resolveIndependentWorkspaceSession(authorization);
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const conversation = Number.isSafeInteger(requestedConversationId) && requestedConversationId > 0
+      ? await getIndependentConversationInTenant(pool, session.workspace.id, agentId, requestedConversationId)
+      : await createIndependentConversation(pool, { tenantId: session.workspace.id, agentId, channel: "web" });
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    if (conversation.status !== "active") return res.status(409).json({ error: conversation.status === "escalated" ? "This conversation was already transferred to the human team" : "This conversation is already closed" });
 
     try {
-      const result = await generateIndependentAgentReply(authorizationFromRequest(req.headers), {
+      await addIndependentConversationMessage(pool, conversation.id, "customer", message);
+      const result = await generateIndependentAgentReply(authorization, {
         agentId,
         message,
         history: Array.isArray(req.body?.history) ? req.body.history : undefined,
       });
       if (result.kind === "unauthorized") return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
       if (result.kind === "not-found") return res.status(404).json({ error: "Agent not found" });
-      return res.json({ reply: result.reply, agentId: result.agentId });
+      await addIndependentConversationMessage(pool, conversation.id, "agent", result.reply);
+      return res.json({ reply: result.reply, agentId: result.agentId, conversation: { id: conversation.id, status: conversation.status } });
     } catch (error) {
       console.error("[Independent Claude] Chat completion failed", error);
       return res.status(503).json({ error: "Independent AI service is unavailable" });
     }
+  });
+
+  app.post("/api/external/agents/:agentId/conversations/:conversationId/close", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const conversationId = Number(req.params.conversationId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !Number.isSafeInteger(conversationId) || conversationId <= 0) return res.status(400).json({ error: "Invalid agent or conversation ID" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const conversation = await updateIndependentConversationStatus(pool, session.workspace.id, agentId, conversationId, "resolved");
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    await addIndependentConversationMessage(pool, conversation.id, "system", "أغلق العميل المحادثة.");
+    return res.json({ conversation: { id: conversation.id, status: conversation.status } });
   });
 }

@@ -32,6 +32,19 @@ export type IndependentKnowledgeItem = {
   updatedAt: Date;
 };
 
+export type IndependentConversation = {
+  id: number;
+  agentId: number;
+  tenantId: number;
+  channel: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  status: "active" | "escalated" | "resolved";
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type CreateIndependentAgentInput = Pick<
   IndependentAgent,
   | "tenantId"
@@ -76,7 +89,10 @@ export type CreateIndependentLeadInput = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  conversationId: number | null;
 };
+
+export type CreateIndependentConversationInput = Pick<IndependentConversation, "tenantId" | "agentId" | "channel">;
 
 type Queryable = Pick<Pool, "query">;
 
@@ -88,6 +104,9 @@ const agentColumns = `
 const knowledgeColumns = `
   id, "agentId", "tenantId", title, content, category, "sourceUrl", "sourceTitle",
   "sourceFetchedAt", "createdAt", "updatedAt"`;
+
+const conversationColumns = `
+  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "createdAt", "updatedAt"`;
 
 export async function listIndependentTenantAgents(client: Queryable, tenantId: number) {
   const result = await client.query<IndependentAgent>(
@@ -205,10 +224,60 @@ export async function updateIndependentAgentHandoffContact(
 
 export async function createIndependentHandoffLead(client: Queryable, input: CreateIndependentLeadInput) {
   const result = await client.query<{ id: number; createdAt: Date }>(
-    `insert into public.leads ("tenantId", "agentId", name, email, phone, notes, status)
-     values ($1, $2, $3, $4, $5, $6, 'new')
+    `insert into public.leads ("tenantId", "agentId", "conversationId", name, email, phone, notes, status)
+     values ($1, $2, $3, $4, $5, $6, $7, 'new')
      returning id, "createdAt"`,
-    [input.tenantId, input.agentId, input.name, input.email, input.phone, input.notes],
+    [input.tenantId, input.agentId, input.conversationId, input.name, input.email, input.phone, input.notes],
+  );
+  return result.rows[0];
+}
+
+export async function createIndependentConversation(client: Queryable, input: CreateIndependentConversationInput) {
+  const result = await client.query<IndependentConversation>(
+    `insert into public.conversations ("tenantId", "agentId", channel)
+     values ($1, $2, $3)
+     returning ${conversationColumns}`,
+    [input.tenantId, input.agentId, input.channel],
+  );
+  return result.rows[0];
+}
+
+export async function getIndependentConversationInTenant(client: Queryable, tenantId: number, agentId: number, conversationId: number) {
+  const result = await client.query<IndependentConversation>(
+    `select ${conversationColumns}
+     from public.conversations
+     where "tenantId" = $1 and "agentId" = $2 and id = $3
+     limit 1`,
+    [tenantId, agentId, conversationId],
+  );
+  return result.rows[0];
+}
+
+export async function addIndependentConversationMessage(
+  client: Queryable,
+  conversationId: number,
+  sender: "customer" | "agent" | "system" | "human",
+  content: string,
+) {
+  await client.query(
+    `insert into public.messages ("conversationId", sender, content) values ($1, $2, $3)`,
+    [conversationId, sender, content],
+  );
+}
+
+export async function updateIndependentConversationStatus(
+  client: Queryable,
+  tenantId: number,
+  agentId: number,
+  conversationId: number,
+  status: IndependentConversation["status"],
+) {
+  const result = await client.query<IndependentConversation>(
+    `update public.conversations
+     set status = $4, "updatedAt" = now()
+     where "tenantId" = $1 and "agentId" = $2 and id = $3
+     returning ${conversationColumns}`,
+    [tenantId, agentId, conversationId, status],
   );
   return result.rows[0];
 }

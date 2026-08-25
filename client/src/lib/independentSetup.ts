@@ -139,7 +139,7 @@ export function saveIndependentHandoffContact<T>(
 export function createIndependentHandoffRequest<T>(
   accessToken: string,
   agentId: number,
-  request: { name: string; phone: string; email: string; notes: string; consent: boolean },
+  request: { name: string; phone: string; email: string; notes: string; consent: boolean; conversationId?: number | null },
   fetchImplementation: FetchImplementation = fetch,
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/handoff-requests`, "POST", accessToken, request, fetchImplementation);

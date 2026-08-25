@@ -24,7 +24,7 @@ vi.mock("./websiteDiscovery", () => ({
 
 vi.mock("./claude", () => ({ completeWithIndependentClaude: vi.fn(), extractKnowledgeFromIndependentImage: vi.fn() }));
 vi.mock("./supabase", () => ({ getIndependentSupabaseServerClient: vi.fn() }));
-vi.mock("./agentRepository", () => ({ createIndependentHandoffLead: vi.fn(), getIndependentAgentInTenant: vi.fn(), listIndependentKnowledgeForAgent: vi.fn(), updateIndependentAgentHandoffContact: vi.fn() }));
+vi.mock("./agentRepository", () => ({ addIndependentConversationMessage: vi.fn(), createIndependentConversation: vi.fn(), createIndependentHandoffLead: vi.fn(), getIndependentAgentInTenant: vi.fn(), getIndependentConversationInTenant: vi.fn(), listIndependentKnowledgeForAgent: vi.fn(), updateIndependentAgentHandoffContact: vi.fn(), updateIndependentConversationStatus: vi.fn() }));
 vi.mock("./postgres", () => ({ getIndependentPostgresPool: vi.fn() }));
 
 import { registerIndependentRuntimeRoutes } from "./routes";

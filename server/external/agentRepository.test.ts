@@ -2,14 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
 
   createIndependentKnowledgeItem,
+  addIndependentConversationMessage,
+  createIndependentConversation,
   createIndependentHandoffLead,
   createIndependentAgent,
   ensureIndependentDefaultAgent,
   getIndependentAgentInTenant,
+  getIndependentConversationInTenant,
   listIndependentKnowledgeForAgent,
   listIndependentTenantAgents,
   updateIndependentAgentProfile,
   updateIndependentAgentHandoffContact,
+  updateIndependentConversationStatus,
 } from "./agentRepository";
 
 const createdAgent = {
@@ -129,9 +133,22 @@ describe("independent agent repository", () => {
 
   it("creates a human handoff lead with tenant and agent-bound values", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ id: 19, createdAt: new Date() }] });
-    await createIndependentHandoffLead({ query } as never, { tenantId: 8, agentId: 31, name: "عبدالله", phone: "+962700000000", email: null, notes: "يسأل عن الأسعار" });
+    await createIndependentHandoffLead({ query } as never, { tenantId: 8, agentId: 31, conversationId: 19, name: "عبدالله", phone: "+962700000000", email: null, notes: "يسأل عن الأسعار" });
 
-    expect(query.mock.calls[0]?.[0]).toContain('insert into public.leads ("tenantId", "agentId"');
-    expect(query.mock.calls[0]?.[1]).toEqual([8, 31, "عبدالله", null, "+962700000000", "يسأل عن الأسعار"]);
+    expect(query.mock.calls[0]?.[0]).toContain('insert into public.leads ("tenantId", "agentId", "conversationId"');
+    expect(query.mock.calls[0]?.[1]).toEqual([8, 31, 19, "عبدالله", null, "+962700000000", "يسأل عن الأسعار"]);
+  });
+
+  it("keeps conversation creation, message writes, status changes, and reads scoped to the same tenant agent", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ id: 19, ...createdAgent, agentId: 31, channel: "web", customerName: null, customerEmail: null, customerPhone: null, status: "active" }] });
+    await createIndependentConversation({ query } as never, { tenantId: 8, agentId: 31, channel: "web" });
+    await addIndependentConversationMessage({ query } as never, 19, "customer", "مرحبا");
+    await updateIndependentConversationStatus({ query } as never, 8, 31, 19, "resolved");
+    await getIndependentConversationInTenant({ query } as never, 8, 31, 19);
+
+    expect(query.mock.calls[0]?.[0]).toContain('insert into public.conversations ("tenantId", "agentId", channel)');
+    expect(query.mock.calls[1]?.[1]).toEqual([19, "customer", "مرحبا"]);
+    expect(query.mock.calls[2]?.[0]).toContain('where "tenantId" = $1 and "agentId" = $2 and id = $3');
+    expect(query.mock.calls[3]?.[0]).toContain('where "tenantId" = $1 and "agentId" = $2 and id = $3');
   });
 });
