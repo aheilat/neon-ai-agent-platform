@@ -78,3 +78,30 @@ button { cursor: pointer; }
   button, a, input, textarea { transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease, transform 160ms ease, box-shadow 180ms ease; }
   button:active { transform: scale(0.98); }
 }
+
+/* Focused independent workspace routes keep only their backed surface visible. */
+[data-independent-view="agents"] #independent-conversations,
+[data-independent-view="agents"] #independent-overview,
+[data-independent-view="agents"] #independent-widget,
+[data-independent-view="agents"] #independent-widget ~ section { display: none; }
+
+[data-independent-view="knowledge"] #independent-conversations,
+[data-independent-view="knowledge"] #independent-overview,
+[data-independent-view="knowledge"] #independent-agents,
+[data-independent-view="knowledge"] #independent-widget,
+[data-independent-view="knowledge"] #independent-channels,
+[data-independent-view="knowledge"] #independent-website-learning,
+[data-independent-view="knowledge"] #independent-test-chat,
+[data-independent-view="knowledge"] #independent-test-chat ~ section { display: none; }
+
+[data-independent-view="conversations"] #independent-overview,
+[data-independent-view="conversations"] #independent-overview ~ section { display: none; }
+
+[data-independent-view="channels"] #independent-conversations,
+[data-independent-view="channels"] #independent-overview,
+[data-independent-view="channels"] #independent-website-learning,
+[data-independent-view="channels"] #independent-website-learning ~ section { display: none; }
+
+[data-independent-view="settings"] #independent-conversations,
+[data-independent-view="settings"] #independent-overview,
+[data-independent-view="settings"] #independent-overview ~ section { display: none; }
