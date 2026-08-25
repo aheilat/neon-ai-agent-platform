@@ -393,3 +393,4 @@
 - [x] Add regression coverage for the simplified onboarding sequence and responsive workspace sections
 - [x] Diagnose and fix `A valid website proposal is required` during onboarding website analysis
 - [x] Verify the corrected proposal flow on the independent Render runtime
+- [x] Reproduce and eliminate the remaining live `A valid website proposal is required` error shown after website analysis

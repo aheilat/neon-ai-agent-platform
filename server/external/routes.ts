@@ -22,6 +22,27 @@ function authorizationFromRequest(headers: { authorization?: string | string[] }
   return Array.isArray(value) ? value[0] : value;
 }
 
+const independentGoalAliases: Record<string, string> = {
+  answer: "questions",
+  questions: "questions",
+  qualify: "leads",
+  capture: "buy",
+  escalate: "human",
+  appointments: "appointments",
+  whatsapp: "route",
+};
+
+function normalizeProposalAnalysisPayload(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const analysis = value as Record<string, unknown>;
+  return {
+    ...analysis,
+    goals: Array.isArray(analysis.goals)
+      ? analysis.goals.map((goal) => typeof goal === "string" ? independentGoalAliases[goal.trim().toLowerCase()] ?? goal : goal)
+      : analysis.goals,
+  };
+}
+
 function text(value: unknown, minimum: number, maximum: number) {
   if (typeof value !== "string") return undefined;
   const result = value.trim();
@@ -551,7 +572,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
         if (typeof candidate.url !== "string" || typeof candidate.title !== "string" || typeof candidate.description !== "string" || !Array.isArray(candidate.headings) || !candidate.headings.every((heading) => typeof heading === "string")) throw new Error("invalid");
         return { url: candidate.url, title: candidate.title, description: candidate.description, headings: candidate.headings };
       });
-      const analysis = assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(req.body?.analysis), pages);
+      const analysis = assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(normalizeProposalAnalysisPayload(req.body?.analysis)), pages);
       const result = await applyIndependentWebsiteProposal(authorizationFromRequest(req.headers), { websiteUrl, pages, analysis });
       if (result === undefined) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
       return res.status(201).json(result);
