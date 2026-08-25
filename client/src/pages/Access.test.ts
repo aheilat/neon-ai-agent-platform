@@ -20,6 +20,13 @@ describe("access page copy", () => {
     expect(copy.switchPath).toBe("/register");
   });
 
+  it("does not promise passwordless access on the Supabase password form", () => {
+    const accessSource = fs.readFileSync(path.join(process.cwd(), "client", "src", "pages", "Access.tsx"), "utf8");
+
+    expect(accessSource).not.toContain("بدون كلمة مرور");
+    expect(accessSource).toContain("كلمة المرور (8 أحرف على الأقل)");
+  });
+
   it("keeps the public /access compatibility route available", () => {
     const appSource = fs.readFileSync(path.join(process.cwd(), "client", "src", "App.tsx"), "utf8");
 

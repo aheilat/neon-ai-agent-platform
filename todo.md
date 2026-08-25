@@ -382,7 +382,7 @@
 - [x] Verify template catalog loading and create-from-template route with focused regression tests
 - [x] Add the truthful independent WhatsApp onboarding surface that clearly explains Meta App not active and prepares the gated Embedded Signup path
 - [ ] Run the final disposable New Customer journey: register → template or website → knowledge → Widget → handoff
-- [ ] Remove temporary test artifacts and disposable Supabase test records without touching customer or production WhatsApp data
+- [x] Remove temporary test artifacts and disposable Supabase test records without touching customer or production WhatsApp data
 - [ ] Review the independent dashboard for remaining non-functional placeholders and label or replace them
 - [x] Diagnose and fix `Unexpected token '<'` when the Widget expects JSON
 - [ ] Verify that Widget conversations appear in the selected agent inbox and document the customer testing flow
@@ -430,4 +430,16 @@
 - [x] إصلاح عدم تطابق عمود تقييم المحادثة في Supabase (`satisfaction_rating`) الذي كان يمنع إنشاء محادثة Widget ويحوّل الطلب إلى 502
 
 - [x] إضافة مهلة استجابة لمسارات Widget العامة حتى لا يبقى الطلب عالقاً عند تعطل Render أو انتظار اتصال قاعدة البيانات
+
+- [x] اختبار حي على `agent.neonadai.com` لمسار Widget: إنشاء محادثة ورد عربي، تحويل بشري، إغلاق، وتقييم نجوم، ثم حذف سجلات الاختبار فقط
+
+- [x] حماية طلبات مساحة العمل المصادق عليها من استجابة Render HTML وتحويلها إلى رسالة عربية قابلة للتنفيذ
+
+- [x] حماية تحميل بيانات الوكلاء والمعرفة في الواجهة من صفحات HTML غير المتوقعة وإظهار رسالة عربية واضحة بدلاً من خطأ JSON
+
+- [x] التحقق الحي من صفحة Widget وملف `neon-agent-widget.js` وملف تعريف الوكيل العام على `agent.neonadai.com` بعد النشر
+
+- [x] تصحيح نص صفحة الدخول حتى لا يقول إن الدخول بدون كلمة مرور بينما المسار المستقل يستخدم كلمة مرور Supabase
+
+- [ ] مزامنة آخر إصلاحات التدقيق مع GitHub وRender والتحقق من أن النطاق المستقل لا يزال يعرض نسخة قديمة
 

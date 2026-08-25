@@ -63,8 +63,20 @@ async function requestJson<T>(
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     ...(method === "GET" ? {} : { body: JSON.stringify(payload) }),
   });
-  const body = await response.json() as unknown;
-  if (!response.ok) throw new Error(serverError(body));
+  let body: unknown;
+  if (typeof response.text === "function") {
+    const raw = await response.text();
+    try { body = raw ? JSON.parse(raw) : {}; } catch { body = null; }
+  } else {
+    body = await response.json() as unknown;
+  }
+  if (!response.ok) {
+    if (body) throw new Error(serverError(body));
+    const contentType = response.headers?.get?.("content-type")?.toLowerCase() ?? "";
+    if (contentType.includes("text/html")) throw new Error("تعذر الوصول إلى خدمة مساحة العمل حالياً. يبدو أن الخادم يعيد صفحة HTML بدلاً من استجابة API.");
+    throw new Error("تعذر حفظ إعدادات مساحة العمل المستقلة.");
+  }
+  if (!body) throw new Error("وصلت استجابة غير صالحة من خدمة مساحة العمل.");
   return body as T;
 }
 

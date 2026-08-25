@@ -142,6 +142,19 @@ function serverMessage(payload: unknown, fallback: string) {
     : fallback;
 }
 
+async function readIndependentResponse(response: Response, fallback: string) {
+  const raw = await response.text();
+  let payload: unknown = null;
+  try { payload = raw ? JSON.parse(raw) : {}; } catch {
+    if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) {
+      throw new Error("تعذر الوصول إلى خدمة مساحة العمل حالياً. يبدو أن الخادم يعيد صفحة HTML بدلاً من استجابة API.");
+    }
+  }
+  if (!response.ok) throw new Error(serverMessage(payload, fallback));
+  if (!payload) throw new Error("وصلت استجابة غير صالحة من خدمة مساحة العمل.");
+  return payload;
+}
+
 export default function IndependentStaging() {
   const [location, setLocation] = useLocation();
   const [data, setData] = useState<IndependentWorkspaceResponse | null>(null);
@@ -270,8 +283,7 @@ export default function IndependentStaging() {
 
     try {
       const response = await fetch("/api/external/agents", { headers: { Authorization: `Bearer ${token}` } });
-      const payload = await response.json() as unknown;
-      if (!response.ok) throw new Error(serverMessage(payload, "تعذر تحميل مساحة العمل المستقلة."));
+      const payload = await readIndependentResponse(response, "تعذر تحميل مساحة العمل المستقلة.");
       const workspace = payload as IndependentWorkspaceResponse;
       setData(workspace);
       setSelectedAgentId((current) => current && workspace.agents.some((agent) => agent.id === current) ? current : workspace.defaultAgent.id);
@@ -288,8 +300,7 @@ export default function IndependentStaging() {
     setKnowledgeLoading(true);
     try {
       const response = await fetch(`/api/external/agents/${agentId}/knowledge`, { headers: { Authorization: `Bearer ${token}` } });
-      const payload = await response.json() as { knowledge?: IndependentKnowledgeItem[]; error?: string };
-      if (!response.ok) throw new Error(serverMessage(payload, "تعذر تحميل المعرفة المعتمدة."));
+      const payload = await readIndependentResponse(response, "تعذر تحميل المعرفة المعتمدة.") as { knowledge?: IndependentKnowledgeItem[]; error?: string };
       setKnowledge(payload.knowledge ?? []);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل المعرفة المعتمدة.");

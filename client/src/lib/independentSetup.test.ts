@@ -120,4 +120,13 @@ describe("independent setup requests", () => {
     const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: "Agent not found" }) });
     await expect(updateIndependentAgentProfile("supabase-token", 7, profile, request)).rejects.toThrow("Agent not found");
   });
+
+  it("turns an HTML gateway response into an actionable workspace error", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: false,
+      text: async () => "<!DOCTYPE html><html><title>502</title></html>",
+      headers: { get: () => "text/html; charset=utf-8" },
+    });
+    await expect(listIndependentAgentConversations("supabase-token", 7, request)).rejects.toThrow("صفحة HTML بدلاً من استجابة API");
+  });
 });
