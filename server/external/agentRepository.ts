@@ -140,7 +140,7 @@ const knowledgeColumns = `
   "sourceFetchedAt", "createdAt", "updatedAt"`;
 
 const conversationColumns = `
-  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "publicSessionTokenHash", "satisfactionRating", "createdAt", "updatedAt"`;
+  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "publicSessionTokenHash", satisfaction_rating, "createdAt", "updatedAt"`;
 
 const leadColumns = `
   id, "tenantId", "agentId", "conversationId", name, email, phone, notes, status, "createdAt", "updatedAt"`;
@@ -432,7 +432,7 @@ export async function updateIndependentPublicConversationSatisfactionRating(
 ) {
   const result = await client.query<IndependentConversation>(
     `update public.conversations
-     set "satisfactionRating" = $5, "updatedAt" = now()
+     set satisfaction_rating = $5, "updatedAt" = now()
      where "tenantId" = $1
        and "agentId" = $2
        and id = $3
