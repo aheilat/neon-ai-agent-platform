@@ -36,12 +36,17 @@ export async function completeWithIndependentClaude(
 ): Promise<string> {
   if (!config) throw new Error("Independent Claude is not configured");
   const create = createMessage ?? ((input) => new Anthropic({ apiKey: config.apiKey }).messages.create(input));
-  const response = await create({
+  const completion = create({
     model: config.model,
     max_tokens: Math.min(Math.max(request.maxTokens ?? 800, 1), 4096),
     system: request.system,
     messages: request.messages,
   });
+  const timeout = new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), 12_000);
+    completion.finally(() => clearTimeout(timer)).catch(() => undefined);
+  });
+  const response = await Promise.race([completion, timeout]);
   return response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)

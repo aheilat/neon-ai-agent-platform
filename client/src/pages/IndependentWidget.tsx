@@ -9,8 +9,18 @@ type HandoffContact = { name: string | null; phone: string | null; email: string
 
 async function publicWidgetRequest<T>(path: string, init?: RequestInit) {
   const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
-  const body = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error || "تعذر إتمام الطلب الآن.");
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+  const rawBody = await response.text();
+  let body: (T & { error?: string }) | null = null;
+  if (contentType.includes("application/json")) {
+    try { body = JSON.parse(rawBody) as T & { error?: string }; } catch { body = null; }
+  }
+  if (!response.ok) {
+    if (body?.error) throw new Error(body.error);
+    if (contentType.includes("text/html") || /^\s*<!doctype html/i.test(rawBody)) throw new Error("تعذر الوصول إلى خدمة الوكيل حالياً. يبدو أن الخادم يعيد صفحة HTML بدلاً من استجابة API. حاول بعد لحظات.");
+    throw new Error("تعذر إتمام الطلب الآن.");
+  }
+  if (!body) throw new Error("وصلت استجابة غير صالحة من خدمة الوكيل. حاول مرة أخرى.");
   return body;
 }
 

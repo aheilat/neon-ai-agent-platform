@@ -411,3 +411,13 @@
 - [x] Redesign the independent navigation and page shells to match the reference structure
 - [x] Align Agents, Knowledge, Conversations, Channels, Settings, onboarding, and Widget entry points with the reference flow
 - [x] Verify all redesigned pages at mobile and desktop widths and label any genuine placeholders
+- [x] Reproduce and fix the live Widget HTML-response failure shown on mobile
+- [x] Ensure human-handoff form presentation remains usable when the Widget service is unavailable
+
+## Comprehensive Application Audit
+- [ ] Inventory every route, dialog, form, button, and API contract
+- [ ] Test the complete customer journey from registration to Widget deployment
+- [ ] Repair confirmed functional errors and incomplete interactions
+- [ ] Verify responsive ordering and usability on mobile and laptop widths
+- [ ] Run full regression and production availability checks
+- [ ] Complete the comprehensive audit as one uninterrupted pass without requesting intermediate confirmation

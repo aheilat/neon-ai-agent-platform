@@ -49,4 +49,19 @@ describe("Independent public Widget feedback", () => {
       expect.objectContaining({ method: "POST", body: JSON.stringify({ conversationSessionToken: "x".repeat(43), satisfactionRating: 5 }) }),
     ));
   });
+
+  it("turns an HTML gateway response into a clear service message instead of a JSON parse error", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/public/agents/10")) return Promise.resolve(new Response(JSON.stringify({ agent: { id: 10, name: "وكيل الاختبار", description: null, language: "ar", tone: "friendly" } }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      if (url.endsWith("/chat")) return Promise.resolve(new Response("<!doctype html><title>502</title>", { status: 502, headers: { "Content-Type": "text/html" } }));
+      return Promise.resolve(new Response(JSON.stringify({ error: "Unexpected request" }), { status: 500, headers: { "Content-Type": "application/json" } }));
+    });
+    render(<IndependentWidget />);
+    await screen.findByText("مرحباً، أنا وكيل الاختبار. كيف أستطيع مساعدتك؟");
+    const input = screen.getByPlaceholderText("اكتب استفسارك…");
+    fireEvent.change(input, { target: { value: "مرحبا" } });
+    fireEvent.submit(input.closest("form")!);
+    await screen.findByText(/يبدو أن الخادم يعيد صفحة HTML/);
+  });
 });
