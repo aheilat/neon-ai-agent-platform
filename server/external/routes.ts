@@ -144,6 +144,32 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     }
   });
 
+  app.post("/api/public/agents/:agentId/handoff", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const name = text(req.body?.name, 1, 255);
+    const phone = optionalText(req.body?.phone, 50);
+    const email = optionalText(req.body?.email, 320);
+    const notes = optionalText(req.body?.notes, 2_000);
+    const conversationId = Number(req.body?.conversationId);
+    const pool = getIndependentPostgresPool();
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    if (!name || (!phone && !email) || req.body?.consent !== true) return res.status(400).json({ error: "Name, a phone number or email, and consent are required" });
+    if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+    const agent = await getIndependentPublicActiveAgent(pool, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const conversation = Number.isSafeInteger(conversationId) && conversationId > 0
+      ? await getIndependentConversationInTenant(pool, agent.tenantId, agent.id, conversationId)
+      : null;
+    if (conversation && conversation.status !== "active") return res.status(409).json({ error: "This conversation is no longer active" });
+    const lead = await createIndependentHandoffLead(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: conversation?.id ?? null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    if (conversation) {
+      await updateIndependentConversationStatus(pool, agent.tenantId, agent.id, conversation.id, "escalated");
+      await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل طلب العميل إلى الفريق البشري بعد موافقته.");
+    }
+    const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
+    return res.status(201).json({ lead: { id: lead.id }, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
+  });
+
   app.get("/api/external/auth/me", async (req, res) => {
     const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
     if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
