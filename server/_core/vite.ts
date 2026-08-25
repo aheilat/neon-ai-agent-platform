@@ -58,10 +58,25 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
+
+  // A missing fingerprinted bundle must be a real 404, not index.html with a
+  // JavaScript URL. Returning HTML here leaves the React root blank and hides
+  // the actual stale-deployment condition from the browser.
+  app.use("/assets", (_req, res) => {
+    res.status(404).end();
+  });
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
