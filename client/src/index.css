@@ -94,6 +94,8 @@ button { cursor: pointer; }
 [data-independent-view="knowledge"] #independent-test-chat,
 [data-independent-view="knowledge"] #independent-test-chat ~ section { display: none; }
 
+[data-independent-view="knowledge"] #independent-agent-profile { display: none; }
+
 [data-independent-view="conversations"] #independent-overview,
 [data-independent-view="conversations"] #independent-overview ~ section { display: none; }
 
