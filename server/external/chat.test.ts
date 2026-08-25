@@ -42,6 +42,15 @@ describe("independent agent chat", () => {
     expect(deps.complete).not.toHaveBeenCalled();
   });
 
+  it("returns a truthful Arabic degraded reply when Claude is unavailable", async () => {
+    const deps = dependencies({ complete: vi.fn().mockRejectedValue(new Error("timeout")) });
+    const result = await generateIndependentAgentReply("Bearer token", { agentId: 11, message: "مرحبا" }, deps);
+
+    expect(result.kind).toBe("success");
+    expect(result.reply).toContain("مشغولة مؤقتاً");
+    expect(result.reply).toContain("التحدث مع موظف");
+  });
+
   it("does not call Claude for an inactive or foreign agent", async () => {
     const deps = dependencies({ getAgent: vi.fn().mockResolvedValue(undefined) });
     const result = await generateIndependentAgentReply("Bearer token", { agentId: 44, message: "مرحبا" }, deps);

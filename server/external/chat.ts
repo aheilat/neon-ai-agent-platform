@@ -46,11 +46,17 @@ export async function generateIndependentAgentReplyForTenant(
   if (!agent || agent.status !== "active") return { kind: "not-found" as const };
   const knowledge = await dependencies.getKnowledge(pool, tenantId, agent.id);
   const history = (input.history ?? []).filter(item => item.role === "user" || item.role === "assistant").slice(-10);
-  const reply = await dependencies.complete({
-    system: systemPrompt(agent, knowledge),
-    messages: [...history, { role: "user", content: input.message }],
-    maxTokens: 800,
-  });
+  let reply: string;
+  try {
+    reply = await dependencies.complete({
+      system: systemPrompt(agent, knowledge),
+      messages: [...history, { role: "user", content: input.message }],
+      maxTokens: 800,
+    });
+  } catch (error) {
+    console.error("[Independent Claude] Falling back after completion failure", error instanceof Error ? error.name : "unknown");
+    reply = "أستطيع مساعدتك، لكن خدمة الذكاء الاصطناعي مشغولة مؤقتاً. حاول إرسال طلبك مرة أخرى، أو استخدم خيار «التحدث مع موظف» ليتابع فريق الشركة طلبك.";
+  }
   return { kind: "success" as const, reply, agentId: agent.id };
 }
 
