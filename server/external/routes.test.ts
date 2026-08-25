@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getPublicAgent: vi.fn(),
   getPublicConversation: vi.fn(),
   closeConversation: vi.fn(),
+  rateConversation: vi.fn(),
   addConversationMessage: vi.fn(),
   getPostgresPool: vi.fn(),
 }));
@@ -34,7 +35,7 @@ vi.mock("./websiteDiscovery", () => ({
 
 vi.mock("./claude", () => ({ completeWithIndependentClaude: vi.fn(), extractKnowledgeFromIndependentImage: vi.fn() }));
 vi.mock("./supabase", () => ({ getIndependentSupabaseServerClient: vi.fn() }));
-vi.mock("./agentRepository", () => ({ addIndependentConversationMessage: mocks.addConversationMessage, createIndependentConversation: vi.fn(), createIndependentHandoffLead: vi.fn(), createIndependentPublicConversationSessionToken: vi.fn(() => "x".repeat(43)), getIndependentAgentInTenant: mocks.getAgentInTenant, getIndependentConversationInTenant: mocks.getConversationInTenant, getIndependentPublicActiveAgent: mocks.getPublicAgent, getIndependentPublicConversationForAgent: mocks.getPublicConversation, hashIndependentPublicConversationSessionToken: vi.fn(() => "hashed-session"), listIndependentConversationMessages: mocks.listConversationMessages, listIndependentConversationsForAgent: mocks.listConversations, listIndependentHandoffLeadsForAgent: mocks.listHandoffLeads, listIndependentKnowledgeForAgent: vi.fn(), updateIndependentAgentHandoffContact: vi.fn(), updateIndependentConversationStatus: mocks.closeConversation }));
+vi.mock("./agentRepository", () => ({ addIndependentConversationMessage: mocks.addConversationMessage, createIndependentConversation: vi.fn(), createIndependentHandoffLead: vi.fn(), createIndependentPublicConversationSessionToken: vi.fn(() => "x".repeat(43)), getIndependentAgentInTenant: mocks.getAgentInTenant, getIndependentConversationInTenant: mocks.getConversationInTenant, getIndependentPublicActiveAgent: mocks.getPublicAgent, getIndependentPublicConversationForAgent: mocks.getPublicConversation, hashIndependentPublicConversationSessionToken: vi.fn(() => "hashed-session"), listIndependentConversationMessages: mocks.listConversationMessages, listIndependentConversationsForAgent: mocks.listConversations, listIndependentHandoffLeadsForAgent: mocks.listHandoffLeads, listIndependentKnowledgeForAgent: vi.fn(), updateIndependentAgentHandoffContact: vi.fn(), updateIndependentConversationStatus: mocks.closeConversation, updateIndependentPublicConversationSatisfactionRating: mocks.rateConversation }));
 vi.mock("./postgres", () => ({ getIndependentPostgresPool: mocks.getPostgresPool }));
 
 import { registerIndependentRuntimeRoutes } from "./routes";
@@ -156,6 +157,36 @@ describe("independent runtime routes", () => {
       expect(mocks.getPublicConversation).toHaveBeenCalledWith(pool, 44, 7, 31, "x".repeat(43));
       expect(mocks.closeConversation).toHaveBeenCalledWith(pool, 44, 7, 31, "resolved");
       expect(mocks.addConversationMessage).toHaveBeenCalledWith(pool, 31, "system", "أنهى العميل المحادثة من الـWidget.");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("stores an optional Widget rating only for a closed conversation bound to the active agent session", async () => {
+    const pool = {};
+    const conversation = { id: 33, tenantId: 44, agentId: 7, channel: "widget", customerName: null, customerEmail: null, customerPhone: null, status: "resolved", publicSessionTokenHash: "hashed-session", satisfactionRating: 5, createdAt: new Date(), updatedAt: new Date() };
+    mocks.getPostgresPool.mockReturnValue(pool);
+    mocks.getPublicAgent.mockResolvedValue({ id: 7, tenantId: 44, status: "active" });
+    mocks.rateConversation.mockResolvedValue(conversation);
+    const app = express();
+    app.use(express.json());
+    registerIndependentRuntimeRoutes(app);
+    const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/public/agents/7/conversations/33/rating`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-forwarded-for": "198.51.100.45" },
+        body: JSON.stringify({ conversationSessionToken: "x".repeat(43), satisfactionRating: 5 }),
+      });
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ conversation: { id: 33, status: "resolved", satisfactionRating: 5 } });
+      expect(mocks.rateConversation).toHaveBeenCalledWith(pool, 44, 7, 33, "x".repeat(43), 5);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }

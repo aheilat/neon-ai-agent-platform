@@ -43,6 +43,7 @@ export type IndependentConversation = {
   customerPhone: string | null;
   status: "active" | "escalated" | "resolved";
   publicSessionTokenHash: string | null;
+  satisfactionRating: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -139,7 +140,7 @@ const knowledgeColumns = `
   "sourceFetchedAt", "createdAt", "updatedAt"`;
 
 const conversationColumns = `
-  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "publicSessionTokenHash", "createdAt", "updatedAt"`;
+  id, "agentId", "tenantId", channel, "customerName", "customerEmail", "customerPhone", status, "publicSessionTokenHash", "satisfactionRating", "createdAt", "updatedAt"`;
 
 const leadColumns = `
   id, "tenantId", "agentId", "conversationId", name, email, phone, notes, status, "createdAt", "updatedAt"`;
@@ -396,6 +397,28 @@ export async function updateIndependentConversationStatus(
      where "tenantId" = $1 and "agentId" = $2 and id = $3
      returning ${conversationColumns}`,
     [tenantId, agentId, conversationId, status],
+  );
+  return result.rows[0];
+}
+
+export async function updateIndependentPublicConversationSatisfactionRating(
+  client: Queryable,
+  tenantId: number,
+  agentId: number,
+  conversationId: number,
+  sessionToken: string,
+  satisfactionRating: number,
+) {
+  const result = await client.query<IndependentConversation>(
+    `update public.conversations
+     set "satisfactionRating" = $5, "updatedAt" = now()
+     where "tenantId" = $1
+       and "agentId" = $2
+       and id = $3
+       and "publicSessionTokenHash" = $4
+       and status in ('resolved', 'escalated')
+     returning ${conversationColumns}`,
+    [tenantId, agentId, conversationId, hashIndependentPublicConversationSessionToken(sessionToken), satisfactionRating],
   );
   return result.rows[0];
 }

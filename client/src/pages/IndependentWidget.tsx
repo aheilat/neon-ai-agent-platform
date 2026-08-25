@@ -75,10 +75,28 @@ export default function IndependentWidget() {
       setMessages((current) => [...current, { role: "assistant", content: contact ? `تم حفظ طلبك وتحويله إلى فريق الشركة. للتواصل المباشر: ${contact}` : "تم حفظ طلبك وتحويله إلى فريق الشركة. سيتواصل معك الفريق باستخدام وسيلة الاتصال التي وافقت على مشاركتها." }]);
       setHandoffComplete(true);
       setHandoffOpen(false);
+      void requestExperienceRating();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حفظ طلب التواصل الآن.");
     } finally {
       setHandoffSubmitting(false);
+    }
+  };
+
+  const requestExperienceRating = async () => {
+    if (!agent || !conversationId || !conversationSessionToken) return;
+    const rawRating = window.prompt("كيف تقيّم تجربة المحادثة؟ اختر رقماً من 1 إلى 5، حيث 5 = ★★★★★", "");
+    if (rawRating === null || !rawRating.trim()) return;
+    const satisfactionRating = Number(rawRating);
+    if (!Number.isInteger(satisfactionRating) || satisfactionRating < 1 || satisfactionRating > 5) {
+      setError("أدخل تقييماً صحيحاً من 1 إلى 5.");
+      return;
+    }
+    try {
+      await publicWidgetRequest(`/api/public/agents/${agent.id}/conversations/${conversationId}/rating`, { method: "POST", body: JSON.stringify({ conversationSessionToken, satisfactionRating }) });
+      setMessages((current) => [...current, { role: "assistant", content: "شكراً لتقييمك. سيساعدنا ذلك في تحسين تجربة المحادثة." }]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر حفظ التقييم الآن.");
     }
   };
 
@@ -90,6 +108,7 @@ export default function IndependentWidget() {
       await publicWidgetRequest(`/api/public/agents/${agent.id}/conversations/${conversationId}/close`, { method: "POST", body: JSON.stringify({ conversationSessionToken }) });
       setConversationClosed(true);
       setMessages((current) => [...current, { role: "assistant", content: "تم إنهاء المحادثة. إذا احتجت مساعدة لاحقاً، يمكنك بدء محادثة جديدة مع الشركة." }]);
+      void requestExperienceRating();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر إنهاء المحادثة الآن.");
     } finally {

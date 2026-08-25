@@ -13,7 +13,7 @@ import { generateIndependentAgentReply, generateIndependentAgentReplyForTenant }
 import { assertIndependentAnalysisSources, discoverIndependentWebsiteProposal, independentWebsiteAnalysisSchema } from "./websiteDiscovery";
 import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
-import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus } from "./agentRepository";
+import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus, updateIndependentPublicConversationSatisfactionRating } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
@@ -229,6 +229,24 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (!closed) return res.status(404).json({ error: "Conversation not found" });
     await addIndependentConversationMessage(pool, conversation.id, "system", "أنهى العميل المحادثة من الـWidget.");
     return res.json({ conversation: { id: closed.id, status: closed.status } });
+  });
+
+  app.post("/api/public/agents/:agentId/conversations/:conversationId/rating", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const conversationId = Number(req.params.conversationId);
+    const conversationSessionToken = text(req.body?.conversationSessionToken, 32, 256);
+    const satisfactionRating = Number(req.body?.satisfactionRating);
+    const pool = getIndependentPostgresPool();
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !Number.isSafeInteger(conversationId) || conversationId <= 0 || !conversationSessionToken || !Number.isInteger(satisfactionRating) || satisfactionRating < 1 || satisfactionRating > 5) {
+      return res.status(400).json({ error: "A valid agent, conversation, widget session, and rating from 1 to 5 are required" });
+    }
+    if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+    const agent = await getIndependentPublicActiveAgent(pool, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!allowPublicWidgetAction(req, res, agent.id, "rating", 3)) return;
+    const rated = await updateIndependentPublicConversationSatisfactionRating(pool, agent.tenantId, agent.id, conversationId, conversationSessionToken, satisfactionRating);
+    if (!rated) return res.status(404).json({ error: "Closed conversation not found" });
+    return res.json({ conversation: { id: rated.id, status: rated.status, satisfactionRating: rated.satisfactionRating } });
   });
 
   app.get("/api/external/auth/me", async (req, res) => {
