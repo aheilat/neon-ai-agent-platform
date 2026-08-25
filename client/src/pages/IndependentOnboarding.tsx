@@ -5,6 +5,8 @@ import { ArrowLeft, Bot, Check, Globe2, Loader2, MessageSquareText, Sparkles } f
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
+const functionGoalMap: Record<string, string> = { answer: "questions", qualify: "leads", capture: "buy", escalate: "human", appointments: "appointments", whatsapp: "route" };
+
 const functions = [
   { id: "answer", title: "الرد على أسئلة العملاء", description: "إجابات واضحة من موقعك ومعرفتك.", icon: MessageSquareText },
   { id: "qualify", title: "تأهيل العملاء", description: "اجمع التفاصيل المهمة قبل التواصل.", icon: Check },
@@ -52,7 +54,7 @@ export default function IndependentOnboarding() {
     if (!accessToken) return setLocation("/login");
     setBusy(true); setError(null);
     try {
-      const adjusted = { ...proposal, analysis: { ...proposal.analysis, goals: selectedFunctions } };
+      const adjusted = { ...proposal, analysis: { ...proposal.analysis, goals: selectedFunctions.map((id) => functionGoalMap[id]).filter(Boolean).slice(0, 7) } };
       const result = await applyIndependentWebsiteProposal<{ agent: CreatedAgent }>(accessToken, adjusted);
       setCreatedAgent(result.agent); setStep(4);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر إنشاء صفحة الوكيل."); }

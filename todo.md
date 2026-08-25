@@ -391,3 +391,5 @@
 - [x] Simplify onboarding to login, URL, function selection, analysis, agent page, chat, and embed code
 - [x] Rework the independent workspace into a mobile-first two-column function-card selection flow
 - [x] Add regression coverage for the simplified onboarding sequence and responsive workspace sections
+- [x] Diagnose and fix `A valid website proposal is required` during onboarding website analysis
+- [x] Verify the corrected proposal flow on the independent Render runtime
