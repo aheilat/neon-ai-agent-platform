@@ -421,3 +421,5 @@
 - [ ] Verify responsive ordering and usability on mobile and laptop widths
 - [ ] Run full regression and production availability checks
 - [ ] Complete the comprehensive audit as one uninterrupted pass without requesting intermediate confirmation
+- [x] حماية مسارات Widget العامة من أخطاء Supabase غير المعالجة حتى تعيد JSON 503 بدلاً من إسقاط خدمة Render إلى 502
+

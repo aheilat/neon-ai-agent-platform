@@ -171,7 +171,8 @@ export function registerIndependentRuntimeRoutes(app: Express) {
   });
 
   app.post("/api/public/agents/:agentId/chat", async (req, res) => {
-    const agentId = Number(req.params.agentId);
+    try {
+      const agentId = Number(req.params.agentId);
     const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
     const requestedConversationId = Number(req.body?.conversationId);
     const requestedConversationSessionToken = text(req.body?.conversationSessionToken, 32, 256);
@@ -199,14 +200,19 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       if (typeof reply !== "string" || !reply.trim()) return res.status(503).json({ error: "Independent AI service is unavailable" });
       await addIndependentConversationMessage(pool, conversation.id, "agent", reply);
       return res.json({ reply, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
+      } catch (error) {
+        console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? error.name : "unknown");
+        return res.status(503).json({ error: "Independent AI service is unavailable" });
+      }
     } catch (error) {
-      console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? error.name : "unknown");
-      return res.status(503).json({ error: "Independent AI service is unavailable" });
+      console.error("[Independent Public Widget] Chat route failed", error instanceof Error ? error.name : "unknown");
+      return res.status(503).json({ error: "Independent service is temporarily unavailable" });
     }
   });
 
   app.post("/api/public/agents/:agentId/handoff", async (req, res) => {
-    const agentId = Number(req.params.agentId);
+    try {
+      const agentId = Number(req.params.agentId);
     const name = text(req.body?.name, 1, 255);
     const phone = optionalText(req.body?.phone, 50);
     const email = optionalText(req.body?.email, 320);
@@ -231,8 +237,12 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       await updateIndependentConversationStatus(pool, agent.tenantId, agent.id, conversation.id, "escalated");
       await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل طلب العميل إلى الفريق البشري بعد موافقته.");
     }
-    const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
-    return res.status(201).json({ lead: { id: lead.id }, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
+      const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
+      return res.status(201).json({ lead: { id: lead.id }, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
+    } catch (error) {
+      console.error("[Independent Public Widget] Handoff route failed", error instanceof Error ? error.name : "unknown");
+      return res.status(503).json({ error: "Independent service is temporarily unavailable" });
+    }
   });
 
   app.post("/api/public/agents/:agentId/conversations/:conversationId/close", async (req, res) => {
