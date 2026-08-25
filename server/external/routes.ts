@@ -1,4 +1,5 @@
 import type { Express, Request } from "express";
+import type { Response as ExpressResponse } from "express";
 import {
   addIndependentWorkspaceKnowledge,
   applyIndependentWebsiteProposal,
@@ -41,6 +42,38 @@ function safeWebsiteUrl(value: unknown) {
   } catch {
     return undefined;
   }
+}
+
+type PublicWidgetRateBucket = { count: number; resetAt: number };
+const publicWidgetRateBuckets = new Map<string, PublicWidgetRateBucket>();
+const PUBLIC_WIDGET_RATE_WINDOW_MS = 60_000;
+
+function publicWidgetVisitorAddress(req: Request) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0]?.trim() || "unknown";
+  return req.socket.remoteAddress || "unknown";
+}
+
+function allowPublicWidgetAction(req: Request, res: ExpressResponse, agentId: number, action: string, maxRequests: number) {
+  const now = Date.now();
+  const key = `${action}:${agentId}:${publicWidgetVisitorAddress(req)}`;
+  const current = publicWidgetRateBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    publicWidgetRateBuckets.set(key, { count: 1, resetAt: now + PUBLIC_WIDGET_RATE_WINDOW_MS });
+    if (publicWidgetRateBuckets.size > 10_000) {
+      publicWidgetRateBuckets.forEach((bucket, bucketKey) => {
+        if (bucket.resetAt <= now) publicWidgetRateBuckets.delete(bucketKey);
+      });
+    }
+    return true;
+  }
+  if (current.count >= maxRequests) {
+    res.set("Retry-After", String(Math.max(1, Math.ceil((current.resetAt - now) / 1_000))));
+    res.status(429).json({ error: "Too many Widget requests. Please try again shortly." });
+    return false;
+  }
+  current.count += 1;
+  return true;
 }
 
 const INDEPENDENT_ATTACHMENT_BUCKET = "neon-agent-attachments";
@@ -125,6 +158,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
     const agent = await getIndependentPublicActiveAgent(pool, agentId);
     if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!allowPublicWidgetAction(req, res, agent.id, "chat", 6)) return;
     const isExistingConversation = Number.isSafeInteger(requestedConversationId) && requestedConversationId > 0;
     if (isExistingConversation && !requestedConversationSessionToken) return res.status(400).json({ error: "A valid widget conversation session is required" });
     const newConversationSessionToken = isExistingConversation ? null : createIndependentPublicConversationSessionToken();
@@ -162,6 +196,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
     const agent = await getIndependentPublicActiveAgent(pool, agentId);
     if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!allowPublicWidgetAction(req, res, agent.id, "handoff", 3)) return;
     const hasConversation = Number.isSafeInteger(conversationId) && conversationId > 0;
     if (hasConversation && !conversationSessionToken) return res.status(400).json({ error: "A valid widget conversation session is required" });
     const conversation = hasConversation
@@ -186,6 +221,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
     const agent = await getIndependentPublicActiveAgent(pool, agentId);
     if (!agent) return res.status(404).json({ error: "Agent not found" });
+    if (!allowPublicWidgetAction(req, res, agent.id, "close", 3)) return;
     const conversation = await getIndependentPublicConversationForAgent(pool, agent.tenantId, agent.id, conversationId, conversationSessionToken);
     if (!conversation) return res.status(404).json({ error: "Conversation not found" });
     if (conversation.status !== "active") return res.status(409).json({ error: "This conversation is no longer active" });

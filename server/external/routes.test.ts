@@ -160,4 +160,35 @@ describe("independent runtime routes", () => {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
   });
+
+  it("limits repeated public Widget close actions by visitor and agent", async () => {
+    const pool = {};
+    const conversation = { id: 32, tenantId: 44, agentId: 7, channel: "widget", customerName: null, customerEmail: null, customerPhone: null, status: "active", publicSessionTokenHash: "hashed-session", createdAt: new Date(), updatedAt: new Date() };
+    mocks.getPostgresPool.mockReturnValue(pool);
+    mocks.getPublicAgent.mockResolvedValue({ id: 7, tenantId: 44, status: "active" });
+    mocks.getPublicConversation.mockResolvedValue(conversation);
+    mocks.closeConversation.mockResolvedValue({ ...conversation, status: "resolved" });
+    const app = express();
+    app.use(express.json());
+    registerIndependentRuntimeRoutes(app);
+    const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+      const makeRequest = () => fetch(`http://127.0.0.1:${address.port}/api/public/agents/7/conversations/32/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-forwarded-for": "198.51.100.44" },
+        body: JSON.stringify({ conversationSessionToken: "x".repeat(43) }),
+      });
+      const responses = await Promise.all([makeRequest(), makeRequest(), makeRequest(), makeRequest()]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 429]);
+      expect(responses[3]?.headers.get("retry-after")).toBeTruthy();
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
 });
