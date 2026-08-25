@@ -14,7 +14,7 @@ import {
   type IndependentWebsiteProposal,
 } from "@/lib/independentSetup";
 import { getIndependentSupabaseBrowserClient } from "@/lib/supabase";
-import { Bot, CheckCircle2, CirclePlus, FileText, Globe2, ImageIcon, Loader2, LogOut, MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send, ShieldCheck, Sparkles, Square, X } from "lucide-react";
+import { Bot, CheckCircle2, CirclePlus, Copy, ExternalLink, FileText, Globe2, ImageIcon, Loader2, LogOut, MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send, ShieldCheck, Sparkles, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { useLocation } from "wouter";
@@ -124,6 +124,7 @@ export default function IndependentStaging() {
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffRequest, setHandoffRequest] = useState({ name: "", phone: "", email: "", notes: "", consent: false });
   const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
+  const [widgetCopyStatus, setWidgetCopyStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -516,6 +517,17 @@ export default function IndependentStaging() {
     }
   };
 
+  const copyWidgetSnippet = async () => {
+    if (!selectedAgent) return;
+    const snippet = `<script src="${window.location.origin}/neon-agent-widget.js" data-agent-id="${selectedAgent.id}"></script>`;
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setWidgetCopyStatus("تم نسخ كود الـWidget الخاص بهذا الوكيل.");
+    } catch {
+      setWidgetCopyStatus("تعذر النسخ تلقائياً. انسخ الكود الظاهر يدوياً.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#07111f] px-4 py-5 text-white sm:px-8 sm:py-8" dir="rtl">
       <div className="mx-auto max-w-6xl">
@@ -536,6 +548,12 @@ export default function IndependentStaging() {
           <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="flex items-center gap-2 font-bold"><Bot className="h-5 w-5 text-cyan-200" /> وكلاؤك</p><p className="mt-1 text-sm text-slate-400">اختر وكيلاً أو أنشئ وكيلاً جديداً لنشاط مختلف.</p></div><Button onClick={() => void createAdditionalAgent()} disabled={creatingAgent} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{creatingAgent ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CirclePlus className="ml-2 h-4 w-4" />}وكيل جديد</Button></div>
             <div className="mt-4 flex flex-wrap gap-2">{data.agents.map((agent) => <button key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-2xl border px-4 py-3 text-right transition ${selectedAgent.id === agent.id ? "border-cyan-200/60 bg-cyan-300/15 text-white" : "border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/25"}`}><span className="block text-sm font-bold">{agent.name}</span><span className="mt-1 block text-xs text-slate-400">{agent.status === "active" ? "نشط" : agent.status}</span></button>)}</div>
+          </section>
+
+          <section className="mt-6 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" /> معاينة وWidget الوكيل</p><p className="mt-1 text-sm leading-6 text-slate-300">هذه المعاينة وكود التضمين مرتبطان بالوكيل المحدد فقط: <strong>{selectedAgent.name}</strong>.</p></div><a href={`/widget/${selectedAgent.id}`} target="_blank" rel="noreferrer"><Button type="button" variant="outline" className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10"><ExternalLink className="ml-2 h-4 w-4" />فتح المعاينة الحية</Button></a></div>
+            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:flex-row sm:items-center"><code dir="ltr" className="min-w-0 flex-1 break-all text-left text-xs leading-6 text-cyan-100">{`<script src="${window.location.origin}/neon-agent-widget.js" data-agent-id="${selectedAgent.id}"></script>`}</code><Button type="button" onClick={() => void copyWidgetSnippet()} className="shrink-0 bg-cyan-300 text-slate-950 hover:bg-cyan-200"><Copy className="ml-2 h-4 w-4" />نسخ الكود</Button></div>
+            {widgetCopyStatus && <p className="mt-3 text-sm text-lime-100">{widgetCopyStatus}</p>}
           </section>
 
           <section className="mt-6 rounded-3xl border border-lime-300/25 bg-gradient-to-l from-lime-300/[0.10] to-cyan-300/[0.06] p-5 sm:p-6">
