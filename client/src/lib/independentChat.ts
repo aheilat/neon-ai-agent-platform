@@ -13,6 +13,17 @@ export type IndependentAgentChatResponse = {
 
 type FetchImplementation = typeof fetch;
 
+async function readJsonResponse(response: Response): Promise<unknown> {
+  if (typeof response.text !== "function") return response.json();
+  const raw = await response.text();
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(response.headers.get("content-type")?.includes("text/html") ? "تعذر الوصول إلى خدمة الوكيل. يبدو أن الخادم يعيد صفحة HTML بدلاً من استجابة API." : "وصل رد غير صالح من خدمة الوكيل.");
+  }
+}
+
 function getResponseError(payload: unknown) {
   if (
     typeof payload === "object" &&
@@ -42,7 +53,7 @@ export async function requestIndependentAgentReply(
     },
     body: JSON.stringify({ message, conversationId }),
   });
-  const payload = await response.json() as unknown;
+  const payload = await readJsonResponse(response);
 
   if (!response.ok) {
     throw new Error(getResponseError(payload));
@@ -80,7 +91,7 @@ export async function closeIndependentConversation(
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: "{}",
   });
-  const payload = await response.json() as unknown;
+  const payload = await readJsonResponse(response);
   if (!response.ok) throw new Error(getResponseError(payload));
   if (typeof payload !== "object" || payload === null || !("conversation" in payload) || typeof payload.conversation !== "object" || payload.conversation === null || !("id" in payload.conversation) || typeof payload.conversation.id !== "number" || !("status" in payload.conversation) || payload.conversation.status !== "resolved") {
     throw new Error("وصلت حالة إغلاق غير صالحة من خدمة المحادثة المستقلة.");

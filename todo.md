@@ -384,7 +384,7 @@
 - [ ] Run the final disposable New Customer journey: register → template or website → knowledge → Widget → handoff
 - [ ] Remove temporary test artifacts and disposable Supabase test records without touching customer or production WhatsApp data
 - [ ] Review the independent dashboard for remaining non-functional placeholders and label or replace them
-- [ ] Diagnose and fix `Unexpected token '<'` when the Widget expects JSON
+- [x] Diagnose and fix `Unexpected token '<'` when the Widget expects JSON
 - [ ] Verify that Widget conversations appear in the selected agent inbox and document the customer testing flow
 - [ ] Diagnose why ready-made templates are not visible or actionable on the Render workspace
 - [ ] Restore visible social-channel onboarding controls while preserving truthful Meta App not active gating
