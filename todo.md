@@ -396,3 +396,6 @@
 - [x] Reproduce and eliminate the remaining live `A valid website proposal is required` error shown after website analysis
 - [x] Diagnose and fix the live agent-service HTML response instead of JSON
 - [ ] Diagnose and fix Meta onboarding return/callback behavior without claiming an unapproved WhatsApp connection
+- [x] Add an explicit Meta pending-approval message beside the connection action
+- [x] Add an agent-scoped local Meta mock-success flow for testing saved connection data
+- [x] Add loading, persistence, and custom error states for the Meta connection test flow

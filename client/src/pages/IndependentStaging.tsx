@@ -20,6 +20,7 @@ import {
   type IndependentWebsiteProposal,
 } from "@/lib/independentSetup";
 import { getIndependentSupabaseBrowserClient } from "@/lib/supabase";
+import { createMockMetaConnection, mockMetaStorageKey, type MockMetaConnection } from "@/lib/mockMetaConnection";
 import { Bot, CheckCircle2, CirclePlus, Copy, ExternalLink, FileText, Globe2, ImageIcon, Loader2, LogOut, MessageSquareText, Mic, Paperclip, RefreshCw, Save, Send, ShieldCheck, Sparkles, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -189,6 +190,9 @@ export default function IndependentStaging() {
   const [inboxMessagesLoading, setInboxMessagesLoading] = useState(false);
   const [closingInboxConversationId, setClosingInboxConversationId] = useState<number | null>(null);
   const [widgetCopyStatus, setWidgetCopyStatus] = useState<string | null>(null);
+  const [mockMetaConnection, setMockMetaConnection] = useState<MockMetaConnection | null>(null);
+  const [mockMetaBusy, setMockMetaBusy] = useState(false);
+  const [mockMetaError, setMockMetaError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -199,6 +203,37 @@ export default function IndependentStaging() {
     () => data?.agents.find((agent) => agent.id === selectedAgentId) ?? data?.defaultAgent ?? null,
     [data, selectedAgentId],
   );
+
+  useEffect(() => {
+    if (!selectedAgent) {
+      setMockMetaConnection(null);
+      return;
+    }
+    try {
+      const saved = window.localStorage.getItem(mockMetaStorageKey(selectedAgent.id));
+      setMockMetaConnection(saved ? JSON.parse(saved) as MockMetaConnection : null);
+      setMockMetaError(null);
+    } catch {
+      setMockMetaConnection(null);
+      setMockMetaError("تعذر قراءة حالة المحاكاة المحفوظة لهذا الوكيل.");
+    }
+  }, [selectedAgent]);
+
+  const simulateMetaConnection = async () => {
+    if (!selectedAgent) return;
+    setMockMetaBusy(true);
+    setMockMetaError(null);
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    try {
+      const connection = createMockMetaConnection(selectedAgent.name);
+      window.localStorage.setItem(mockMetaStorageKey(selectedAgent.id), JSON.stringify(connection));
+      setMockMetaConnection(connection);
+    } catch {
+      setMockMetaError("تعذر حفظ نتيجة المحاكاة على هذا الجهاز. تحقق من مساحة التخزين ثم حاول مجدداً.");
+    } finally {
+      setMockMetaBusy(false);
+    }
+  };
 
   const accessToken = useCallback(async () => {
     const client = getIndependentSupabaseBrowserClient();
@@ -763,7 +798,7 @@ export default function IndependentStaging() {
 
           <section id="independent-channels" className="mt-6 scroll-mt-5 rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-6">
             <div className="flex items-start gap-3"><Globe2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" /><div><h2 className="font-bold">قنوات وكيلك</h2><p className="mt-1 text-sm leading-6 text-slate-300">هذه الحالة تخص الوكيل المحدد فقط. لا نظهر قناة على أنها متصلة قبل أن تكون جاهزة فعلياً.</p></div></div>
-            <div className="mt-5 grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.08] p-4"><p className="font-bold text-lime-100">Widget الويب</p><p className="mt-2 text-sm leading-6 text-slate-300">جاهز للمعاينة والتضمين مع الوكيل المحدد.</p><a href={`/widget/${selectedAgent.id}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-bold text-lime-200 hover:text-lime-100">فتح الـWidget ←</a></div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-amber-100">إعداد WhatsApp / Meta</p><p className="mt-1 text-xs font-bold text-amber-200">الحالة الحالية: App not active</p></div><span className="rounded-full border border-amber-200/20 px-2 py-1 text-[11px] text-amber-100">محجوز حتى اعتماد Meta</span></div><p className="mt-3 text-sm leading-6 text-slate-300">لا ندّعي وجود اتصال أو إرسال رسائل الآن. بعد تفعيل التطبيق ومراجعة صلاحيات Tech Provider يمكن للعميل ربط حسابه عبر Embedded Signup، من دون مشاركة Access Token يدوي.</p><ol className="mt-3 space-y-2 text-xs leading-5 text-slate-300"><li><span className="ml-2 text-amber-200">١.</span>أكمل App Review وAccess Verification في Meta.</li><li><span className="ml-2 text-amber-200">٢.</span>فعّل التطبيق من وضع Development إلى Live.</li><li><span className="ml-2 text-amber-200">٣.</span>سنفتح زر الربط الذاتي بعد تأكيد Configuration ID وصلاحيات الإنتاج.</li></ol><a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="mt-4 inline-flex text-xs font-bold text-amber-100 underline decoration-amber-200/40 underline-offset-4 hover:text-white">فتح لوحة Meta للمراجعة ←</a></div><div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"><p className="font-bold text-slate-100">الهاتف والبريد</p><p className="mt-2 text-sm leading-6 text-slate-300">قنوات الإرسال لم تُهيأ بعد. يمكن للوكيل حفظ طلب تحويل بموافقة العميل فقط، من دون ادعاء إرسال مكالمة أو بريد.</p></div></div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.08] p-4"><p className="font-bold text-lime-100">Widget الويب</p><p className="mt-2 text-sm leading-6 text-slate-300">جاهز للمعاينة والتضمين مع الوكيل المحدد.</p><a href={`/widget/${selectedAgent.id}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-bold text-lime-200 hover:text-lime-100">فتح الـWidget ←</a></div><div className={`rounded-2xl border p-4 ${mockMetaConnection ? "border-lime-300/25 bg-lime-300/[0.08]" : "border-amber-300/20 bg-amber-300/[0.07]"}`}><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-amber-100">إعداد WhatsApp / Meta</p><p className={`mt-1 text-xs font-bold ${mockMetaConnection ? "text-lime-200" : "text-amber-200"}`}>{mockMetaConnection ? "الحالة: اتصال محاكى للاختبار فقط" : "الحالة الحالية: بانتظار اعتماد Meta"}</p></div><span className="rounded-full border border-amber-200/20 px-2 py-1 text-[11px] text-amber-100">{mockMetaConnection ? "محاكاة محلية" : "بانتظار الاعتماد"}</span></div>{mockMetaConnection ? <div className="mt-4 rounded-xl border border-lime-300/20 bg-lime-300/10 p-3 text-sm leading-6 text-lime-50"><p className="font-bold">تم حفظ بيانات اتصال تجريبية</p><p className="mt-1" dir="ltr">{mockMetaConnection.displayPhoneNumber} · {mockMetaConnection.verifiedName}</p><p className="mt-1 text-xs text-lime-100/80">Quality: {mockMetaConnection.qualityRating} · لا توجد رسالة حقيقية أُرسلت إلى WhatsApp.</p></div> : <><p className="mt-3 text-sm leading-6 text-slate-300">هذه الخدمة بانتظار اعتماد تطبيق Meta وفتح صلاحيات Embedded Signup. لا يوجد ربط حقيقي أو إرسال رسائل حالياً، ولن نعرض القناة كأنها متصلة قبل اعتمادها.</p><ol className="mt-3 space-y-2 text-xs leading-5 text-slate-300"><li><span className="ml-2 text-amber-200">١.</span>أكمل App Review وAccess Verification في Meta.</li><li><span className="ml-2 text-amber-200">٢.</span>فعّل التطبيق من Development إلى Live.</li><li><span className="ml-2 text-amber-200">٣.</span>بعد الاعتماد نفعّل زر الربط الذاتي للعميل.</li></ol></>}<div className="mt-4 flex flex-wrap items-center gap-2"><Button type="button" onClick={() => void simulateMetaConnection()} disabled={mockMetaBusy} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">{mockMetaBusy ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />جارٍ حفظ المحاكاة…</> : mockMetaConnection ? "إعادة محاكاة نجاح الربط" : "محاكاة نجاح الربط للاختبار"}</Button><a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="text-xs font-bold text-amber-100 underline decoration-amber-200/40 underline-offset-4 hover:text-white">فتح لوحة Meta للمراجعة ←</a></div>{mockMetaError && <p className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-xs leading-6 text-rose-100">{mockMetaError}</p>}<p className="mt-3 text-[11px] leading-5 text-slate-500">زر المحاكاة يحفظ بيانات اختبار محلياً لهذا الوكيل في هذا المتصفح فقط، ولا ينشئ WABA ولا يرسل رسائل.</p></div><div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4"><p className="font-bold text-slate-100">الهاتف والبريد</p><p className="mt-2 text-sm leading-6 text-slate-300">قنوات الإرسال لم تُهيأ بعد. يمكن للوكيل حفظ طلب تحويل بموافقة العميل فقط، من دون ادعاء إرسال مكالمة أو بريد.</p></div></div>
           </section>
 
           <section id="independent-website-learning" className="mt-6 rounded-3xl border border-lime-300/25 bg-gradient-to-l from-lime-300/[0.10] to-cyan-300/[0.06] p-5 sm:p-6">
