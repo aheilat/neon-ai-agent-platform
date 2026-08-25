@@ -399,3 +399,5 @@
 - [x] Add an explicit Meta pending-approval message beside the connection action
 - [x] Add an agent-scoped local Meta mock-success flow for testing saved connection data
 - [x] Add loading, persistence, and custom error states for the Meta connection test flow
+- [x] Add reset/cancel control for saved Meta simulation data
+- [x] Show simulated connection time and current activity status in the Meta card
