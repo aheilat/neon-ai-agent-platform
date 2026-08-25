@@ -43,7 +43,7 @@ export async function completeWithIndependentClaude(
     messages: request.messages,
   });
   const timeout = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), 12_000);
+    const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), 3_500);
     completion.finally(() => clearTimeout(timer)).catch(() => undefined);
   });
   const response = await Promise.race([completion, timeout]);
