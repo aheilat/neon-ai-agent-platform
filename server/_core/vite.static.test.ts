@@ -1,10 +1,15 @@
 import express from "express";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { serveStatic } from "./vite";
 
 describe("production static delivery", () => {
   it("does not return the SPA HTML fallback for a missing hashed asset and prevents stale HTML caching", async () => {
     const app = express();
+    const distPath = path.resolve(import.meta.dirname, "../..", "dist", "public");
+    await mkdir(distPath, { recursive: true });
+    await writeFile(path.join(distPath, "index.html"), "<!doctype html><html><body><div id=\"root\"></div></body></html>");
     serveStatic(app);
     const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
       const instance = app.listen(0, () => resolve(instance));
@@ -22,6 +27,7 @@ describe("production static delivery", () => {
       expect(spaRoute.headers.get("content-type")).toContain("text/html");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await rm(path.resolve(import.meta.dirname, "../..", "dist"), { recursive: true, force: true });
     }
   });
 });
