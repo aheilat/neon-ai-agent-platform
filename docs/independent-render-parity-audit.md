@@ -34,6 +34,8 @@ The isolated Supabase project was then queried with a bounded schema check. It c
 
 After the independent focused-view rollout, the live `/knowledge` route was rechecked on Render. It showed only the selected agent’s backed knowledge editor, current knowledge items, and supported attachment controls. The unrelated agent-profile editor was not present on that route.
 
+The live `/agents` route was also verified after its focused-view refinement. It showed only the tenant workspace’s agent selection controls, agent creation action, and the selected agent’s backed profile editor. Knowledge, chat, Widget, channel, and setup sections were not present on that route.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
