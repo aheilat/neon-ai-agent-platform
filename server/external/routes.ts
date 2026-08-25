@@ -44,20 +44,43 @@ function safeWebsiteUrl(value: unknown) {
 }
 
 const INDEPENDENT_ATTACHMENT_BUCKET = "neon-agent-attachments";
+let attachmentBucketReady = false;
+
+class IndependentAttachmentError extends Error {
+  constructor(readonly kind: "storage-not-configured" | "storage-bucket-unavailable" | "storage-upload-failed") {
+    super(kind);
+  }
+}
+
+function attachmentFailureMessage(error: unknown) {
+  if (!(error instanceof IndependentAttachmentError)) return "تعذر إضافة المرفق إلى معرفة الوكيل الآن.";
+  if (error.kind === "storage-not-configured") return "تخزين المعرفة الخاص غير مهيأ في بيئة Render بعد. لا تعيد رفع الملف؛ يلزم إصلاح إعداد التخزين أولاً.";
+  if (error.kind === "storage-bucket-unavailable") return "تعذر الوصول إلى مساحة التخزين الخاصة بقاعدة المعرفة. حاول لاحقاً؛ إذا تكرر الخطأ سيحتاج مسؤول المنصة إلى مراجعة إعداد التخزين.";
+  return "تعذر حفظ الملف داخل التخزين الخاص. لم تتم إضافة معرفة جزئية إلى الوكيل؛ حاول بملف أصغر أو لاحقاً.";
+}
 
 async function storeIndependentAttachment(input: { tenantId: number; agentId: number; fileName: string; contentType: string; bytes: Uint8Array }) {
   const supabase = getIndependentSupabaseServerClient();
-  if (!supabase) throw new Error("storage-unavailable");
-  const { error: bucketError } = await supabase.storage.createBucket(INDEPENDENT_ATTACHMENT_BUCKET, {
-    public: false,
-    fileSizeLimit: "5242880",
-    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "text/plain", "text/markdown", "text/csv", "application/json"],
-  });
-  if (bucketError && !/already exists|duplicate/i.test(bucketError.message)) throw new Error("storage-unavailable");
+  if (!supabase) throw new IndependentAttachmentError("storage-not-configured");
+  if (!attachmentBucketReady) {
+    const { error: bucketError } = await supabase.storage.createBucket(INDEPENDENT_ATTACHMENT_BUCKET, {
+      public: false,
+      fileSizeLimit: "5242880",
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "text/plain", "text/markdown", "text/csv", "application/json"],
+    });
+    if (bucketError && !/already exists|duplicate/i.test(bucketError.message)) {
+      console.error("[Independent Attachment] Bucket unavailable", bucketError.name);
+      throw new IndependentAttachmentError("storage-bucket-unavailable");
+    }
+    attachmentBucketReady = true;
+  }
   const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "attachment";
   const path = `${input.tenantId}/${input.agentId}/${Date.now()}-${safeName}`;
   const { data, error } = await supabase.storage.from(INDEPENDENT_ATTACHMENT_BUCKET).upload(path, input.bytes, { contentType: input.contentType, upsert: false });
-  if (error || !data) throw new Error("storage-unavailable");
+  if (error || !data) {
+    console.error("[Independent Attachment] Upload failed", error?.name ?? "unknown");
+    throw new IndependentAttachmentError("storage-upload-failed");
+  }
   return `supabase://${INDEPENDENT_ATTACHMENT_BUCKET}/${data.path}`;
 }
 
@@ -171,6 +194,10 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
     if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
     try {
+      const pool = getIndependentPostgresPool();
+      if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+      const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+      if (!agent) return res.status(404).json({ error: "Agent not found" });
       const bytes = Buffer.from(match[2], "base64");
       if (bytes.byteLength > 5 * 1024 * 1024) return res.status(400).json({ error: "A supported image up to 5 MB is required" });
       const sourceUrl = await storeIndependentAttachment({ tenantId: session.workspace.id, agentId, fileName, contentType: supportedMediaType, bytes });
@@ -187,8 +214,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       if (!knowledge) return res.status(404).json({ error: "Agent not found" });
       return res.status(201).json({ knowledge, extractedText: content });
     } catch (error) {
+      if (error instanceof IndependentAttachmentError) return res.status(503).json({ error: attachmentFailureMessage(error), code: error.kind });
       console.error("[Independent Image Knowledge] Extraction failed", error instanceof Error ? error.name : "unknown");
-      return res.status(503).json({ error: "Independent image analysis is unavailable" });
+      return res.status(503).json({ error: "تعذر استخراج معرفة من الصورة الآن. لم تُضف الصورة إلى الوكيل." });
     }
   });
 
@@ -203,6 +231,10 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
     if (!session) return res.status(401).json({ error: "Supabase authentication is required" });
     try {
+      const pool = getIndependentPostgresPool();
+      if (!pool) return res.status(503).json({ error: "Independent database is unavailable" });
+      const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+      if (!agent) return res.status(404).json({ error: "Agent not found" });
       const bytes = Buffer.from(match[2], "base64");
       if (bytes.byteLength > 5 * 1024 * 1024) return res.status(400).json({ error: "A supported text file up to 5 MB is required" });
       const content = bytes.toString("utf8").trim();
@@ -219,8 +251,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       if (!knowledge) return res.status(404).json({ error: "Agent not found" });
       return res.status(201).json({ knowledge });
     } catch (error) {
+      if (error instanceof IndependentAttachmentError) return res.status(503).json({ error: attachmentFailureMessage(error), code: error.kind });
       console.error("[Independent Text Knowledge] Storage failed", error instanceof Error ? error.name : "unknown");
-      return res.status(503).json({ error: "Independent attachment storage is unavailable" });
+      return res.status(503).json({ error: "تعذر قراءة أو حفظ هذا الملف. لم تُضف معرفة جزئية إلى الوكيل." });
     }
   });
 

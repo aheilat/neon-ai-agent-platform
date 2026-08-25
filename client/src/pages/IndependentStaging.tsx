@@ -198,6 +198,9 @@ export default function IndependentStaging() {
     setChatError(null);
     setConversationId(null);
     setConversationStatus("active");
+    setAttachmentStatus(null);
+    setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+    setVoiceTranscript("");
     const contact = (selectedAgent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
     setHandoffContact({ name: typeof contact.name === "string" ? contact.name : "", phone: typeof contact.phone === "string" ? contact.phone : "", email: typeof contact.email === "string" ? contact.email : "" });
     setHandoffOpen(false);
@@ -333,7 +336,6 @@ export default function IndependentStaging() {
         });
         const result = await addIndependentImageKnowledge<{ knowledge: IndependentKnowledgeItem; extractedText: string }>(token, selectedAgent.id, { fileName: file.name, mediaType: file.type as "image/jpeg" | "image/png" | "image/webp" | "image/gif", dataUrl });
         setKnowledge((current) => [result.knowledge, ...current]);
-        setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة المعرفة المستخرجة من الصورة **${file.name}** إلى معرفة الوكيل.` }]);
         setAttachmentStatus(`تم حفظ ${file.name} واستخراج معرفة منه بنجاح.`);
         return;
       }
@@ -350,7 +352,6 @@ export default function IndependentStaging() {
         fileName: file.name, mediaType, dataUrl,
       });
       setKnowledge((current) => [result.knowledge, ...current]);
-      setChatMessages((current) => [...current, { id: `attachment-${Date.now()}`, role: "assistant", content: `تمت إضافة محتوى الملف **${file.name}** إلى معرفة الوكيل.` }]);
       setAttachmentStatus(`تم حفظ ${file.name} ضمن معرفة الوكيل بنجاح.`);
     } catch (reason) {
       setAttachmentStatus(reason instanceof Error ? `تعذر إضافة المرفق: ${reason.message}` : "تعذر إضافة المرفق إلى معرفة الوكيل.");
@@ -425,7 +426,7 @@ export default function IndependentStaging() {
 
   const sendTestMessage = async (quickMessage?: string) => {
     if (!selectedAgent) return;
-    if (conversationStatus !== "active") return setChatError(conversationStatus === "escalated" ? "تم تحويل هذه المحادثة إلى الفريق البشري؛ لن يرسل الوكيل رداً آلياً آخر." : "هذه المحادثة مغلقة. ابدأ اختباراً جديداً باختيار الوكيل مرة أخرى.");
+    if (conversationStatus !== "active" && conversationId) return setChatError(conversationStatus === "escalated" ? "تم تحويل هذه المحادثة إلى الفريق البشري؛ لن يرسل الوكيل رداً آلياً آخر." : "هذه المحادثة مغلقة.");
     const message = (quickMessage ?? chatDraft).trim();
     if (!message) return setChatError("اكتب رسالة قصيرة لاختبار رد الوكيل.");
     const token = await accessToken();
@@ -477,12 +478,15 @@ export default function IndependentStaging() {
       const result = await createIndependentHandoffRequest<{ contact: { name: string | null; phone: string | null; email: string | null }; conversation: { id: number; status: "escalated" } | null }>(token, selectedAgent.id, { ...handoffRequest, conversationId });
       const directContact = [result.contact.name, result.contact.phone, result.contact.email].filter(Boolean).join(" · ");
       const confirmation = directContact ? `تم تسجيل طلبك وسيتم التواصل معك عبر فريق ${directContact}.` : "تم تسجيل طلبك لفريق هذه الشركة. لم تُضبط وسيلة تواصل مباشرة بعد.";
-      setChatMessages((current) => [...current, { id: `handoff-${Date.now()}`, role: "assistant", content: confirmation }]);
+      setChatMessages([]);
+      setChatDraft("");
+      setVoiceTranscript("");
+      setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
       if (result.conversation) {
         setConversationId(result.conversation.id);
         setConversationStatus("escalated");
       }
-      setHandoffStatus("تم حفظ طلب التواصل بنجاح.");
+      setHandoffStatus(`${confirmation} تمت إزالة سجل الدردشة من شاشة الاختبار.`);
       setHandoffOpen(false);
       setHandoffRequest({ name: "", phone: "", email: "", notes: "", consent: false });
     } catch (reason) {
@@ -499,7 +503,12 @@ export default function IndependentStaging() {
     try {
       await closeIndependentConversation(token, selectedAgent.id, conversationId);
       setConversationStatus("resolved");
-      setChatMessages((current) => [...current, { id: `close-${Date.now()}`, role: "assistant", content: "تم إغلاق هذه المحادثة. شكراً لتواصلك معنا." }]);
+      setConversationId(null);
+      setChatMessages([]);
+      setChatDraft("");
+      setVoiceTranscript("");
+      setAudioPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+      setChatError("تم إغلاق المحادثة وحذف سجلها من شاشة الاختبار. اكتب رسالة جديدة لبدء اختبار جديد.");
     } catch (reason) {
       setChatError(reason instanceof Error ? reason.message : "تعذر إغلاق المحادثة الآن.");
     } finally {
