@@ -160,6 +160,13 @@ function agentProfile(req: Request) {
  * from the browser.
  */
 export function registerIndependentRuntimeRoutes(app: Express) {
+  app.use("/api/public", (_req, res, next) => {
+    res.setTimeout(4_500, () => {
+      if (!res.headersSent) res.status(503).json({ error: "Independent service is temporarily unavailable" });
+    });
+    next();
+  });
+
   app.get("/api/public/agents/:agentId", async (req, res) => {
     const agentId = Number(req.params.agentId);
     const pool = getIndependentPostgresPool();
