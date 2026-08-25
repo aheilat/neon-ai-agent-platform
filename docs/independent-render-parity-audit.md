@@ -22,6 +22,12 @@ For a separate live website-to-agent validation, the isolated workspace submitte
 
 The live analysis returned a reviewable proposal from one public page, including an `AdCreative AI` agent name, a business summary, one service, and three source-linked FAQs. After approval in the disposable workspace, the platform created and selected a **new active AdCreative AI agent**, showed its own extracted knowledge items, and issued a distinct Widget URL at `/widget/10`. The prior second agent and its manual knowledge remained a separate agent surface. This completes the previously pending live approval step without modifying any customer agent or production channel asset.
 
+The live `/conversations` route then loaded the new **صندوق محادثات الوكيل** surface for the selected AdCreative AI agent, alongside the agent-specific handoff request panel. Its empty state correctly reported no saved conversations for that newly created agent, while the independent navigation links were visible and the route was no longer a managed tRPC dashboard. A separate disposable conversation will be created for this agent solely to validate stored message-detail rendering.
+
+For that final live inbox check, the disposable AdCreative AI agent answered a test question using only its newly extracted website knowledge. The conversation appeared in its own inbox, opened to a stored two-message thread, and was then closed through the inbox control. The list refreshed to the closed state with the system close-out event while retaining the readable message history. This verified the independent list, detail, and close lifecycle on Render without accessing another tenant or customer agent.
+
+The live `/settings` route was also verified after the independent navigation rollout. It loaded the selected AdCreative AI agent’s dedicated handoff-contact configuration surface and explicitly stated that it stores company contact information only; it makes no claim to send a message, initiate a call, or use any production phone or WhatsApp asset.
+
 | Area | Managed Manus implementation | Independent Render status | Consequence on Render |
 |---|---|---|---|
 | Dashboard pages | Existing agents, knowledge, conversations, team, channels, notifications, billing, and quality pages make 67 tRPC calls across 14 screens | `/api/trpc` is deliberately absent | Existing full-page components render without their data/actions or are unusable |
