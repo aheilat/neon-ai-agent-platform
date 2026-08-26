@@ -4,6 +4,19 @@ import net from "net";
 import { serveStatic, setupVite } from "./vite";
 import { isIndependentRuntime } from "../external/runtimeMode";
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled promise rejection", reason);
+});
+
+let uncaughtExceptionShutdownScheduled = false;
+
+process.on("uncaughtException", (error) => {
+  console.error("[Process] Uncaught exception", error);
+  if (uncaughtExceptionShutdownScheduled) return;
+  uncaughtExceptionShutdownScheduled = true;
+  setTimeout(() => process.exit(1), 100);
+});
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();

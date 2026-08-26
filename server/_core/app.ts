@@ -22,44 +22,54 @@ export async function createNeonApp() {
   const app = express();
 
   app.get("/api/webhooks/whatsapp", (req, res) => {
-    const challenge = verifyWhatsAppWebhook(req.query as Record<string, string | string[] | undefined>, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
-    if (!challenge) return res.status(403).json({ error: "Webhook verification failed" });
-    return res.status(200).send(challenge);
+    try {
+      const challenge = verifyWhatsAppWebhook(req.query as Record<string, string | string[] | undefined>, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
+      if (!challenge) return res.status(403).json({ error: "Webhook verification failed" });
+      return res.status(200).send(challenge);
+    } catch (error) {
+      console.error("[WhatsApp Webhook] Verification failed", error);
+      return res.status(500).json({ error: "Webhook verification unavailable" });
+    }
   });
 
   app.post("/api/webhooks/whatsapp", express.raw({ type: "application/json", limit: "3mb" }), (req, res) => {
-    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
-    if (!verifyWhatsAppSignature(rawBody, req.get("x-hub-signature-256") || undefined, process.env.WHATSAPP_APP_SECRET)) {
-      console.warn("[WhatsApp Webhook] Rejected event with an invalid signature");
-      return res.status(401).json({ error: "Invalid WhatsApp signature" });
-    }
-    let payload: unknown;
     try {
-      payload = JSON.parse(rawBody.toString("utf8"));
-    } catch {
-      return res.status(400).json({ error: "Invalid JSON payload" });
-    }
-    const incomingMessages = extractWhatsAppInboundMessages(payload);
-    console.info("[WhatsApp Webhook] Accepted event", { incomingMessageCount: incomingMessages.length });
-    res.status(200).send("EVENT_RECEIVED");
-    for (const message of incomingMessages) {
-      void processWhatsAppInboundMessage(message).then(async result => {
-        console.info("[WhatsApp Webhook] Processing result", {
-          accepted: result.accepted,
-          reason: "reason" in result ? result.reason : undefined,
-          hasReply: "reply" in result && Boolean(result.reply),
-          handoff: "handoff" in result && Boolean(result.handoff),
-        });
-        if (result.accepted && result.reply) {
-          try {
-            const customerBusinessToken = await getEmbeddedBusinessTokenForPhoneNumberId(message.phoneNumberId);
-            await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply, accessToken: customerBusinessToken });
-            console.info("[WhatsApp Webhook] Automated reply sent");
-          } catch (error) {
-            console.error("[WhatsApp Webhook] Failed to send automated reply", error);
+      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+      if (!verifyWhatsAppSignature(rawBody, req.get("x-hub-signature-256") || undefined, process.env.WHATSAPP_APP_SECRET)) {
+        console.warn("[WhatsApp Webhook] Rejected event with an invalid signature");
+        return res.status(401).json({ error: "Invalid WhatsApp signature" });
+      }
+      let payload: unknown;
+      try {
+        payload = JSON.parse(rawBody.toString("utf8"));
+      } catch {
+        return res.status(400).json({ error: "Invalid JSON payload" });
+      }
+      const incomingMessages = extractWhatsAppInboundMessages(payload);
+      console.info("[WhatsApp Webhook] Accepted event", { incomingMessageCount: incomingMessages.length });
+      res.status(200).send("EVENT_RECEIVED");
+      for (const message of incomingMessages) {
+        void processWhatsAppInboundMessage(message).then(async result => {
+          console.info("[WhatsApp Webhook] Processing result", {
+            accepted: result.accepted,
+            reason: "reason" in result ? result.reason : undefined,
+            hasReply: "reply" in result && Boolean(result.reply),
+            handoff: "handoff" in result && Boolean(result.handoff),
+          });
+          if (result.accepted && result.reply) {
+            try {
+              const customerBusinessToken = await getEmbeddedBusinessTokenForPhoneNumberId(message.phoneNumberId);
+              await sendWhatsAppText({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: result.reply, accessToken: customerBusinessToken });
+              console.info("[WhatsApp Webhook] Automated reply sent");
+            } catch (error) {
+              console.error("[WhatsApp Webhook] Failed to send automated reply", error);
+            }
           }
-        }
-      }).catch(error => console.error("[WhatsApp Webhook] Failed to process message", error));
+        }).catch(error => console.error("[WhatsApp Webhook] Failed to process message", error));
+      }
+    } catch (error) {
+      console.error("[WhatsApp Webhook] Failed to accept event", error);
+      if (!res.headersSent) return res.status(400).json({ error: "Invalid WhatsApp event" });
     }
   });
 

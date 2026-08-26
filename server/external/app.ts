@@ -1,6 +1,7 @@
 import express from "express";
 import { getIndependentRuntimeHealth } from "./health";
 import { registerIndependentRuntimeRoutes } from "./routes";
+import { independentErrorHandler, installAsyncRouteGuards } from "./asyncHandler";
 
 /**
  * Express application used only by Render/Vercel independent deployments.
@@ -10,6 +11,7 @@ import { registerIndependentRuntimeRoutes } from "./routes";
  */
 export async function createIndependentNeonApp() {
   const app = express();
+  installAsyncRouteGuards(app);
   app.get("/api/health", async (_req, res) => {
     const health = await getIndependentRuntimeHealth();
     return res.status(health.ok ? 200 : 503).json(health);
@@ -20,5 +22,6 @@ export async function createIndependentNeonApp() {
   app.all("/api/*", (_req, res) => {
     return res.status(404).json({ error: "Independent API route not found" });
   });
+  app.use(independentErrorHandler);
   return app;
 }
