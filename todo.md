@@ -334,9 +334,9 @@
 
 ## Independent Render Parity Recovery
 - [x] تدقيق الفرق الوظيفي الفعلي بين منصة Manus المدارة ونسخة Render المستقلة، بما يشمل التعلم والدردشة والإغلاق والتحويل والمرفقات
-- [ ] التحقق من أن بيانات Supabase والهجرة والمفاتيح الخادمية في Render تشير إلى المشروع المستقل الصحيح من دون كشف أسرار
+- [x] التحقق من أن بيانات Supabase والهجرة والمفاتيح الخادمية في Render تشير إلى المشروع المستقل الصحيح من دون كشف أسرار
 - [x] توثيق الوظائف التي لا يمكن نقلها مباشرة من Manus بسبب OAuth أو Forge أو قاعدة بيانات Manus، واستبدالها بمسارات مستقلة عند الحاجة
-- [ ] استعادة رحلة شركة كاملة على Render: موقع عام → وكيل منفصل → معرفة → دردشة → إغلاق وتحويل بشري
+- [x] استعادة رحلة شركة كاملة على Render: موقع عام → وكيل منفصل → معرفة → دردشة → إغلاق وتحويل بشري
 - [x] إبقاء WhatsApp الخارجي معطلاً حتى يصبح تطبيق Meta نشطاً ومراجعته مكتملة، من دون تغيير رقم Oman Drive أو الـWebhook
 - [x] إضافة دورة محادثة مستقلة مقيّدة بالـtenant تحفظ الرسائل وتمنع الرد الآلي بعد التحويل أو الإغلاق، مع اختبار الإغلاق
 
@@ -395,7 +395,7 @@
 - [x] Verify the corrected proposal flow on the independent Render runtime
 - [x] Reproduce and eliminate the remaining live `A valid website proposal is required` error shown after website analysis
 - [x] Diagnose and fix the live agent-service HTML response instead of JSON
-- [ ] Diagnose and fix Meta onboarding return/callback behavior without claiming an unapproved WhatsApp connection
+- [x] Diagnose and fix Meta onboarding return/callback behavior without claiming an unapproved WhatsApp connection
 - [x] Add an explicit Meta pending-approval message beside the connection action
 - [x] Add an agent-scoped local Meta mock-success flow for testing saved connection data
 - [x] Add loading, persistence, and custom error states for the Meta connection test flow
@@ -451,7 +451,9 @@
 - [x] Inspect the latest Render/runtime startup logs for the status-1 exit and identify the failing command or exception
 - [x] Reproduce the startup path locally with production configuration shape without exposing secrets
 - [x] Apply and test the smallest safe fix, if the root cause is in the repository
-- [ ] Recheck the live health endpoint and save a verified checkpoint after the service stabilizes
+- [x] Recheck the live health endpoint and save a verified checkpoint after the service stabilizes
 
 - [x] جعل مهمة مزامنة الموقع المجدولة تتعامل مع نفاد حصة LLM كحالة مؤجلة قابلة للتعافي، لا كخطأ 500 متكرر
+
+- [x] تفعيل النشر التلقائي من GitHub إلى Render في manifest حتى تصل الإصلاحات المدفوعة إلى الخدمة دون بقاء النسخة القديمة
 

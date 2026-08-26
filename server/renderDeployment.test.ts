@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 
 describe("Render staging deployment configuration", () => {
-  it("keeps the staging service manual and prompts securely for external secrets", () => {
+  it("deploys verified GitHub commits and prompts securely for external secrets", () => {
     const blueprint = fs.readFileSync(path.join(root, "render.yaml"), "utf8");
 
     expect(blueprint).toContain("runtime: node");
     expect(blueprint).toContain("buildCommand: pnpm install --frozen-lockfile && pnpm build");
     expect(blueprint).toContain("startCommand: pnpm start");
-    expect(blueprint).toContain("autoDeployTrigger: off");
+    expect(blueprint).toContain("autoDeployTrigger: commit");
     expect(blueprint).toContain("healthCheckPath: /api/health");
     expect(blueprint).toContain("key: INDEPENDENT_DATABASE_URL\n        sync: false");
     expect(blueprint).toContain("key: SUPABASE_URL\n        sync: false");
