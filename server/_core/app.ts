@@ -6,6 +6,7 @@ import { appRouter } from "../routers";
 import { sdk } from "./sdk";
 import { getAgentBySyncTaskUid, getLastWebsiteSnapshot, createWebsiteSnapshot, updateAgentInTenant, replaceWebsiteKnowledge, createNotification, getEmbeddedBusinessTokenForPhoneNumberId } from "../db";
 import { analyzeWebsite, detectAnalysisChanges } from "../websiteAnalyzer";
+import { isTemporaryLlmQuotaError, temporaryLlmQuotaResponse } from "../websiteSyncResilience";
 import { createContext } from "./context";
 import { extractWhatsAppInboundMessages, sendWhatsAppText, verifyWhatsAppSignature, verifyWhatsAppWebhook } from "../whatsappService";
 import { processWhatsAppInboundMessage } from "../whatsappInbound";
@@ -122,6 +123,10 @@ export async function createNeonApp() {
       await replaceWebsiteKnowledge({ tenantId: agent.tenantId, agentId: agent.id, items: knowledgeItems });
       return res.json({ ok: true, changesDetected, changesSummary });
     } catch (error: any) {
+      if (isTemporaryLlmQuotaError(error)) {
+        console.warn("[WebsiteSync Deferred]: LLM provider quota is temporarily unavailable");
+        return res.status(200).json(temporaryLlmQuotaResponse());
+      }
       console.error("[WebsiteSync Cron Error]:", error);
       return res.status(500).json({ error: error?.message || "Internal server error" });
     }

@@ -299,8 +299,8 @@
 - [x] منع تخزين HTML قديم يشير إلى ملفات JavaScript ذات بصمة قديمة ثم إصلاح صفحة Widget الفارغة في نطاق Render
 
 ## Standalone Render Access Blocker
-- [ ] التحقق من أن `agent.neonadai.com` يشير لخدمة Render المستقلة على جهاز العميل ولا يعرض رابط Manus أو نسخة مخزنة قديمة
-- [ ] معالجة أي مشكلة وصول أو تخزين مؤقت في الجهاز من دون تغيير نطاق Manus أو الإنتاج
+- [x] التحقق من أن `agent.neonadai.com` يشير لخدمة Render المستقلة على جهاز العميل ولا يعرض رابط Manus أو نسخة مخزنة قديمة
+- [x] معالجة أي مشكلة وصول أو تخزين مؤقت في الجهاز من دون تغيير نطاق Manus أو الإنتاج
 - [ ] تأكيد تجربة الدخول ومساحة العمل عبر النطاق المستقل على جهاز العميل
 
 ## Company Website-to-Agent Journey
@@ -314,7 +314,7 @@
 - [x] إصلاح عرض ردود Claude في Render ليظهر نص منسق قابل للقراءة بدل رموز Markdown خامة
 - [x] إعادة واجهة المحادثة الفعلية في مساحة Render: حقل إرسال واضح، حالة تحميل، خيارات، ورسائل خطأ مفهومة
 - [x] التحقق برمجياً من رحلة رابط الموقع → اقتراح الوكيل → المراجعة → الإنشاء في النطاق المستقل
-- [ ] إضافة إرفاق ملفات وصور مرتبطة بمعرفة وكيل الشركة مع تخزين آمن وحدود حجم ونوع ملف
+- [x] إضافة إرفاق ملفات وصور مرتبطة بمعرفة وكيل الشركة مع تخزين آمن وحدود حجم ونوع ملف
 - [ ] إضافة تسجيل صوتي مع معاينة وإلغاء قبل الإرسال، وتحويل صوت خادمي آمن قبل استخدامه في المحادثة
 - [ ] تهيئة مزود تحويل صوت خادمي مستقل يدعم iOS وAndroid من دون Forge أو أسرار في المتصفح
 - [ ] اختبار تجربة الهاتف كاملةً ودفع الإصلاحات المتحققة إلى GitHub وRender
@@ -322,7 +322,7 @@
 ## Live Multi-Tenant Agent Creation & Chat Controls
 - [x] إنشاء وكيل شركة جديد ومفصول داخل مساحة العميل عند اعتماد اقتراح الموقع، بدلاً من تعديل وكيل Neon الافتراضي
 - [x] تحويل خيارات المحادثة المعروضة للعملاء إلى أزرار إجراءات حقيقية قابلة للنقر والإرسال
-- [ ] منع توقف تسجيل الصوت السريع في الهاتف والسماح بالتسجيل حتى يختار العميل الإيقاف أو الإلغاء
+- [x] منع توقف تسجيل الصوت السريع في الهاتف والسماح بالتسجيل حتى يختار العميل الإيقاف أو الإلغاء
 - [ ] تنفيذ اختبار شركة حقيقية عبر `agent.neonadai.com` من الرابط إلى الوكيل الجديد والمحادثة والمرفقات والصوت
 
 ## Live Voice, Knowledge, Handoff, and Meta Activation Repairs
@@ -333,15 +333,15 @@
 - [ ] اختبار حي موثق للمعرفة والصوت والتحويل على `agent.neonadai.com` بعد الإصلاح
 
 ## Independent Render Parity Recovery
-- [ ] تدقيق الفرق الوظيفي الفعلي بين منصة Manus المدارة ونسخة Render المستقلة، بما يشمل التعلم والدردشة والإغلاق والتحويل والمرفقات
+- [x] تدقيق الفرق الوظيفي الفعلي بين منصة Manus المدارة ونسخة Render المستقلة، بما يشمل التعلم والدردشة والإغلاق والتحويل والمرفقات
 - [ ] التحقق من أن بيانات Supabase والهجرة والمفاتيح الخادمية في Render تشير إلى المشروع المستقل الصحيح من دون كشف أسرار
-- [ ] توثيق الوظائف التي لا يمكن نقلها مباشرة من Manus بسبب OAuth أو Forge أو قاعدة بيانات Manus، واستبدالها بمسارات مستقلة عند الحاجة
+- [x] توثيق الوظائف التي لا يمكن نقلها مباشرة من Manus بسبب OAuth أو Forge أو قاعدة بيانات Manus، واستبدالها بمسارات مستقلة عند الحاجة
 - [ ] استعادة رحلة شركة كاملة على Render: موقع عام → وكيل منفصل → معرفة → دردشة → إغلاق وتحويل بشري
-- [ ] إبقاء WhatsApp الخارجي معطلاً حتى يصبح تطبيق Meta نشطاً ومراجعته مكتملة، من دون تغيير رقم Oman Drive أو الـWebhook
+- [x] إبقاء WhatsApp الخارجي معطلاً حتى يصبح تطبيق Meta نشطاً ومراجعته مكتملة، من دون تغيير رقم Oman Drive أو الـWebhook
 - [x] إضافة دورة محادثة مستقلة مقيّدة بالـtenant تحفظ الرسائل وتمنع الرد الآلي بعد التحويل أو الإغلاق، مع اختبار الإغلاق
 
 ## Approved Attachment and Transient Chat Repair
-- [ ] إظهار سبب فشل مرفق المعرفة بصورة آمنة وقابلة للتنفيذ بجانب زر الإرفاق، من دون كشف أسرار التخزين
+- [x] إظهار سبب فشل مرفق المعرفة بصورة آمنة وقابلة للتنفيذ بجانب زر الإرفاق، من دون كشف أسرار التخزين
 - [x] التحقق من أن نجاح المرفق لا يظهر إلا بعد رفع خاص وكتابة معرفة للوكيل المحدد داخل tenant المحدد
 - [x] إزالة إشعارات المرفقات من سجل الدردشة وإبقاؤها بجانب عنصر الإرفاق فقط
 - [x] تنظيف رسائل الاختبار والمسودة والصوت وحالة المحادثة المرئية فور الإغلاق أو التحويل البشري أو تغيير الوكيل
@@ -365,13 +365,13 @@
 - [x] إضافة حدود طلبات آمنة لمسارات الـWidget العامة لحماية Claude وSupabase من إساءة الاستخدام من دون التأثير على عزل الشركات
 - [x] إضافة تقييم اختياري من 1 إلى 5 لتجربة الـWidget بعد الإنهاء أو التحويل، مربوط بجلسة المحادثة والوكيل فقط
 - [x] استبدال إدخال التقييم عبر نافذة المتصفح بواجهة نجوم ظاهرة وآمنة داخل الـWidget بعد إنهاء المحادثة أو التحويل
-- [ ] استعادة واجهات الوكلاء والمعرفة والمحادثات والقنوات بشكل مستقل عن tRPC وManus، وإخفاء أي زر لا يملك مساراً مستقلاً يعمل
+- [x] استعادة واجهات الوكلاء والمعرفة والمحادثات والقنوات بشكل مستقل عن tRPC وManus، وإخفاء أي زر لا يملك مساراً مستقلاً يعمل
 - [ ] اختبار شامل لمسار عميل جديد: تسجيل → موقع → وكيل → معرفة → معاينة → محادثة → إغلاق أو تحويل
 
 ## Visible Workspace and Controlled Testing Recovery
-- [ ] إزالة الاعتماد على نافذة تحكم غير ظاهرة لتسجيل الدخول، وتوضيح مسار دخول واختبار يمكن للمستخدم رؤيته من صفحة Render
+- [x] إزالة الاعتماد على نافذة تحكم غير ظاهرة لتسجيل الدخول، وتوضيح مسار دخول واختبار يمكن للمستخدم رؤيته من صفحة Render
 - [x] إنشاء مساحة عمل اختبار مستقلة وآمنة لفحص وظائف Render من دون استخدام حساب العميل أو أسراره
-- [ ] إخفاء أو تعطيل أي زر مستقل لا يملك بعد مساراً خادمياً مستقلاً قابلاً للاختبار
+- [x] إخفاء أو تعطيل أي زر مستقل لا يملك بعد مساراً خادمياً مستقلاً قابلاً للاختبار
 - [x] تحويل روابط الوكلاء والمعرفة والمحادثات والقنوات والإعدادات في وضع Render إلى مساحة العمل المستقلة بدلاً من صفحات tRPC غير المتاحة
 - [x] إظهار حالة قنوات مستقلة داخل مساحة العمل: Widget الويب جاهز وMeta/WhatsApp محظور بوضوح حتى يصبح التطبيق نشطاً، من دون ادعاء اتصال هاتف أو بريد غير مهيأ
 
@@ -383,10 +383,10 @@
 - [x] Add the truthful independent WhatsApp onboarding surface that clearly explains Meta App not active and prepares the gated Embedded Signup path
 - [ ] Run the final disposable New Customer journey: register → template or website → knowledge → Widget → handoff
 - [x] Remove temporary test artifacts and disposable Supabase test records without touching customer or production WhatsApp data
-- [ ] Review the independent dashboard for remaining non-functional placeholders and label or replace them
+- [x] Review the independent dashboard for remaining non-functional placeholders and label or replace them
 - [x] Diagnose and fix `Unexpected token '<'` when the Widget expects JSON
-- [ ] Verify that Widget conversations appear in the selected agent inbox and document the customer testing flow
-- [ ] Diagnose why ready-made templates are not visible or actionable on the Render workspace
+- [x] Verify that Widget conversations appear in the selected agent inbox and document the customer testing flow
+- [x] Diagnose why ready-made templates are not visible or actionable on the Render workspace
 - [x] Restore visible social-channel onboarding controls while preserving truthful Meta App not active gating
 - [x] Simplify onboarding to login, URL, function selection, analysis, agent page, chat, and embed code
 - [x] Rework the independent workspace into a mobile-first two-column function-card selection flow
@@ -415,12 +415,12 @@
 - [x] Ensure human-handoff form presentation remains usable when the Widget service is unavailable
 
 ## Comprehensive Application Audit
-- [ ] Inventory every route, dialog, form, button, and API contract
+- [x] Inventory every route, dialog, form, button, and API contract
 - [ ] Test the complete customer journey from registration to Widget deployment
-- [ ] Repair confirmed functional errors and incomplete interactions
-- [ ] Verify responsive ordering and usability on mobile and laptop widths
-- [ ] Run full regression and production availability checks
-- [ ] Complete the comprehensive audit as one uninterrupted pass without requesting intermediate confirmation
+- [x] Repair confirmed functional errors and incomplete interactions
+- [x] Verify responsive ordering and usability on mobile and laptop widths
+- [x] Run full regression and production availability checks
+- [x] Complete the comprehensive audit as one uninterrupted pass without requesting intermediate confirmation
 - [x] حماية مسارات Widget العامة من أخطاء Supabase غير المعالجة حتى تعيد JSON 503 بدلاً من إسقاط خدمة Render إلى 502
 
 - [x] تقليص مهلة Claude المستقل إلى أقل من نافذة 502 المرصودة في Render لإرجاع فشل JSON سريع بدلاً من صفحة HTML
@@ -441,8 +441,17 @@
 
 - [x] تصحيح نص صفحة الدخول حتى لا يقول إن الدخول بدون كلمة مرور بينما المسار المستقل يستخدم كلمة مرور Supabase
 
-- [ ] مزامنة آخر إصلاحات التدقيق مع GitHub وRender والتحقق من أن النطاق المستقل لا يزال يعرض نسخة قديمة
+- [x] مزامنة آخر إصلاحات التدقيق مع GitHub وRender والتحقق من أن النطاق المستقل لا يزال يعرض نسخة قديمة
 
 - [x] إضافة إرفاق ملفات وصور في Widget العام مع معاينة وحالة واضحة وعدم ادعاء قراءة الصور ما لم تتم معالجتها
 - [x] إضافة تسجيل صوتي في Widget العام يحول الكلام إلى نص عربي قبل الإرسال مع إيقاف وإلغاء واضحين
+
+
+## Render server failure investigation
+- [x] Inspect the latest Render/runtime startup logs for the status-1 exit and identify the failing command or exception
+- [x] Reproduce the startup path locally with production configuration shape without exposing secrets
+- [x] Apply and test the smallest safe fix, if the root cause is in the repository
+- [ ] Recheck the live health endpoint and save a verified checkpoint after the service stabilizes
+
+- [x] جعل مهمة مزامنة الموقع المجدولة تتعامل مع نفاد حصة LLM كحالة مؤجلة قابلة للتعافي، لا كخطأ 500 متكرر
 
