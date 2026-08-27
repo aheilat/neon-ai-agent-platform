@@ -66,6 +66,32 @@ describe("independent runtime routes", () => {
     }
   });
 
+  it("maps an independent Claude analysis timeout to a truthful Arabic retry response", async () => {
+    mocks.resolveSession.mockResolvedValue({ workspace: { id: 44 } });
+    mocks.discoverWebsite.mockRejectedValue(new Error("Independent Claude request timed out"));
+    const app = express();
+    app.use(express.json());
+    registerIndependentRuntimeRoutes(app);
+    const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/external/website/analysis`, {
+        method: "POST",
+        headers: { Authorization: "Bearer workspace-token", "Content-Type": "application/json" },
+        body: JSON.stringify({ websiteUrl: "https://example.com", consent: true }),
+      });
+
+      expect(response.status).toBe(504);
+      await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("إعادة المحاولة") });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   it("returns handoff requests only for the authenticated workspace and selected agent", async () => {
     const pool = {};
     mocks.resolveSession.mockResolvedValue({ workspace: { id: 44 } });

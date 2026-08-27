@@ -23,6 +23,8 @@ export type IndependentClaudeRequest = {
   system: string;
   messages: IndependentClaudeMessage[];
   maxTokens?: number;
+  /** Allows slower, bounded workflows such as website analysis to use a larger budget. */
+  timeoutMs?: number;
 };
 
 /**
@@ -42,11 +44,14 @@ export async function completeWithIndependentClaude(
     system: request.system,
     messages: request.messages,
   });
-  const timeout = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), 3_500);
-    completion.finally(() => clearTimeout(timer)).catch(() => undefined);
+  const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 3_500, 1_000), 20_000);
+  const response = await new Promise<Anthropic.Message>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), timeoutMs);
+    completion.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
   });
-  const response = await Promise.race([completion, timeout]);
   return response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)

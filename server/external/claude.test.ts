@@ -21,6 +21,23 @@ describe("independent Claude adapter", () => {
     expect(JSON.stringify(create.mock.calls)).not.toContain("secret-key");
   });
 
+  it("uses a bounded per-request timeout for slower workflows", async () => {
+    vi.useFakeTimers();
+    try {
+      const create = vi.fn().mockReturnValue(new Promise<never>(() => undefined));
+      const pending = completeWithIndependentClaude(
+        { system: "حلل الموقع", messages: [{ role: "user", content: "المحتوى" }], timeoutMs: 1_000 },
+        { apiKey: "secret-key", model: "claude-haiku-4-5" },
+        create,
+      );
+      const assertion = expect(pending).rejects.toThrow("Independent Claude request timed out");
+      await vi.advanceTimersByTimeAsync(1_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("extracts image knowledge only through the server-side Claude client", async () => {
     const create = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "الخدمة: تأجير شاحنات مبردة" }] });
     const result = await extractKnowledgeFromIndependentImage(

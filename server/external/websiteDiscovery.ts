@@ -6,7 +6,9 @@ const goals = ["questions", "issues", "recommend", "buy", "leads", "appointments
 const channels = ["web", "whatsapp", "messenger", "instagram", "phone"] as const;
 const MAX_PAGES = 5;
 const MAX_PAGE_CHARS = 12_000;
+const MAX_ANALYSIS_SOURCE_CHARS = 30_000;
 const REQUEST_TIMEOUT_MS = 8_000;
+const CLAUDE_ANALYSIS_TIMEOUT_MS = 15_000;
 const USER_AGENT = "NeonAIWebsiteDiscovery/1.0 (+https://agent.neonadai.com)";
 
 export const independentWebsitePageSchema = z.object({
@@ -248,11 +250,12 @@ export async function analyzeIndependentWebsitePages(
   snapshot: { websiteUrl: string; pages: IndependentWebsitePage[] },
   complete: typeof completeWithIndependentClaude = completeWithIndependentClaude,
 ) {
-  const sourceText = snapshot.pages.map((page) => `SOURCE_URL: ${page.url}\nTITLE: ${page.title}\nDESCRIPTION: ${page.description}\nHEADINGS: ${page.headings.join(" | ")}\nCONTENT: ${page.content}`).join("\n\n").slice(0, 48_000);
+  const sourceText = snapshot.pages.map((page) => `SOURCE_URL: ${page.url}\nTITLE: ${page.title}\nDESCRIPTION: ${page.description}\nHEADINGS: ${page.headings.join(" | ")}\nCONTENT: ${page.content}`).join("\n\n").slice(0, MAX_ANALYSIS_SOURCE_CHARS);
   const response = await complete({
     system: "أنت محلل مواقع أعمال لمنصة Neon المستقلة. استخرج فقط ما تدعمه الصفحات العامة المرفقة. لا تخترع أسعاراً أو خدمات أو وعوداً. أنشئ اقتراحاً أولياً لوكيل خدمة عملاء للشركة نفسها، واجعل persona آمنة ومهنية. يجب أن تعتمد tone أحد القيم friendly أو professional أو direct. أضف guardrails تمنع الادعاءات غير المدعومة وتطلب تحويل الحالات الخاصة إلى فريق الشركة. يجب أن يطابق sourceUrl لكل خدمة وسؤال شائع أحد قيم SOURCE_URL حرفياً. أعد JSON فقط بلا Markdown.",
     messages: [{ role: "user", content: `حلل الصفحات التالية وأعد JSON مطابقاً للمفاتيح: businessName, businessSummary, industry, audience, language, tone, persona, goals, suggestedChannels, services, faqs, guardrails.\n\n${sourceText}` }],
-    maxTokens: 3_500,
+    maxTokens: 2_200,
+    timeoutMs: CLAUDE_ANALYSIS_TIMEOUT_MS,
   });
   try {
     return assertIndependentAnalysisSources(independentWebsiteAnalysisSchema.parse(normalizeIndependentWebsiteAnalysis(extractJson(response), snapshot.pages)), snapshot.pages);

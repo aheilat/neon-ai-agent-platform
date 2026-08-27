@@ -346,7 +346,11 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     try {
       return res.json(await discoverIndependentWebsiteProposal(websiteUrl));
     } catch (error) {
-      return res.status(422).json({ error: error instanceof Error ? error.message : "تعذر تحليل الموقع الآن." });
+      const message = error instanceof Error ? error.message : "";
+      if (/timed out|timeout/i.test(message)) {
+        return res.status(504).json({ error: "استغرق تحليل الموقع وقتاً أطول من المتوقع. خفّف محتوى الموقع أو اضغط إعادة المحاولة بعد لحظات." });
+      }
+      return res.status(422).json({ error: message || "تعذر تحليل الموقع الآن." });
     }
   });
 
