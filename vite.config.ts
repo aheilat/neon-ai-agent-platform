@@ -167,6 +167,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Keep production output lean and avoid extra memory used to calculate gzip sizes.
+    sourcemap: false,
+    reportCompressedSize: false,
+    minify: "esbuild",
   },
   server: {
     host: true,
