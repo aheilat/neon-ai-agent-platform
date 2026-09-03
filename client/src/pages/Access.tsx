@@ -2,11 +2,19 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { startLogin } from "@/const";
-import { signInToIndependentNeon, signUpForIndependentNeon } from "@/lib/independentAuth";
+import { resendIndependentConfirmationEmail, sendIndependentPasswordReset, signInWithIndependentGoogle, signInToIndependentNeon, signUpForIndependentNeon, updateIndependentPassword } from "@/lib/independentAuth";
 import { hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
-import { ArrowLeft, Bot, Check, LockKeyhole, Sparkles } from "lucide-react";
+import { ArrowLeft, Bot, Check, Chrome, LockKeyhole, Sparkles } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
+
+function readableAuthError(reason: unknown, fallback: string) {
+  const message = reason instanceof Error ? reason.message : "";
+  if (/provider.*not enabled|unsupported provider/i.test(message)) return "تسجيل الدخول عبر Google غير مفعّل في Supabase حالياً. فعّل Google من Authentication ثم أعد المحاولة.";
+  if (/email.*not confirmed/i.test(message)) return "أكد بريدك الإلكتروني أولاً من الرابط المرسل، ثم سجّل الدخول مرة أخرى.";
+  if (/rate limit|too many requests/i.test(message)) return "تم تجاوز عدد المحاولات المسموح. انتظر قليلاً ثم حاول مرة أخرى.";
+  return message || fallback;
+}
 
 export function getAccessCopy(isRegister: boolean) {
   if (isRegister) {
@@ -34,15 +42,17 @@ export default function Access() {
   const [location, setLocation] = useLocation();
   const { isAuthenticated, loading } = useAuth();
   const isRegister = location === "/register";
+  const isReset = location === "/reset-password";
   const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
+  const [resetRequested, setResetRequested] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isIndependentRuntime || !isAuthenticated) return;
+    if (isIndependentRuntime || !isAuthenticated || isReset) return;
     const intentRaw = localStorage.getItem("neon-checkout-intent");
     if (intentRaw) {
       localStorage.removeItem("neon-checkout-intent");
@@ -55,11 +65,18 @@ export default function Access() {
       }
     }
     setLocation("/start");
-  }, [isAuthenticated, isIndependentRuntime, setLocation]);
+  }, [isAuthenticated, isIndependentRuntime, isReset, setLocation]);
 
-  if (isAuthenticated) return null;
+  if (isAuthenticated && !isReset) return null;
 
-  const copy = getAccessCopy(isRegister);
+  const copy = isReset ? {
+    heading: resetRequested ? "أنشئ كلمة مرور جديدة" : "استعادة كلمة المرور",
+    description: resetRequested ? "اكتب كلمة مرور جديدة لحماية مساحة عملك، ثم سجّل الدخول للمتابعة." : "أدخل بريدك الإلكتروني وسنرسل لك رابطاً آمناً لاستعادة كلمة المرور.",
+    action: resetRequested ? "حفظ كلمة المرور" : "إرسال رابط الاستعادة",
+    switchLead: "تذكرت كلمة المرور؟",
+    switchAction: "العودة لتسجيل الدخول",
+    switchPath: "/login",
+  } : getAccessCopy(isRegister);
 
   const submitIndependentAccess = async (event: FormEvent) => {
     event.preventDefault();
@@ -67,7 +84,11 @@ export default function Access() {
     setConfirmationMessage(null);
     setSubmitting(true);
     try {
-      if (isRegister) {
+      if (isReset) {
+        await updateIndependentPassword(password);
+        setConfirmationMessage("تم تحديث كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.");
+        setPassword("");
+      } else if (isRegister) {
         const result = await signUpForIndependentNeon(email, password, window.location.origin);
         if (result.confirmationRequired) {
           setConfirmationMessage("تحقق من بريدك الإلكتروني ثم افتح رابط التأكيد للمتابعة إلى مساحة العمل.");
@@ -79,8 +100,52 @@ export default function Access() {
         setLocation("/external");
       }
     } catch (reason) {
-      setFormError(reason instanceof Error ? reason.message : "تعذرت عملية المصادقة. حاول مرة أخرى.");
+      setFormError(readableAuthError(reason, "تعذرت عملية المصادقة. حاول مرة أخرى."));
     } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const requestPasswordReset = async () => {
+    if (!email.trim()) {
+      setFormError("اكتب بريدك الإلكتروني أولاً لاستلام رابط الاستعادة.");
+      return;
+    }
+    setFormError(null);
+    setConfirmationMessage(null);
+    setSubmitting(true);
+    try {
+      await sendIndependentPasswordReset(email.trim(), window.location.origin);
+      setResetRequested(true);
+      setConfirmationMessage("إذا كان البريد مسجلاً، سيصلك رابط استعادة كلمة المرور. تحقق من الوارد والرسائل غير المرغوب فيها، ثم افتح الرابط للمتابعة.");
+    } catch (reason) {
+      setFormError(readableAuthError(reason, "تعذر إرسال رابط الاستعادة الآن."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resendConfirmation = async () => {
+    if (!email.trim()) return setFormError("اكتب بريد التسجيل أولاً.");
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await resendIndependentConfirmationEmail(email.trim(), window.location.origin);
+      setConfirmationMessage("تمت إعادة إرسال رسالة التأكيد. تحقق من الوارد والرسائل غير المرغوب فيها.");
+    } catch (reason) {
+      setFormError(readableAuthError(reason, "تعذر إعادة إرسال رسالة التأكيد الآن."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await signInWithIndependentGoogle(window.location.origin);
+    } catch (reason) {
+      setFormError(readableAuthError(reason, "تسجيل الدخول عبر Google غير متاح حالياً. فعّله من Supabase ثم حاول مجدداً."));
       setSubmitting(false);
     }
   };
@@ -98,7 +163,15 @@ export default function Access() {
           <div className="mt-8 rounded-2xl border border-white/[0.09] bg-white/[0.045] p-4">
             <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-lime-300" /><div><p className="text-sm font-bold text-white">دخول آمن إلى مساحة عملك داخل Neon</p><p className="mt-1 text-xs leading-6 text-slate-400">نستخدم Supabase لحماية تسجيل الدخول وإنشاء أو استعادة مساحة عملك وحفظ وكلائك وبياناتك بصورة محمية.</p></div></div>
           </div>
-          {isIndependentRuntime ? <form className="mt-6 space-y-3" onSubmit={submitIndependentAccess}><Input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" /><Input required type="password" minLength={8} autoComplete={isRegister ? "new-password" : "current-password"} value={password} onChange={event => setPassword(event.target.value)} placeholder="كلمة المرور (8 أحرف على الأقل)" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />{formError && <p className="text-sm text-rose-200">{formError}</p>}{confirmationMessage && <p className="text-sm leading-6 text-lime-200">{confirmationMessage}</p>}<Button disabled={submitting} type="submit" size="lg" className="h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{submitting ? "جارٍ المتابعة..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button></form> : <Button disabled={loading} onClick={() => { if (!localStorage.getItem("neon-checkout-intent")) localStorage.setItem("neon-after-auth", "/start"); startLogin(); }} size="lg" className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{loading ? "جارٍ التحقق..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>}
+          {isIndependentRuntime ? <form className="mt-6 space-y-3" onSubmit={isReset && !resetRequested ? (event) => { event.preventDefault(); void requestPasswordReset(); } : submitIndependentAccess}>
+            {(!isReset || !resetRequested) && <Input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
+            {(!isReset || resetRequested) && <Input required type="password" minLength={8} autoComplete={isRegister || isReset ? "new-password" : "current-password"} value={password} onChange={event => setPassword(event.target.value)} placeholder={isReset ? "كلمة المرور الجديدة (8 أحرف على الأقل)" : "كلمة المرور (8 أحرف على الأقل)"} className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
+            {formError && <p className="text-sm leading-6 text-rose-200">{formError}</p>}{confirmationMessage && <p className="text-sm leading-6 text-lime-200">{confirmationMessage}</p>}
+            {isRegister && confirmationMessage && <button type="button" onClick={() => void resendConfirmation()} disabled={submitting} className="w-full text-sm font-bold text-cyan-200 hover:text-cyan-100 disabled:opacity-50">إعادة إرسال رسالة التأكيد</button>}
+            <Button disabled={submitting} type="submit" size="lg" className="h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{submitting ? "جارٍ المتابعة..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>
+            {!isRegister && !isReset && <div className="flex items-center justify-between gap-3 text-sm"><button type="button" onClick={() => setLocation("/reset-password")} className="font-bold text-cyan-200 hover:text-cyan-100">نسيت كلمة المرور؟</button><span className="text-slate-500">أو</span></div>}
+            {!isRegister && !isReset && <Button type="button" variant="outline" disabled={submitting} onClick={() => void signInWithGoogle()} className="h-12 w-full border-white/15 bg-white/[0.04] text-white hover:bg-white/10"><Chrome className="ml-2 h-4 w-4" />المتابعة باستخدام Google</Button>}
+          </form> : <Button disabled={loading} onClick={() => { if (!localStorage.getItem("neon-checkout-intent")) localStorage.setItem("neon-after-auth", "/start"); startLogin(); }} size="lg" className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{loading ? "جارٍ التحقق..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>}
           <p className="mt-5 text-center text-sm text-slate-400">{copy.switchLead} <Link href={copy.switchPath} className="font-bold text-cyan-200 hover:text-cyan-100">{copy.switchAction}</Link></p>
         </div>
       </section>

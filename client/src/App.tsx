@@ -24,6 +24,7 @@ import Pricing from "./pages/Pricing";
 import Quality from "./pages/Quality";
 import IndependentStaging from "./pages/IndependentStaging";
 import IndependentOnboarding from "./pages/IndependentOnboarding";
+import IndependentProfileSettings from "./pages/IndependentProfileSettings";
 import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 
 function AppRoutes() {
@@ -33,6 +34,7 @@ function AppRoutes() {
       <Route path="/" component={PublicLanding} />
       <Route path="/login" component={Access} />
       <Route path="/register" component={Access} />
+      <Route path="/reset-password" component={Access} />
       <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/external" component={hasIndependentSupabaseBrowserConfig() ? IndependentOnboarding : IndependentStaging} />
@@ -42,6 +44,7 @@ function AppRoutes() {
       <Route path="/conversations" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Conversations} />
       <Route path="/channels" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Channels} />
       <Route path="/settings" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Settings} />
+      <Route path="/profile" component={IndependentProfileSettings} />
       <Route path="*">
         <DashboardLayout>
           <Switch>
