@@ -161,7 +161,7 @@ function agentProfile(req: Request) {
  */
 export function registerIndependentRuntimeRoutes(app: Express) {
   app.use("/api/public", (_req, res, next) => {
-    res.setTimeout(4_500, () => {
+    res.setTimeout(20_000, () => {
       if (!res.headersSent) res.status(503).json({ error: "Independent service is temporarily unavailable" });
     });
     next();
@@ -201,11 +201,12 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     try {
       await addIndependentConversationMessage(pool, conversation.id, "customer", message);
       const result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history: Array.isArray(req.body?.history) ? req.body.history : undefined });
-      if (result.kind === "not-found") return res.status(404).json({ error: "Agent not found" });
-      if (result.kind !== "success") return res.status(503).json({ error: "Independent AI service is unavailable" });
+      if (result.kind === "not-found") return res.headersSent ? undefined : res.status(404).json({ error: "Agent not found" });
+      if (result.kind !== "success") return res.headersSent ? undefined : res.status(503).json({ error: "Independent AI service is unavailable" });
       const reply = result.reply;
-      if (typeof reply !== "string" || !reply.trim()) return res.status(503).json({ error: "Independent AI service is unavailable" });
+      if (typeof reply !== "string" || !reply.trim()) return res.headersSent ? undefined : res.status(503).json({ error: "Independent AI service is unavailable" });
       await addIndependentConversationMessage(pool, conversation.id, "agent", reply);
+      if (res.headersSent) return;
       return res.json({ reply, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
       } catch (error) {
         console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
