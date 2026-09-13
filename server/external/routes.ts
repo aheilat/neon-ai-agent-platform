@@ -209,10 +209,12 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       return res.json({ reply, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
       } catch (error) {
         console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? error.name : "unknown");
+        if (res.headersSent) return;
         return res.status(503).json({ error: "Independent AI service is unavailable" });
       }
     } catch (error) {
       console.error("[Independent Public Widget] Chat route failed", error instanceof Error ? error.name : "unknown");
+      if (res.headersSent) return;
       return res.status(503).json({ error: "Independent service is temporarily unavailable" });
     }
   });
