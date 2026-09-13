@@ -97,7 +97,7 @@ export default function Access() {
         }
       } else {
         await signInToIndependentNeon(email, password);
-        setLocation("/external");
+        setLocation("/start");
       }
     } catch (reason) {
       setFormError(readableAuthError(reason, "تعذرت عملية المصادقة. حاول مرة أخرى."));

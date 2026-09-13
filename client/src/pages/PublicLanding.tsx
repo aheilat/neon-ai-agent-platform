@@ -42,7 +42,7 @@ export const LANDING_VERTICALS = [
 ];
 
 export function publicStartDestination(isIndependentRuntime: boolean, isAuthenticated: boolean) {
-  if (isIndependentRuntime) return "/register";
+  if (isIndependentRuntime) return isAuthenticated ? "/start" : "/register";
   return isAuthenticated ? "/start" : undefined;
 }
 
