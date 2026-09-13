@@ -44,7 +44,7 @@ export async function completeWithIndependentClaude(
     system: request.system,
     messages: request.messages,
   });
-  const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 3_500, 1_000), 20_000);
+  const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 15_000, 1_000), 20_000);
   const response = await new Promise<Anthropic.Message>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Independent Claude request timed out")), timeoutMs);
     completion.then(
