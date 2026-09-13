@@ -218,9 +218,112 @@ const resolveApiUrl = () =>
     : "https://forge.manus.im/v1/chat/completions";
 
 const assertApiKey = () => {
+  if (ENV.anthropicApiKey) return;
   if (!ENV.forgeApiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
+};
+
+// Maps the app's internal model ids (originally aimed at the Manus Forge
+// multi-provider proxy) to real Anthropic model strings, since a direct
+// ANTHROPIC_API_KEY only talks to Anthropic.
+const ANTHROPIC_MODEL_MAP: Record<string, string> = {
+  auto: "claude-haiku-4-5-20251001",
+  "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-6": "claude-sonnet-5",
+  "gpt-5-mini": "claude-haiku-4-5-20251001",
+  "gemini-3-flash-preview": "claude-haiku-4-5-20251001",
+};
+
+const resolveAnthropicModel = (model?: string) => {
+  if (!model) return "claude-haiku-4-5-20251001";
+  return ANTHROPIC_MODEL_MAP[model] ?? "claude-haiku-4-5-20251001";
+};
+
+// Converts the OpenAI-chat-style message array (system/user/assistant roles
+// mixed together) into Anthropic's Messages API shape: a single top-level
+// "system" string plus an alternating user/assistant message array.
+const toAnthropicRequest = (
+  messages: ReturnType<typeof normalizeMessage>[],
+  model: string,
+  maxTokens: number
+) => {
+  const systemParts: string[] = [];
+  const anthropicMessages: { role: "user" | "assistant"; content: string }[] = [];
+
+  for (const message of messages) {
+    const text = Array.isArray(message.content)
+      ? message.content
+          .map(part => (typeof part === "string" ? part : "text" in part ? part.text : ""))
+          .join("\n")
+      : message.content ?? "";
+    if (message.role === "system") {
+      systemParts.push(text);
+    } else if (message.role === "user" || message.role === "assistant") {
+      anthropicMessages.push({ role: message.role, content: text });
+    }
+  }
+
+  return {
+    model,
+    max_tokens: maxTokens,
+    system: systemParts.join("\n\n") || undefined,
+    messages: anthropicMessages,
+  };
+};
+
+const invokeAnthropicDirect = async (
+  messages: ReturnType<typeof normalizeMessage>[],
+  model: string | undefined,
+  maxTokens: number | undefined
+): Promise<InvokeResult> => {
+  const resolvedModel = resolveAnthropicModel(model);
+  const payload = toAnthropicRequest(messages, resolvedModel, maxTokens ?? 600);
+
+  const response = await fetchWithBackoff("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": ENV.anthropicApiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
+  }
+
+  const data = (await response.json()) as {
+    id: string;
+    model: string;
+    content: Array<{ type: string; text?: string }>;
+    stop_reason: string | null;
+    usage?: { input_tokens: number; output_tokens: number };
+  };
+
+  const text = data.content.filter(part => part.type === "text").map(part => part.text ?? "").join("");
+
+  return {
+    id: data.id,
+    created: Math.floor(Date.now() / 1000),
+    model: data.model,
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: text },
+        finish_reason: data.stop_reason,
+      },
+    ],
+    usage: data.usage
+      ? {
+          prompt_tokens: data.usage.input_tokens,
+          completion_tokens: data.usage.output_tokens,
+          total_tokens: data.usage.input_tokens + data.usage.output_tokens,
+        }
+      : undefined,
+  };
 };
 
 const normalizeResponseFormat = ({
@@ -358,8 +461,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     max_tokens,
   } = params;
 
+  const normalizedMessages = messages.map(normalizeMessage);
+
+  // Direct Anthropic path: used whenever ANTHROPIC_API_KEY is configured,
+  // regardless of whether the Manus Forge gateway is also available. This
+  // does not support tools/tool_choice/response_format (not needed by the
+  // simple chat-reply flows that call invokeLLM today).
+  if (ENV.anthropicApiKey && !tools?.length) {
+    return invokeAnthropicDirect(normalizedMessages, model, max_tokens ?? maxTokens);
+  }
+
   const payload: Record<string, unknown> = {
-    messages: messages.map(normalizeMessage),
+    messages: normalizedMessages,
   };
 
   if (model) {
