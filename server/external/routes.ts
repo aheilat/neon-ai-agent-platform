@@ -208,7 +208,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       await addIndependentConversationMessage(pool, conversation.id, "agent", reply);
       return res.json({ reply, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
       } catch (error) {
-        console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? error.name : "unknown");
+        console.error("[Independent Public Widget] Chat completion failed", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
         if (res.headersSent) return;
         return res.status(503).json({ error: "Independent AI service is unavailable" });
       }

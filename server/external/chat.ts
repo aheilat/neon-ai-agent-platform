@@ -54,7 +54,7 @@ export async function generateIndependentAgentReplyForTenant(
       maxTokens: 800,
     });
   } catch (error) {
-    console.error("[Independent Claude] Falling back after completion failure", error instanceof Error ? error.name : "unknown");
+    console.error("[Independent Claude] Falling back after completion failure", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
     reply = "أستطيع مساعدتك، لكن خدمة الذكاء الاصطناعي مشغولة مؤقتاً. حاول إرسال طلبك مرة أخرى، أو استخدم خيار «التحدث مع موظف» ليتابع فريق الشركة طلبك.";
   }
   return { kind: "success" as const, reply, agentId: agent.id };
