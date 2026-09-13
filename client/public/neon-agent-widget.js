@@ -14,7 +14,7 @@
       #neon-agent-widget-${agentId} .neon-frame.is-open { display: block; }
       #neon-agent-widget-${agentId} iframe { display: block; width: 100%; height: 100%; border: 0; }
     </style>
-    <div class="neon-frame"><iframe title="Neon AI Agent" loading="lazy"></iframe></div>
+    <div class="neon-frame"><iframe title="Neon AI Agent" loading="lazy" allow="microphone"></iframe></div>
     <button class="neon-launcher" aria-label="Open Neon AI Agent">✦</button>
   `;
   document.body.appendChild(root);
