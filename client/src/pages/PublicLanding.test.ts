@@ -13,9 +13,9 @@ describe("Public landing page conversion content", () => {
     expect(LANDING_VERTICALS).toHaveLength(5);
   });
 
-  it("sends every independent public start call to standalone registration", () => {
+  it("sends unauthenticated independent visitors to registration, and authenticated ones to their dashboard", () => {
     expect(publicStartDestination(true, false)).toBe("/register");
-    expect(publicStartDestination(true, true)).toBe("/register");
+    expect(publicStartDestination(true, true)).toBe("/start");
     expect(publicStartDestination(false, true)).toBe("/start");
     expect(publicStartDestination(false, false)).toBeUndefined();
   });

@@ -52,7 +52,11 @@ export default function Access() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isIndependentRuntime || !isAuthenticated || isReset) return;
+    if (!isAuthenticated || isReset) return;
+    if (isIndependentRuntime) {
+      setLocation("/start");
+      return;
+    }
     const intentRaw = localStorage.getItem("neon-checkout-intent");
     if (intentRaw) {
       localStorage.removeItem("neon-checkout-intent");
