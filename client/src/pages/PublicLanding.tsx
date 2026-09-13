@@ -62,6 +62,19 @@ export default function PublicLanding() {
   }, [isLight]);
 
   useEffect(() => {
+    const AGENT_ID = "2"; // Neon AI Agents' own company agent, used to demo the widget to site visitors.
+    if (document.getElementById(`neon-agent-widget-${AGENT_ID}`)) return;
+    const script = document.createElement("script");
+    script.src = "/neon-agent-widget.js";
+    script.dataset.agentId = AGENT_ID;
+    document.body.appendChild(script);
+    return () => {
+      script.remove();
+      document.getElementById(`neon-agent-widget-${AGENT_ID}`)?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
     const checkoutIntent = localStorage.getItem("neon-checkout-intent");
     if (checkoutIntent) {
