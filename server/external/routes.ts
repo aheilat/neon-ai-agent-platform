@@ -17,6 +17,7 @@ import { getIndependentSupabaseServerClient } from "./supabase";
 import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus, updateIndependentPublicConversationSatisfactionRating } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
+import { sendEmail } from "../_core/email";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
   const value = headers.authorization;
@@ -248,7 +249,24 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل طلب العميل إلى الفريق البشري بعد موافقته.");
     }
       const contact = (agent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
-      return res.status(201).json({ lead: { id: lead.id }, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: typeof contact.email === "string" ? contact.email : null } });
+      const ownerEmail = typeof contact.email === "string" && contact.email ? contact.email : null;
+      if (ownerEmail) {
+        void sendEmail({
+          to: ownerEmail,
+          subject: `طلب جديد من عميل — ${agent.name}`,
+          html: `
+            <div dir="rtl" style="font-family: sans-serif;">
+              <h2>عميل يطلب التحدث مع فريقك</h2>
+              <p><strong>الاسم:</strong> ${name}</p>
+              ${phone ? `<p><strong>الهاتف:</strong> ${phone}</p>` : ""}
+              ${email ? `<p><strong>الإيميل:</strong> ${email}</p>` : ""}
+              ${notes ? `<p><strong>ملاحظات:</strong> ${notes}</p>` : ""}
+              <p style="color:#888;font-size:12px;">أرسلت هذه الرسالة تلقائيًا من وكيل ${agent.name} على Neon AI Agents.</p>
+            </div>
+          `,
+        });
+      }
+      return res.status(201).json({ lead: { id: lead.id }, conversation: conversation ? { id: conversation.id, status: "escalated" } : null, contact: { name: typeof contact.name === "string" ? contact.name : null, phone: typeof contact.phone === "string" ? contact.phone : null, email: ownerEmail } });
     } catch (error) {
       console.error("[Independent Public Widget] Handoff route failed", error instanceof Error ? error.name : "unknown");
       return res.status(503).json({ error: "Independent service is temporarily unavailable" });
