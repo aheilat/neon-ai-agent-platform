@@ -9,23 +9,23 @@ import {
   Bot,
   Check,
   ChevronLeft,
-  CirclePlay,
   Globe2,
   Instagram,
   Languages,
   LockKeyhole,
   MessageCircle,
-  Moon,
   PhoneCall,
   ShieldCheck,
   Sparkles,
-  Sun,
   UserRoundCheck,
-  UsersRound,
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
+
+// Neon AI Agents' own company agent, used to power the live demo widget for site visitors.
+// This id already existed in the codebase before this redesign; it is reused here, not newly introduced.
+const DEMO_AGENT_ID = "2";
 
 export const LANDING_WORKFLOW = [
   { number: "01", label: "اربط القنوات", copy: "أضف موقعك أولاً، ثم جهّز WhatsApp والقنوات التي يستخدمها عملاؤك.", icon: MessageCircle, tag: "Website · WhatsApp" },
@@ -38,8 +38,19 @@ export const LANDING_VERTICALS = [
   { name: "العقارات", outcome: "تأهيل العملاء وحجز المعاينات", icon: Globe2 },
   { name: "الخدمات المحلية", outcome: "طلبات العرض والحجوزات والمتابعة", icon: PhoneCall },
   { name: "الرعاية الصحية", outcome: "توجيه آمن ومواعيد مع تصعيد واضح", icon: ShieldCheck },
-  { name: "السفر والضيافة", outcome: "تأهيل طلب السفر وتنسيق البرنامج", icon: Languages },
+  { name: "السفر والضيافة", outcome: "تأهيل الطلبات وتنسيق البرنامج", icon: Languages },
 ];
+
+// Channel availability shown on the public landing page. `ready` must stay in sync with the
+// `channels` list in Channels.tsx (the dashboard integration page) — it reflects which
+// integrations are actually built, not just configured. Do not mark a channel `ready` here
+// unless its backend integration exists; see docs/landing-page-conversion-audit for context.
+const LANDING_CHANNELS = [
+  { id: "whatsapp", name: "WhatsApp", nameAr: "واتساب", icon: MessageCircle, ready: true },
+  { id: "web", name: "Website Chat", nameAr: "محادثة الموقع", icon: Globe2, ready: true },
+  { id: "instagram", name: "Instagram", nameAr: "إنستغرام", icon: Instagram, ready: false },
+  { id: "voice", name: "Voice", nameAr: "صوتي", icon: PhoneCall, ready: false },
+] as const;
 
 export function publicStartDestination(isIndependentRuntime: boolean, isAuthenticated: boolean) {
   if (isIndependentRuntime) return isAuthenticated ? "/start" : "/register";
@@ -47,30 +58,33 @@ export function publicStartDestination(isIndependentRuntime: boolean, isAuthenti
 }
 
 function NeonMark({ compact = false }: { compact?: boolean }) {
-  return <span className="inline-flex items-center gap-2.5" dir="ltr"><span className="relative flex h-10 w-10 items-center justify-center rounded-[14px] bg-gradient-to-br from-cyan-300 via-sky-400 to-lime-300 text-slate-950 shadow-[0_0_32px_rgba(103,232,249,0.32)]"><Bot className="h-5 w-5" /><span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#07111f] bg-lime-300" /></span>{!compact && <span className="text-sm font-extrabold tracking-[0.16em] text-white">NEON <span className="font-semibold text-cyan-200">AI</span></span>}</span>;
+  return (
+    <span className="inline-flex items-center gap-2.5" dir="ltr">
+      <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <Bot className="h-5 w-5" />
+        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-ring" />
+      </span>
+      {!compact && <span className="text-sm font-bold tracking-[0.14em] text-foreground">NEON AI</span>}
+    </span>
+  );
 }
 
 export default function PublicLanding() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
   const isIndependentRuntime = hasIndependentSupabaseBrowserConfig();
-  const [isLight, setIsLight] = useState(false);
 
+  // Load the existing floating demo-agent widget (same mechanism used elsewhere in the app).
+  // Every CTA below that should "talk to the agent" opens this widget rather than a new route.
   useEffect(() => {
-    document.documentElement.classList.toggle("neon-light", isLight);
-    return () => document.documentElement.classList.remove("neon-light");
-  }, [isLight]);
-
-  useEffect(() => {
-    const AGENT_ID = "2"; // Neon AI Agents' own company agent, used to demo the widget to site visitors.
-    if (document.getElementById(`neon-agent-widget-${AGENT_ID}`)) return;
+    if (document.getElementById(`neon-agent-widget-${DEMO_AGENT_ID}`)) return;
     const script = document.createElement("script");
     script.src = "/neon-agent-widget.js";
-    script.dataset.agentId = AGENT_ID;
+    script.dataset.agentId = DEMO_AGENT_ID;
     document.body.appendChild(script);
     return () => {
       script.remove();
-      document.getElementById(`neon-agent-widget-${AGENT_ID}`)?.remove();
+      document.getElementById(`neon-agent-widget-${DEMO_AGENT_ID}`)?.remove();
     };
   }, []);
 
@@ -99,71 +113,255 @@ export default function PublicLanding() {
     startLogin();
   };
 
-  const tone = isLight ? {
-    page: "bg-[#f6fbff] text-slate-950",
-    muted: "text-slate-600",
-    card: "border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]",
-    soft: "border-slate-200 bg-white/80",
-    nav: "border-slate-200 bg-white/75",
-  } : {
-    page: "bg-[#06111f] text-white",
-    muted: "text-slate-300",
-    card: "border-white/[0.11] bg-[#0b1b2e]/80 shadow-[0_28px_80px_rgba(0,0,0,0.34)]",
-    soft: "border-white/[0.09] bg-white/[0.035]",
-    nav: "border-white/[0.08] bg-[#071625]/70",
+  // Opens the existing live demo widget. Reused by the hero's secondary CTA and by every
+  // "ready" channel card — none of them invent a new route or a new agent id.
+  const openDemo = () => {
+    document.querySelector<HTMLButtonElement>(`#neon-agent-widget-${DEMO_AGENT_ID} .neon-launcher`)?.click();
   };
 
-  return <main className={`min-h-screen overflow-hidden ${tone.page}`} dir="rtl">
-    <div className="pointer-events-none fixed inset-0 -z-10 opacity-[0.17] [background-image:radial-gradient(circle,rgba(148,163,184,0.75)_1px,transparent_1px)] [background-size:19px_19px]" />
-    <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[850px] bg-[radial-gradient(circle_at_75%_14%,rgba(34,211,238,0.20),transparent_23rem),radial-gradient(circle_at_23%_30%,rgba(190,242,100,0.12),transparent_25rem)]" />
-
-    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 lg:px-8">
-      <div className={`mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-2xl border px-4 py-3 backdrop-blur-xl ${tone.nav}`}>
-        <Link href="/" aria-label="Neon AI home"><NeonMark /></Link>
-        <nav className="hidden items-center gap-6 text-sm font-semibold lg:flex">
-          <a href="#product" className={`${tone.muted} transition hover:text-cyan-300`}>المنصة</a>
-          <a href="#how-it-works" className={`${tone.muted} transition hover:text-cyan-300`}>كيف تعمل</a>
-          <a href="#industries" className={`${tone.muted} transition hover:text-cyan-300`}>للقطاعات</a>
-          <Link href="/pricing" className={`${tone.muted} transition hover:text-cyan-300`}>الأسعار</Link>
-        </nav>
-        <div className="flex items-center gap-2" dir="ltr">
-          <button type="button" onClick={() => setIsLight(value => !value)} className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition ${isLight ? "border-slate-200 bg-white text-slate-700 hover:border-cyan-300" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-300/40"}`} aria-label={isLight ? "Switch to dark theme" : "Switch to light theme"}>{isLight ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}</button>
-          {isAuthenticated ? <Button onClick={() => setLocation("/start")} className="h-10 rounded-xl bg-lime-300 px-4 text-sm font-bold text-slate-950 hover:bg-lime-200">مساحة العمل</Button> : <><Link href="/login" className={`hidden px-2 text-sm font-bold sm:inline ${isLight ? "text-slate-600" : "text-slate-200"}`}>تسجيل الدخول</Link><Button onClick={beginFree} className="h-10 rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-4 text-sm font-extrabold text-slate-950 shadow-[0_10px_30px_rgba(103,232,249,0.25)] hover:from-cyan-200 hover:to-lime-200">ابدأ مجاناً</Button></>}
-        </div>
-      </div>
-    </header>
-
-    <section className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-16 pt-16 sm:px-6 sm:pt-24 lg:grid-cols-[0.88fr_1.12fr] lg:items-center lg:px-8 lg:pb-24">
-      <div className="order-1 max-w-2xl text-center lg:text-right">
-        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${isLight ? "border-cyan-200 bg-cyan-50 text-cyan-800" : "border-cyan-300/20 bg-cyan-300/[0.10] text-cyan-100"}`}><span className="h-1.5 w-1.5 rounded-full bg-lime-300 shadow-[0_0_12px_#bef264]" /> وكلاء محادثة عربية للشركات</div>
-        <h1 className={`mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-[-0.055em] sm:text-6xl lg:text-7xl ${isLight ? "text-slate-950" : "text-white"}`}>ردّ على عملائك،<br /><span className="bg-gradient-to-l from-cyan-300 via-sky-300 to-lime-300 bg-clip-text text-transparent">واجمع طلباتهم،</span><br />وسلّم المهم لفريقك.</h1>
-        <p className={`mx-auto mt-6 max-w-xl text-base leading-8 sm:text-lg lg:mx-0 ${tone.muted}`}>Neon يحوّل موقع شركتك ومعرفتها إلى وكيل يجيب بوضوح، يؤهل الاستفسارات، ويعرف متى يتوقف ليسلّم المحادثة لفريقك.</p>
-        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"><Button onClick={beginFree} size="lg" className="h-14 rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 text-base font-extrabold text-slate-950 shadow-[0_16px_38px_rgba(103,232,249,0.25)] hover:from-cyan-200 hover:to-lime-200">ابنِ وكيلك الأول مجاناً <ArrowLeft className="mr-2 h-5 w-5" /></Button><a href="#product" className={`inline-flex h-14 items-center justify-center gap-2 rounded-2xl border px-6 text-base font-bold transition ${isLight ? "border-slate-200 bg-white text-slate-800 hover:border-cyan-300" : "border-white/[0.12] bg-white/[0.03] text-white hover:border-cyan-300/50 hover:bg-white/[0.06]"}`}><CirclePlay className="h-5 w-5 text-cyan-300" /> شاهد المنتج</a></div>
-        <div className={`mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-semibold lg:justify-start ${isLight ? "text-slate-500" : "text-slate-400"}`}><span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-lime-300" /> تجربة مجانية 14 يوماً</span><span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-lime-300" /> بلا بطاقة للبدء</span><span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-lime-300" /> عربي وإنجليزي</span></div>
-      </div>
-
-      <div id="product" className="order-2 relative mx-auto w-full max-w-[710px]">
-        <div className="absolute -inset-10 -z-10 rounded-[4rem] bg-cyan-300/15 blur-3xl" />
-        <div className={`overflow-hidden rounded-[30px] border p-3 sm:p-4 ${tone.card}`}>
-          <div className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${isLight ? "border-slate-100 bg-slate-50" : "border-white/[0.07] bg-[#071626]/75"}`}><div className="flex items-center gap-3"><NeonMark compact /><div><p className={`text-sm font-extrabold ${isLight ? "text-slate-900" : "text-white"}`}>تشغيل المحادثات</p><p className={`mt-0.5 text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>مثال توضيحي داخل Neon</p></div></div><span className="inline-flex items-center gap-1.5 rounded-full bg-lime-300/10 px-2.5 py-1 text-[10px] font-extrabold text-lime-300"><span className="h-1.5 w-1.5 rounded-full bg-lime-300" /> الوكيل نشط</span></div>
-          <div className="mt-3 grid gap-3 lg:grid-cols-[0.72fr_1.28fr]">
-            <aside className={`rounded-2xl border p-3 ${isLight ? "border-slate-100 bg-slate-50" : "border-white/[0.07] bg-white/[0.025]"}`}><p className={`px-1 text-[10px] font-extrabold uppercase tracking-[0.16em] ${isLight ? "text-slate-400" : "text-slate-500"}`}>القنوات</p>{[{ icon: MessageCircle, text: "WhatsApp", active: true }, { icon: Globe2, text: "الموقع", active: false }, { icon: Instagram, text: "Instagram", active: false }].map(channel => <div key={channel.text} className={`mt-2 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold ${channel.active ? (isLight ? "bg-emerald-100 text-emerald-800" : "bg-emerald-300/10 text-emerald-100") : (isLight ? "text-slate-500" : "text-slate-400")}`}><channel.icon className="h-3.5 w-3.5" />{channel.text}<span className={`mr-auto h-1.5 w-1.5 rounded-full ${channel.active ? "bg-lime-300" : "bg-slate-400"}`} /></div>)}<div className={`mt-4 rounded-xl border p-3 ${isLight ? "border-slate-200 bg-white" : "border-white/[0.07] bg-[#10243a]"}`}><p className={`text-[10px] font-bold ${isLight ? "text-slate-500" : "text-slate-400"}`}>قاعدة المعرفة</p><p className={`mt-1 text-xs font-extrabold ${isLight ? "text-slate-800" : "text-white"}`}>موقعك + ملفاتك</p></div></aside>
-            <section className={`rounded-2xl border p-4 sm:p-5 ${isLight ? "border-slate-100 bg-white" : "border-white/[0.07] bg-[#081829]"}`}><div className="flex items-start justify-between gap-4"><div><p className={`text-base font-extrabold ${isLight ? "text-slate-900" : "text-white"}`}>طلب جديد: شاحنة مبردة</p><p className={`mt-1 text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>WhatsApp · محادثة تجريبية</p></div><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-extrabold text-cyan-200">تأهيل عميل</span></div><div className={`mt-5 max-w-[88%] rounded-2xl rounded-tr-sm px-3.5 py-3 text-xs leading-6 ${isLight ? "bg-slate-100 text-slate-700" : "bg-white/[0.07] text-slate-100"}`}>أحتاج شاحنة مبردة يوم الثلاثاء. هل تتوفر في مسقط؟</div><div className="mr-auto mt-3 max-w-[90%] rounded-2xl rounded-tl-sm bg-gradient-to-l from-cyan-300 to-[#9cf1bf] px-3.5 py-3 text-xs leading-6 text-slate-950">يسعدني مساعدتك. ما الحمولة التقريبية ووقت الاستلام؟ سأتحقق من التوفر وأسجّل طلبك للفريق.</div><div className={`mt-5 flex items-center justify-between rounded-xl border px-3 py-2.5 ${isLight ? "border-lime-100 bg-lime-50" : "border-lime-300/15 bg-lime-300/[0.06]"}`}><span className={`inline-flex items-center gap-2 text-xs font-bold ${isLight ? "text-lime-800" : "text-lime-100"}`}><UserRoundCheck className="h-4 w-4 text-lime-300" /> جاهز للتحويل للفريق عند الحاجة</span><span className="text-[10px] font-extrabold text-lime-300">بيانات بإذن العميل</span></div></section>
+  return (
+    <main dir="rtl" className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <Link href="/" aria-label="Neon AI home"><NeonMark /></Link>
+          <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground lg:flex">
+            <a href="#channels" className="transition hover:text-foreground">القنوات</a>
+            <a href="#how-it-works" className="transition hover:text-foreground">كيف تعمل</a>
+            <a href="#industries" className="transition hover:text-foreground">للقطاعات</a>
+            <Link href="/pricing" className="transition hover:text-foreground">الأسعار</Link>
+          </nav>
+          <div className="flex items-center gap-3">
+            {isAuthenticated ? (
+              <Button onClick={() => setLocation("/start")} className="h-10 rounded-lg px-4 text-sm font-semibold">مساحة العمل</Button>
+            ) : (
+              <>
+                <Link href="/login" className="hidden px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline">تسجيل الدخول</Link>
+                <Button onClick={beginFree} className="h-10 rounded-lg px-4 text-sm font-semibold">ابدأ مجاناً</Button>
+              </>
+            )}
           </div>
         </div>
-        <div className={`absolute -right-3 top-20 hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold shadow-xl sm:flex ${isLight ? "border-slate-200 bg-white text-slate-700" : "border-white/10 bg-[#11263c] text-white"}`}><ShieldCheck className="h-4 w-4 text-lime-300" /> إجابة من المعرفة</div>
-        <div className={`absolute -left-4 bottom-10 hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs font-extrabold shadow-xl sm:flex ${isLight ? "border-slate-200 bg-white text-slate-700" : "border-white/10 bg-[#11263c] text-white"}`}><MessageCircle className="h-4 w-4 text-emerald-400" /> WhatsApp جاهز للربط</div>
-      </div>
-    </section>
+      </header>
 
-    <section className={`border-y ${isLight ? "border-slate-200 bg-white/75" : "border-white/[0.07] bg-white/[0.025]"}`}><div className="mx-auto grid max-w-7xl gap-px px-4 sm:grid-cols-3 sm:px-6 lg:px-8"><div className="py-6 text-center"><p className="text-2xl font-extrabold text-cyan-300">موقعك</p><p className={`mt-1 text-xs font-semibold ${tone.muted}`}>تعليم الوكيل من صفحاتك العامة</p></div><div className="border-y py-6 text-center sm:border-x sm:border-y-0 sm:border-white/[0.08]"><p className="text-2xl font-extrabold text-lime-300">قنواتك</p><p className={`mt-1 text-xs font-semibold ${tone.muted}`}>محادثات موحّدة على الويب وWhatsApp</p></div><div className="py-6 text-center"><p className="text-2xl font-extrabold text-cyan-300">فريقك</p><p className={`mt-1 text-xs font-semibold ${tone.muted}`}>تحويل واضح للحالات التي تحتاج إنساناً</p></div></div></section>
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-4 pb-14 pt-16 text-center sm:px-6 sm:pt-20 lg:px-8">
+        <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" /> وكلاء محادثة عربية للشركات
+        </div>
+        <h1 className="mx-auto mt-6 max-w-3xl text-balance text-4xl font-bold leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
+          ردّ على عملائك، واجمع طلباتهم، وسلّم المهم لفريقك.
+        </h1>
+        <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
+          Neon يحوّل موقع شركتك ومعرفتها إلى وكيل يجيب بوضوح، يؤهل الاستفسارات، ويعرف متى يتوقف ليسلّم المحادثة لفريقك.
+        </p>
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Button onClick={beginFree} size="lg" className="h-13 rounded-lg px-6 text-base font-semibold">
+            ابنِ وكيلك الأول مجاناً <ArrowLeft className="mr-2 h-5 w-5" />
+          </Button>
+          <Button onClick={openDemo} variant="outline" size="lg" className="h-13 rounded-lg border-border px-6 text-base font-semibold">
+            جرّب المحادثة الآن
+          </Button>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-primary" /> تجربة مجانية 14 يوماً</span>
+          <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-primary" /> بلا بطاقة للبدء</span>
+          <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-primary" /> عربي وإنجليزي</span>
+        </div>
 
-    <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8" id="how-it-works"><div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-start"><div><p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">خطوات واضحة، بلا تعقيد</p><h2 className={`mt-4 text-4xl font-bold leading-tight tracking-[-0.045em] sm:text-5xl ${isLight ? "text-slate-950" : "text-white"}`}>من أول زيارة إلى وكيل يعمل لخدمة عملائك.</h2><p className={`mt-5 max-w-md text-base leading-8 ${tone.muted}`}>ابدأ بخطوة واحدة. لا تحتاج إلى فريق تقني حتى ترى أول إجابة مبنية على معرفة نشاطك.</p><Link href="/pricing" className="mt-7 inline-flex items-center gap-2 text-sm font-extrabold text-cyan-300 hover:text-cyan-200">شاهد الباقات والتجربة المجانية <ArrowLeft className="h-4 w-4" /></Link></div><div className="space-y-3">{LANDING_WORKFLOW.map(step => <article key={step.number} className={`group flex gap-4 rounded-[24px] border p-5 transition duration-200 hover:-translate-y-0.5 ${tone.soft}`}><div className="flex w-12 shrink-0 flex-col items-center"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300/20 to-lime-300/10 text-cyan-300"><step.icon className="h-5 w-5" /></span><span className={`mt-2 text-[10px] font-extrabold ${isLight ? "text-slate-400" : "text-slate-500"}`}>{step.number}</span></div><div className="flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className={`text-xl font-extrabold ${isLight ? "text-slate-900" : "text-white"}`}>{step.label}</h3><span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-300" dir="ltr">{step.tag}</span></div><p className={`mt-2 text-sm leading-7 ${tone.muted}`}>{step.copy}</p></div></article>)}</div></div></section>
+        {/* Product proof panel */}
+        <div className="relative mx-auto mt-14 w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-card p-3 text-right shadow-xl shadow-black/20 sm:p-4">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/60 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <NeonMark compact />
+              <div>
+                <p className="text-sm font-semibold">تشغيل المحادثات</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">مثال توضيحي داخل Neon</p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-semibold text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" /> الوكيل نشط
+            </span>
+          </div>
+          <div className="mt-3 rounded-xl border border-border bg-background p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold">طلب جديد: شاحنة مبردة</p>
+                <p className="mt-1 text-xs text-muted-foreground">WhatsApp · محادثة تجريبية</p>
+              </div>
+              <span className="rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">تأهيل عميل</span>
+            </div>
+            <div className="mt-4 max-w-[90%] rounded-2xl rounded-tr-sm bg-secondary px-3.5 py-3 text-xs leading-6 text-foreground">
+              أحتاج شاحنة مبردة يوم الثلاثاء. هل تتوفر في مسقط؟
+            </div>
+            <div className="mr-auto mt-3 max-w-[90%] rounded-2xl rounded-tl-sm bg-primary px-3.5 py-3 text-xs leading-6 text-primary-foreground">
+              يسعدني مساعدتك. ما الحمولة التقريبية ووقت الاستلام؟ سأتحقق من التوفر وأسجّل طلبك للفريق.
+            </div>
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-secondary/50 px-3 py-2.5">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold"><UserRoundCheck className="h-4 w-4 text-primary" /> جاهز للتحويل للفريق عند الحاجة</span>
+              <span className="text-[11px] font-semibold text-muted-foreground">بيانات بإذن العميل</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section id="industries" className={`border-y py-24 ${isLight ? "border-slate-200 bg-white/75" : "border-white/[0.07] bg-[#091a2b]/55"}`}><div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_0.95fr] lg:items-center lg:px-8"><div><p className="text-xs font-extrabold uppercase tracking-[0.18em] text-lime-300">مُصمم لطبيعة عملك</p><h2 className={`mt-4 text-4xl font-bold leading-tight tracking-[-0.045em] sm:text-5xl ${isLight ? "text-slate-950" : "text-white"}`}>لا تبدأ من صفحة فارغة.</h2><p className={`mt-5 max-w-lg text-base leading-8 ${tone.muted}`}>اختر قالباً يهيّئ الأهداف والقنوات وقاعدة المعرفة كنقطة بداية. يبقى كل شيء قابلاً للتعديل قبل الإطلاق.</p><Button onClick={beginFree} variant="outline" className={`mt-7 h-12 rounded-xl px-5 font-bold ${isLight ? "border-slate-200 bg-white text-slate-800 hover:border-cyan-300" : "border-white/[0.12] bg-white/[0.03] text-white hover:border-cyan-300/50"}`}>استكشف القوالب <ArrowLeft className="mr-2 h-4 w-4" /></Button></div><div className={`overflow-hidden rounded-[28px] border ${tone.card}`}>{LANDING_VERTICALS.map((vertical, index) => <button key={vertical.name} type="button" onClick={beginFree} className={`group flex w-full items-center gap-4 px-5 py-4 text-right transition ${index !== LANDING_VERTICALS.length - 1 ? (isLight ? "border-b border-slate-100" : "border-b border-white/[0.07]") : ""} ${isLight ? "hover:bg-cyan-50" : "hover:bg-white/[0.045]"}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-300"><vertical.icon className="h-4.5 w-4.5" /></span><span className="flex-1"><span className={`block text-sm font-extrabold ${isLight ? "text-slate-900" : "text-white"}`}>{vertical.name}</span><span className={`mt-1 block text-xs ${tone.muted}`}>{vertical.outcome}</span></span><ChevronLeft className="h-4 w-4 text-slate-500 transition group-hover:-translate-x-1 group-hover:text-cyan-300" /></button>)}</div></div></section>
+      {/* Channels */}
+      <section id="channels" className="border-y border-border bg-secondary/20 py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">القنوات</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">قابل عملاءك أينما كانوا</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-muted-foreground">
+              القنوات الجاهزة الآن تربطك بالوكيل مباشرة. القنوات القادمة ستظهر بوضوح بدون أي وعد سابق لأوانه.
+            </p>
+          </div>
+          <div className="mx-auto mt-10 grid max-w-3xl gap-3 sm:grid-cols-2">
+            {LANDING_CHANNELS.map(channel => (
+              channel.ready ? (
+                <button
+                  key={channel.id}
+                  type="button"
+                  onClick={openDemo}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-right transition hover:border-primary/50 hover:bg-secondary/40"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <channel.icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold">{channel.nameAr}</span>
+                    <span className="mt-0.5 block text-xs text-primary">جرّب المحادثة الآن</span>
+                  </span>
+                  <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                </button>
+              ) : (
+                <div
+                  key={channel.id}
+                  aria-disabled="true"
+                  className="flex cursor-not-allowed items-center gap-4 rounded-xl border border-dashed border-border bg-transparent p-5 opacity-60"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                    <channel.icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold text-muted-foreground">{channel.nameAr}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">قريباً</span>
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+      </section>
 
-    <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8"><div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]"><div className={`rounded-[30px] border p-7 sm:p-10 ${tone.card}`}><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-lime-300/10 px-3 py-1 text-xs font-extrabold text-lime-300">التجربة المجانية</span><span className={`rounded-full border px-3 py-1 text-xs font-bold ${isLight ? "border-slate-200 text-slate-600" : "border-white/[0.10] text-slate-300"}`}>14 يوماً · بلا بطاقة</span></div><h2 className={`mt-6 max-w-2xl text-4xl font-bold leading-tight tracking-[-0.045em] sm:text-5xl ${isLight ? "text-slate-950" : "text-white"}`}>اختبر أول محادثة قبل أن تربط أي قناة حية.</h2><p className={`mt-5 max-w-xl text-base leading-8 ${tone.muted}`}>أنشئ مساحة عملك، أضف موقعك، وجرّب الوكيل. عندما تصبح جاهزاً، اختر الباقة المناسبة وفعّل قنواتك.</p><div className="mt-8 flex flex-col gap-3 sm:flex-row"><Button onClick={beginFree} size="lg" className="h-14 rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 text-base font-extrabold text-slate-950 hover:from-cyan-200 hover:to-lime-200">ابدأ التجربة المجانية <ArrowLeft className="mr-2 h-5 w-5" /></Button><Link href="/pricing" className={`inline-flex h-14 items-center justify-center gap-2 rounded-2xl border px-6 font-bold ${isLight ? "border-slate-200 bg-white text-slate-800" : "border-white/[0.12] bg-white/[0.03] text-white"}`}>قارن الباقات <ArrowUpLeft className="h-4 w-4" /></Link></div></div><aside className={`rounded-[30px] border p-7 ${tone.soft}`}><LockKeyhole className="h-7 w-7 text-cyan-300" /><h3 className={`mt-5 text-xl font-extrabold ${isLight ? "text-slate-900" : "text-white"}`}>ثقة قبل الإطلاق</h3><div className={`mt-5 space-y-4 text-sm leading-6 ${tone.muted}`}><p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-lime-300" /> عزل بيانات ومحادثات كل شركة داخل مساحة عملها.</p><p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-lime-300" /> طلب موافقة قبل جمع بيانات التواصل عند تفعيلها في إعدادات الخصوصية.</p><p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-lime-300" /> ربط WhatsApp الذاتي جاهز تقنياً ويُفتح للعملاء بعد اكتمال مراجعة Meta.</p></div></aside></div></section>
+      {/* How it works */}
+      <section id="how-it-works" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">خطوات واضحة، بلا تعقيد</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">من أول زيارة إلى وكيل يعمل لخدمة عملائك.</h2>
+            <p className="mt-4 max-w-md text-sm leading-7 text-muted-foreground">
+              ابدأ بخطوة واحدة. لا تحتاج إلى فريق تقني حتى ترى أول إجابة مبنية على معرفة نشاطك.
+            </p>
+            <Link href="/pricing" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+              شاهد الباقات والتجربة المجانية <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {LANDING_WORKFLOW.map(step => (
+              <article key={step.number} className="flex gap-4 rounded-xl border border-border bg-card p-5">
+                <div className="flex w-11 shrink-0 flex-col items-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary"><step.icon className="h-5 w-5" /></span>
+                  <span className="mt-2 text-[11px] font-semibold text-muted-foreground">{step.number}</span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-semibold">{step.label}</h3>
+                    <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground" dir="ltr">{step.tag}</span>
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">{step.copy}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
-    <footer className={`border-t ${isLight ? "border-slate-200 bg-white" : "border-white/[0.07] bg-[#05101b]"}`}><div className={`mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 text-xs sm:flex-row sm:px-6 lg:px-8 ${isLight ? "text-slate-500" : "text-slate-500"}`}><NeonMark /><span>Neon AI Agent Platform · Arabic-first customer automation</span><div className="flex items-center gap-4"><Link href="/pricing" className="hover:text-cyan-300">الأسعار</Link><Link href="/login" className="hover:text-cyan-300">تسجيل الدخول</Link><a href={`mailto:${NEON_CONTACT_EMAIL}`} className="hover:text-cyan-300">تواصل معنا</a></div></div></footer>
-  </main>;
+      {/* Industries */}
+      <section id="industries" className="border-y border-border bg-secondary/20 py-20">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_0.95fr] lg:items-center lg:px-8">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">مُصمم لطبيعة عملك</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">لا تبدأ من صفحة فارغة.</h2>
+            <p className="mt-4 max-w-lg text-sm leading-7 text-muted-foreground">
+              اختر قالباً يهيّئ الأهداف والقنوات وقاعدة المعرفة كنقطة بداية. يبقى كل شيء قابلاً للتعديل قبل الإطلاق.
+            </p>
+            <Button onClick={beginFree} variant="outline" className="mt-6 h-11 rounded-lg border-border px-5 font-semibold">
+              استكشف القوالب <ArrowLeft className="mr-2 h-4 w-4" />
+            </Button>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            {LANDING_VERTICALS.map((vertical, index) => (
+              <button
+                key={vertical.name}
+                type="button"
+                onClick={beginFree}
+                className={`group flex w-full items-center gap-4 px-5 py-4 text-right transition hover:bg-secondary/50 ${index !== LANDING_VERTICALS.length - 1 ? "border-b border-border" : ""}`}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><vertical.icon className="h-4.5 w-4.5" /></span>
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold">{vertical.name}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{vertical.outcome}</span>
+                </span>
+                <ChevronLeft className="h-4 w-4 text-muted-foreground transition group-hover:-translate-x-1" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+          <div className="rounded-2xl border border-border bg-card p-8 sm:p-10">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">التجربة المجانية</span>
+              <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">14 يوماً · بلا بطاقة</span>
+            </div>
+            <h2 className="mt-6 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">اختبر أول محادثة قبل أن تربط أي قناة حية.</h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">
+              أنشئ مساحة عملك، أضف موقعك، وجرّب الوكيل. عندما تصبح جاهزاً، اختر الباقة المناسبة وفعّل قنواتك.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button onClick={beginFree} size="lg" className="h-13 rounded-lg px-6 text-base font-semibold">
+                ابدأ التجربة المجانية <ArrowLeft className="mr-2 h-5 w-5" />
+              </Button>
+              <Link href="/pricing" className="inline-flex h-13 items-center justify-center gap-2 rounded-lg border border-border px-6 text-sm font-semibold">
+                قارن الباقات <ArrowUpLeft className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+          <aside className="rounded-2xl border border-border bg-secondary/30 p-7">
+            <LockKeyhole className="h-6 w-6 text-primary" />
+            <h3 className="mt-5 text-lg font-semibold">ثقة قبل الإطلاق</h3>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
+              <p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-primary" /> عزل بيانات ومحادثات كل شركة داخل مساحة عملها.</p>
+              <p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-primary" /> طلب موافقة قبل جمع بيانات التواصل عند تفعيلها في إعدادات الخصوصية.</p>
+              <p className="flex gap-3"><Check className="mt-1 h-4 w-4 shrink-0 text-primary" /> ربط WhatsApp الذاتي جاهز تقنياً ويُفتح للعملاء بعد اكتمال مراجعة Meta.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-xs text-muted-foreground sm:flex-row sm:px-6 lg:px-8">
+          <NeonMark />
+          <span>Neon AI Agent Platform · Arabic-first customer automation</span>
+          <div className="flex items-center gap-4">
+            <Link href="/pricing" className="hover:text-foreground">الأسعار</Link>
+            <Link href="/login" className="hover:text-foreground">تسجيل الدخول</Link>
+            <a href={`mailto:${NEON_CONTACT_EMAIL}`} className="hover:text-foreground">تواصل معنا</a>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
 }
