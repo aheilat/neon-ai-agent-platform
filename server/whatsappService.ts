@@ -7,6 +7,11 @@ export type WhatsAppInboundMessage = {
   customerName?: string;
   content: string;
   timestamp?: number;
+  // Present only for an inbound voice message (Meta's "audio" type covers both regular
+  // audio attachments and voice notes). When set, `content` is a transient placeholder —
+  // processWhatsAppInboundMessage replaces it with the transcribed text before any other
+  // handling (escalation keywords, LLM reply) runs, so every downstream path is unaffected.
+  audioMediaId?: string;
 };
 
 type MetaWebhookQuery = Record<string, string | string[] | undefined>;
@@ -45,7 +50,12 @@ export function extractWhatsAppInboundMessages(payload: unknown): WhatsAppInboun
         .map((contact: any) => [contact.wa_id, contact.profile.name] as [string, string]));
       for (const message of value?.messages ?? []) {
         if (!phoneNumberId || !message?.from || !message?.id) continue;
-        const content = message.type === "text" ? message.text?.body?.trim() : `[مرفق واتساب من النوع: ${message.type || "غير معروف"}]`;
+        const audioMediaId = message.type === "audio" && typeof message.audio?.id === "string" ? message.audio.id : undefined;
+        const content = message.type === "text"
+          ? message.text?.body?.trim()
+          : audioMediaId
+            ? "[رسالة صوتية قيد التفريغ]" // overwritten by processWhatsAppInboundMessage once transcribed
+            : `[مرفق واتساب من النوع: ${message.type || "غير معروف"}]`;
         if (!content) continue;
         incoming.push({
           messageId: message.id,
@@ -54,11 +64,26 @@ export function extractWhatsAppInboundMessages(payload: unknown): WhatsAppInboun
           customerName: contactById.get(message.from),
           content,
           timestamp: Number(message.timestamp || 0) || undefined,
+          ...(audioMediaId ? { audioMediaId } : {}),
         });
       }
     }
   }
   return incoming;
+}
+
+// Meta's media URLs are short-lived and require the same Bearer token as every other
+// Graph API call; the returned url itself must also be fetched with that same header.
+export async function fetchWhatsAppMediaUrl(input: { mediaId: string; accessToken?: string; graphApiVersion?: string }) {
+  const accessToken = input.accessToken || process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!accessToken) throw new Error("WhatsApp access token is not configured");
+  const apiVersion = input.graphApiVersion || process.env.WHATSAPP_GRAPH_API_VERSION || "v23.0";
+  const response = await fetch(`https://graph.facebook.com/${apiVersion}/${input.mediaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || typeof data?.url !== "string") throw new Error(data?.error?.message || "Failed to resolve WhatsApp media URL");
+  return { url: data.url as string, mimeType: typeof data?.mime_type === "string" ? data.mime_type : undefined };
 }
 
 export async function sendWhatsAppText(input: { phoneNumberId: string; to: string; body: string; accessToken?: string; graphApiVersion?: string }) {

@@ -32,4 +32,38 @@ describe("WhatsApp Cloud API webhook helpers", () => {
     });
     expect(messages).toEqual([{ messageId: "wamid.abc", phoneNumberId: "123456789", senderPhone: "96875192909", customerName: "عبدالله", content: "أريد شاحنة مبردة", timestamp: 1786799000 }]);
   });
+
+  it("extracts a voice message with its media id and a transient placeholder", () => {
+    const messages = extractWhatsAppInboundMessages({
+      object: "whatsapp_business_account",
+      entry: [{
+        changes: [{
+          field: "messages",
+          value: {
+            metadata: { phone_number_id: "123456789" },
+            contacts: [{ wa_id: "96875192909", profile: { name: "عبدالله" } }],
+            messages: [{ id: "wamid.voice", from: "96875192909", timestamp: "1786799000", type: "audio", audio: { id: "media-1", mime_type: "audio/ogg; codecs=opus" } }],
+          },
+        }],
+      }],
+    });
+    expect(messages).toEqual([{ messageId: "wamid.voice", phoneNumberId: "123456789", senderPhone: "96875192909", customerName: "عبدالله", content: "[رسالة صوتية قيد التفريغ]", timestamp: 1786799000, audioMediaId: "media-1" }]);
+  });
+
+  it("still falls back to a generic placeholder for other unsupported attachment types", () => {
+    const messages = extractWhatsAppInboundMessages({
+      object: "whatsapp_business_account",
+      entry: [{
+        changes: [{
+          field: "messages",
+          value: {
+            metadata: { phone_number_id: "123456789" },
+            messages: [{ id: "wamid.img", from: "96875192909", timestamp: "1786799000", type: "image", image: { id: "media-2" } }],
+          },
+        }],
+      }],
+    });
+    expect(messages[0].content).toBe("[مرفق واتساب من النوع: image]");
+    expect(messages[0].audioMediaId).toBeUndefined();
+  });
 });

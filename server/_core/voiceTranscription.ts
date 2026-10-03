@@ -31,6 +31,7 @@ export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
   language?: string; // Optional: specify language code (e.g., "en", "es", "zh")
   prompt?: string; // Optional: custom prompt for the transcription
+  authorizationHeader?: string; // Optional: forwarded when downloading audioUrl requires auth (e.g. Meta's media CDN)
 };
 
 // Native Whisper API segment format
@@ -94,7 +95,9 @@ export async function transcribeAudio(
     let audioBuffer: Buffer;
     let mimeType: string;
     try {
-      const response = await fetch(options.audioUrl);
+      const response = await fetch(options.audioUrl, options.authorizationHeader
+        ? { headers: { Authorization: options.authorizationHeader } }
+        : undefined);
       if (!response.ok) {
         return {
           error: "Failed to download audio file",
