@@ -52,6 +52,28 @@ const LANDING_CHANNELS = [
   { id: "voice", name: "Voice", nameAr: "صوتي", icon: PhoneCall, ready: false },
 ] as const;
 
+const LANDING_PAINS = [
+  "رسائل واتساب تتراكم خارج ساعات الدوام وتضيع معها فرص بيع.",
+  "الفريق يكرر نفس الإجابات عن الأسعار والمواعيد والتوفر كل يوم.",
+  "العميل ينتظر ساعات حتى يحصل على ردّ بسيط.",
+  "لا أحد يعرف أي المحادثات تحتاج تدخلاً بشرياً فعلاً.",
+];
+
+const LANDING_USE_CASES = [
+  { title: "المبيعات", copy: "يجيب عن المنتجات والأسعار ويؤهل العميل قبل أن يصل إلى مندوبك.", icon: Sparkles },
+  { title: "خدمة العملاء", copy: "ردود فورية مبنية على معرفة شركتك، مع تحويل واضح عند الحاجة.", icon: MessageCircle },
+  { title: "الحجوزات", copy: "يجمع تفاصيل الموعد المطلوب ويسلّمها لفريقك جاهزة.", icon: PhoneCall },
+  { title: "الطلبات", copy: "يسجّل طلبات العملاء ويستفسر عن الناقص قبل تسليمها للفريق.", icon: Zap },
+];
+
+const LANDING_FAQ = [
+  { q: "هل أحتاج فريقاً تقنياً لإطلاق الوكيل؟", a: "لا. تُدخل رابط موقعك وتختار أهداف الوكيل ونبرته، ثم تجرّب المحادثة قبل ربط أي قناة." },
+  { q: "ماذا يحدث عندما لا يعرف الوكيل الإجابة؟", a: "يتوقف ويحوّل المحادثة لفريقك مع حفظ المحادثة وبيانات العميل، بدل أن يخمّن." },
+  { q: "هل ربط WhatsApp جاهز؟", a: "الربط الذاتي جاهز تقنياً ويُفتح للعملاء بعد اكتمال مراجعة Meta. يمكنك تجربة الوكيل الآن عبر محادثة الموقع." },
+  { q: "هل بيانات شركتي معزولة عن غيرها؟", a: "نعم، تُعزل بيانات ومحادثات كل شركة داخل مساحة عملها." },
+  { q: "كم تكلف التجربة؟", a: "التجربة المجانية 14 يوماً وبلا بطاقة. تفاصيل الباقات في صفحة الأسعار." },
+];
+
 export function publicStartDestination(isIndependentRuntime: boolean, isAuthenticated: boolean) {
   if (isIndependentRuntime) return isAuthenticated ? "/start" : "/register";
   return isAuthenticated ? "/start" : undefined;
@@ -126,9 +148,11 @@ export default function PublicLanding() {
           <Link href="/" aria-label="Neon AI home"><NeonMark /></Link>
           <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground lg:flex">
             <a href="#channels" className="transition hover:text-foreground">القنوات</a>
+            <a href="#use-cases" className="transition hover:text-foreground">الاستخدامات</a>
             <a href="#how-it-works" className="transition hover:text-foreground">كيف تعمل</a>
             <a href="#industries" className="transition hover:text-foreground">للقطاعات</a>
             <Link href="/pricing" className="transition hover:text-foreground">الأسعار</Link>
+            <a href="#faq" className="transition hover:text-foreground">الأسئلة</a>
           </nav>
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
@@ -200,6 +224,54 @@ export default function PublicLanding() {
               <span className="inline-flex items-center gap-2 text-xs font-semibold"><UserRoundCheck className="h-4 w-4 text-primary" /> جاهز للتحويل للفريق عند الحاجة</span>
               <span className="text-[11px] font-semibold text-muted-foreground">بيانات بإذن العميل</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Built for the region (text only: no client logos, no unverified claims) */}
+      <section className="border-y border-border bg-secondary/20 py-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 text-xs font-semibold text-muted-foreground sm:px-6 lg:px-8">
+          <span>مصمم للشركات في الأردن والخليج</span>
+          <span className="hidden h-1 w-1 rounded-full bg-border sm:inline-block" />
+          <span>واجهة عربية بالكامل</span>
+          <span className="hidden h-1 w-1 rounded-full bg-border sm:inline-block" />
+          <span>WhatsApp أولاً</span>
+          <span className="hidden h-1 w-1 rounded-full bg-border sm:inline-block" />
+          <span>تحويل بشري عند الحاجة</span>
+        </div>
+      </section>
+
+      {/* Problem */}
+      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">المشكلة</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">عملاؤك يسألون الآن، وفريقك مشغول.</h2>
+        </div>
+        <div className="mx-auto mt-10 grid max-w-4xl gap-3 sm:grid-cols-2">
+          {LANDING_PAINS.map(pain => (
+            <p key={pain} className="rounded-xl border border-border bg-card p-5 text-sm leading-7 text-muted-foreground">{pain}</p>
+          ))}
+        </div>
+      </section>
+
+      {/* Use cases */}
+      <section id="use-cases" className="border-y border-border bg-secondary/20 py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">الحل</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">وكيل واحد، عدة مهام يومية.</h2>
+          </div>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {LANDING_USE_CASES.map(item => (
+              <article key={item.title} className="rounded-xl border border-border bg-card p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/15 text-primary"><item.icon className="h-5 w-5" /></span>
+                <h3 className="mt-5 text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-muted-foreground">{item.copy}</p>
+              </article>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Button onClick={beginFree} className="h-11 rounded-lg px-6 font-semibold">ابدأ مجاناً <ArrowLeft className="mr-2 h-4 w-4" /></Button>
           </div>
         </div>
       </section>
@@ -318,6 +390,39 @@ export default function PublicLanding() {
         </div>
       </section>
 
+      {/* Pricing summary */}
+      <section className="mx-auto max-w-6xl px-4 pb-4 pt-20 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-start justify-between gap-5 rounded-2xl border border-border bg-card p-8 sm:flex-row sm:items-center sm:p-10">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">الأسعار</p>
+            <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">ابدأ مجاناً 14 يوماً، ثم اختر الباقة المناسبة.</h2>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">قارن الباقات وبدّل بينها شهرياً أو سنوياً.</p>
+          </div>
+          <Link href="/pricing" className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground">
+            شاهد الباقات <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-3xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">الأسئلة الشائعة</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">قبل أن تبدأ</h2>
+        </div>
+        <div className="mt-10 space-y-3">
+          {LANDING_FAQ.map(item => (
+            <details key={item.q} className="group rounded-xl border border-border bg-card px-5 py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold">
+                {item.q}
+                <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:-rotate-90" />
+              </summary>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
@@ -352,13 +457,22 @@ export default function PublicLanding() {
       </section>
 
       <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-xs text-muted-foreground sm:flex-row sm:px-6 lg:px-8">
-          <NeonMark />
-          <span>Neon AI Agent Platform · Arabic-first customer automation</span>
-          <div className="flex items-center gap-4">
-            <Link href="/pricing" className="hover:text-foreground">الأسعار</Link>
-            <Link href="/login" className="hover:text-foreground">تسجيل الدخول</Link>
-            <a href={`mailto:${NEON_CONTACT_EMAIL}`} className="hover:text-foreground">تواصل معنا</a>
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 text-sm sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
+          <div className="space-y-3 lg:col-span-2">
+            <NeonMark />
+            <p className="max-w-sm text-xs leading-6 text-muted-foreground">Neon AI Agent Platform · وكلاء محادثة عربية للشركات، يجيبون ويؤهلون ويحوّلون للفريق عند الحاجة.</p>
+          </div>
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <p className="text-sm font-semibold text-foreground">المنتج</p>
+            <a href="#use-cases" className="block hover:text-foreground">الاستخدامات</a>
+            <a href="#channels" className="block hover:text-foreground">القنوات</a>
+            <Link href="/pricing" className="block hover:text-foreground">الأسعار</Link>
+          </div>
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <p className="text-sm font-semibold text-foreground">الشركة</p>
+            <Link href="/login" className="block hover:text-foreground">تسجيل الدخول</Link>
+            <a href="#faq" className="block hover:text-foreground">الأسئلة الشائعة</a>
+            <a href={`mailto:${NEON_CONTACT_EMAIL}`} className="block hover:text-foreground">تواصل معنا</a>
           </div>
         </div>
       </footer>
