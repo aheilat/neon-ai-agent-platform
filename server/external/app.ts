@@ -2,6 +2,7 @@ import express from "express";
 import { getIndependentRuntimeHealth } from "./health";
 import { registerIndependentRuntimeRoutes } from "./routes";
 import { independentErrorHandler, installAsyncRouteGuards } from "./asyncHandler";
+import { registerIndependentWhatsAppRoutes } from "./whatsapp";
 
 /**
  * Express application used only by Render/Vercel independent deployments.
@@ -16,6 +17,8 @@ export async function createIndependentNeonApp() {
     const health = await getIndependentRuntimeHealth();
     return res.status(health.ok ? 200 : 503).json(health);
   });
+  // Must precede express.json(): the WhatsApp signature is verified over the raw body.
+  registerIndependentWhatsAppRoutes(app);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerIndependentRuntimeRoutes(app);
