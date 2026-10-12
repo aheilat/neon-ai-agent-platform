@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>WhatsApp Embedded Signup test</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;line-height:1.6}
+  button{font-size:16px;padding:10px 16px;margin:4px 0;cursor:pointer}
+  pre{background:#111;color:#0f0;padding:12px;overflow:auto;white-space:pre-wrap;direction:ltr;text-align:left;min-height:160px}
+  small{color:#666}
+</style>
+</head>
+<body>
+<h2>اختبار ربط WhatsApp (قراءة فقط)</h2>
+<p><small>هذه الصفحة لا ترسل الرمز إلى أي خادم، ولا تسجّل أي رقم، ولا تغيّر شيئاً. تعرض فقط ما ترجعه Meta.</small></p>
+<button id="a">اختبار A: النمط العادي</button><br>
+<button id="b">اختبار B: تطبيق WhatsApp Business الموجود (Coexistence)</button>
+<pre id="log">جاهز...</pre>
+<script>
+var APP_ID = "1150600540201785";
+var CONFIG_ID = "1907486873280363";
+var VERSION = "v23.0";
+var logEl = document.getElementById("log");
+function log(x){ logEl.textContent += "\n" + (typeof x === "string" ? x : JSON.stringify(x, null, 2)); }
+
+window.fbAsyncInit = function () {
+  FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: true, version: VERSION });
+  log("FB SDK loaded, version " + VERSION);
+};
+(function (d, s, id) {
+  if (d.getElementById(id)) return;
+  var js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "https://connect.facebook.net/en_US/sdk.js";
+  d.getElementsByTagName("head")[0].appendChild(js);
+})(document, "script", "facebook-jssdk");
+
+window.addEventListener("message", function (event) {
+  if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+  try {
+    var data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+    if (data && data.type === "WA_EMBEDDED_SIGNUP") log({ message_event: data });
+  } catch (e) { /* ignore non-JSON messages */ }
+});
+
+function run(extras, label) {
+  log("--- " + label + " ---");
+  if (!window.FB) return log("FB SDK not ready (domain not allowed or script blocked?)");
+  FB.login(function (response) {
+    var r = JSON.parse(JSON.stringify(response));
+    if (r.authResponse && r.authResponse.code) r.authResponse.code = r.authResponse.code.slice(0, 6) + "...(hidden)";
+    log({ login_response: r });
+  }, {
+    config_id: CONFIG_ID,
+    response_type: "code",
+    override_default_response_type: true,
+    extras: extras
+  });
+}
+document.getElementById("a").onclick = function () { run({ setup: {} }, "A: setup only"); };
+document.getElementById("b").onclick = function () {
+  run({ setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }, "B: coexistence");
+};
+</script>
+</body>
+</html>
