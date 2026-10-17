@@ -16,6 +16,8 @@ import { extractKnowledgeFromIndependentImage } from "./claude";
 import { getIndependentSupabaseServerClient } from "./supabase";
 import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus, updateIndependentPublicConversationSatisfactionRating } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
+import { captureLeadFromWidgetMessage } from "./leadCapture";
+import { ensureConversationLead, isLeadStatus, listIndependentLeads, updateIndependentLead } from "./leadRepository";
 import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
 import { sendEmail } from "../_core/email";
 
@@ -54,6 +56,13 @@ function text(value: unknown, minimum: number, maximum: number) {
 function optionalText(value: unknown, maximum: number) {
   if (value === null || value === undefined || value === "") return null;
   return text(value, 1, maximum);
+}
+
+/** A handoff on a conversation that already has a lead updates it instead of creating a duplicate. */
+async function saveHandoffLead(pool: NonNullable<ReturnType<typeof getIndependentPostgresPool>>, input: { tenantId: number; agentId: number; conversationId: number; name: string; phone: string | null; email: string | null; notes: string | null }) {
+  const saved = await ensureConversationLead(pool, { ...input, overrideName: true });
+  if (saved.id !== undefined) return { id: saved.id };
+  return createIndependentHandoffLead(pool, input);
 }
 
 function safeWebsiteUrl(value: unknown) {
@@ -201,6 +210,7 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     if (conversation.status !== "active") return res.status(409).json({ error: "This conversation is no longer active" });
     try {
       await addIndependentConversationMessage(pool, conversation.id, "customer", message);
+      await captureLeadFromWidgetMessage(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: conversation.id, message });
       const result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history: Array.isArray(req.body?.history) ? req.body.history : undefined });
       if (result.kind === "not-found") return res.headersSent ? undefined : res.status(404).json({ error: "Agent not found" });
       if (result.kind !== "success") return res.headersSent ? undefined : res.status(503).json({ error: "Independent AI service is unavailable" });
@@ -243,7 +253,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       ? await getIndependentPublicConversationForAgent(pool, agent.tenantId, agent.id, conversationId, conversationSessionToken!)
       : null;
     if (conversation && conversation.status !== "active") return res.status(409).json({ error: "This conversation is no longer active" });
-    const lead = await createIndependentHandoffLead(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: conversation?.id ?? null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    const lead = conversation
+      ? await saveHandoffLead(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: conversation.id, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null })
+      : await createIndependentHandoffLead(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
     if (conversation) {
       await updateIndependentConversationStatus(pool, agent.tenantId, agent.id, conversation.id, "escalated");
       await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل طلب العميل إلى الفريق البشري بعد موافقته.");
@@ -564,6 +576,45 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     return res.json({ leads });
   });
 
+  app.get("/api/external/agents/:agentId/leads", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    const rawStatus = typeof req.query.status === "string" && req.query.status ? req.query.status : undefined;
+    if (rawStatus !== undefined && !isLeadStatus(rawStatus)) return res.status(400).json({ error: "Invalid lead status" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const result = await listIndependentLeads(pool, session.workspace.id, agent.id, {
+      status: isLeadStatus(rawStatus) ? rawStatus : undefined,
+      search: typeof req.query.search === "string" ? req.query.search : undefined,
+      limit: Number(req.query.limit) || 25,
+      offset: Number(req.query.offset) || 0,
+    });
+    return res.json(result);
+  });
+
+  app.patch("/api/external/agents/:agentId/leads/:leadId", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const leadId = Number(req.params.leadId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !Number.isSafeInteger(leadId) || leadId <= 0) return res.status(400).json({ error: "Invalid agent or lead ID" });
+    const hasStatus = req.body?.status !== undefined;
+    const hasNotes = req.body?.notes !== undefined;
+    if (!hasStatus && !hasNotes) return res.status(400).json({ error: "A status or notes value is required" });
+    if (hasStatus && !isLeadStatus(req.body.status)) return res.status(400).json({ error: "Invalid lead status" });
+    const notes = hasNotes ? optionalText(req.body.notes, 2_000) : undefined;
+    if (hasNotes && notes === undefined) return res.status(400).json({ error: "Notes must be at most 2000 characters" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const agent = await getIndependentAgentInTenant(pool, session.workspace.id, agentId);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+    const lead = await updateIndependentLead(pool, session.workspace.id, agent.id, leadId, { status: hasStatus ? req.body.status : undefined, notes });
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+    return res.json({ lead });
+  });
+
   app.get("/api/external/agents/:agentId/conversations", async (req, res) => {
     const agentId = Number(req.params.agentId);
     if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
@@ -606,7 +657,9 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       ? await getIndependentConversationInTenant(pool, session.workspace.id, agentId, conversationId)
       : undefined;
     if (Number.isSafeInteger(conversationId) && conversationId > 0 && !conversation) return res.status(404).json({ error: "Conversation not found" });
-    const lead = await createIndependentHandoffLead(pool, { tenantId: session.workspace.id, agentId, conversationId: conversation?.id ?? null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
+    const lead = conversation
+      ? await saveHandoffLead(pool, { tenantId: session.workspace.id, agentId, conversationId: conversation.id, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null })
+      : await createIndependentHandoffLead(pool, { tenantId: session.workspace.id, agentId, conversationId: null, name, phone: phone ?? null, email: email ?? null, notes: notes ?? null });
     if (conversation) {
       await updateIndependentConversationStatus(pool, session.workspace.id, agentId, conversation.id, "escalated");
       await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل الطلب إلى الفريق البشري بعد موافقة العميل.");

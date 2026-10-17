@@ -11,6 +11,7 @@ import {
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { addIndependentConversationMessage, getIndependentAgentInTenant } from "./agentRepository";
 import { generateIndependentAgentReplyForTenant } from "./chat";
+import { captureLeadFromWhatsAppConversation } from "./leadCapture";
 import { getIndependentPostgresPool } from "./postgres";
 import { resolveIndependentWorkspaceSession } from "./runtime";
 
@@ -114,6 +115,7 @@ export async function processIndependentWhatsAppMessage(message: WhatsAppInbound
   const conversation = await findOrCreateWhatsAppConversation(pool, integration, message);
   const history = await loadHistory(pool, conversation.id);
   await addIndependentConversationMessage(pool, conversation.id, "customer", content);
+  await captureLeadFromWhatsAppConversation(pool, { tenantId: integration.tenantId, agentId: integration.agentId, conversationId: conversation.id, senderPhone: message.senderPhone, customerName: message.customerName, message: content });
 
   // A human has taken over: keep the customer's message visible in the inbox, but do not auto-reply.
   if (conversation.status === "escalated") return { accepted: true as const, reply: undefined, reason: "escalated_to_human" };
