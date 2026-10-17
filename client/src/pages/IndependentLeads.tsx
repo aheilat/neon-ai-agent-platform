@@ -27,16 +27,19 @@ function LeadCard({ lead, agentId, onSaved }: { lead: IndependentLeadRecord; age
   const [notes, setNotes] = useState(lead.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedNotice, setSavedNotice] = useState(false);
   const dirty = status !== lead.status || notes !== (lead.notes ?? "");
 
   const save = async () => {
     setSaving(true);
     setError(null);
+    setSavedNotice(false);
     try {
       const token = await accessToken();
       if (!token) throw new Error("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.");
       const { lead: saved } = await updateIndependentLead(token, agentId, lead.id, { status, notes: notes.trim() ? notes.trim() : null });
       onSaved(saved);
+      setSavedNotice(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حفظ التعديل.");
     } finally {
@@ -53,15 +56,16 @@ function LeadCard({ lead, agentId, onSaved }: { lead: IndependentLeadRecord; age
           <time className="mt-1 block text-xs text-slate-400">{new Date(lead.createdAt).toLocaleString("ar")}</time>
         </div>
         <label className="text-xs font-bold">الحالة
-          <select value={status} onChange={event => setStatus(event.target.value as IndependentLeadStatus)} className="mr-2 rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-sm text-white">
+          <select value={status} onChange={event => setStatus(event.target.value as IndependentLeadStatus)} className="mr-2 rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-sm">
             {STATUSES.map(item => <option key={item} value={item}>{STATUS_LABELS[item]}</option>)}
           </select>
         </label>
       </div>
-      <textarea value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000} rows={2} placeholder="ملاحظات داخلية عن العميل" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm text-white" />
+      <textarea value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000} rows={2} placeholder="ملاحظات داخلية عن العميل" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm" />
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <Button type="button" onClick={() => void save()} disabled={!dirty || saving} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">{saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}حفظ</Button>
         {lead.conversationId ? <a href="/conversations" className="inline-flex items-center gap-1 text-xs font-bold text-cyan-200"><MessageSquareText className="h-4 w-4" />المحادثة #{lead.conversationId}</a> : null}
+        {savedNotice && !dirty ? <p className="text-xs font-bold text-lime-200" role="status">تم الحفظ</p> : null}
         {error ? <p className="text-xs text-rose-200" role="alert">{error}</p> : null}
       </div>
     </article>
@@ -147,7 +151,16 @@ export default function IndependentLeads() {
           {error ? <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100" role="alert">{error}</p> : null}
           {loading && !page ? <p className="mt-4 text-sm text-slate-400">جارٍ التحميل…</p> : null}
           {page && page.leads.length === 0 && !loading ? <p className="mt-4 rounded-2xl border border-dashed border-white/15 p-4 text-sm leading-6 text-slate-400">لا يوجد عملاء محتملون بعد. يُضاف العميل تلقائياً عند أول رسالة واتساب أو عند مشاركة رقمه أو بريده في الويدجت.</p> : null}
-          <div className="mt-4 space-y-3">{agentId !== null && page?.leads.map(lead => <LeadCard key={`${lead.id}-${lead.updatedAt}`} lead={lead} agentId={agentId} onSaved={saved => setPage(current => current ? { ...current, leads: current.leads.map(item => item.id === saved.id ? saved : item) } : current)} />)}</div>
+          <div className="mt-4 space-y-3">{agentId !== null && page?.leads.map(lead => <LeadCard key={`${lead.id}-${lead.updatedAt}`} lead={lead} agentId={agentId} onSaved={saved => setPage(current => {
+              if (!current) return current;
+              const previous = current.leads.find(item => item.id === saved.id);
+              const statusCounts = { ...current.statusCounts };
+              if (previous && previous.status !== saved.status) {
+                statusCounts[previous.status] = Math.max((statusCounts[previous.status] ?? 0) - 1, 0);
+                statusCounts[saved.status] = (statusCounts[saved.status] ?? 0) + 1;
+              }
+              return { ...current, statusCounts, leads: current.leads.map(item => item.id === saved.id ? saved : item) };
+            })} />)}</div>
 
           {page && page.total > PAGE_SIZE ? <div className="mt-5 flex items-center justify-between text-sm">
             <Button variant="outline" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))} className="border-white/15 text-white hover:bg-white/10">السابق</Button>
