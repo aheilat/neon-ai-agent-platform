@@ -132,6 +132,7 @@ const independentWorkspaceNavigation = [
   { href: "/agents", label: "الوكلاء", sectionId: "independent-agents" },
   { href: "/knowledge", label: "المعرفة", sectionId: "independent-knowledge" },
   { href: "/conversations", label: "الحوار والطلبات", sectionId: "independent-conversations" },
+  { href: "/leads", label: "العملاء المحتملون", sectionId: "independent-leads" },
   { href: "/channels", label: "القنوات", sectionId: "independent-channels" },
   { href: "/settings", label: "الإعدادات", sectionId: "independent-settings" },
 ] as const;

@@ -25,6 +25,7 @@ import Quality from "./pages/Quality";
 import IndependentStaging from "./pages/IndependentStaging";
 import IndependentOnboarding from "./pages/IndependentOnboarding";
 import IndependentProfileSettings from "./pages/IndependentProfileSettings";
+import IndependentLeads from "./pages/IndependentLeads";
 import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 
 function AppRoutes() {
@@ -45,6 +46,7 @@ function AppRoutes() {
       <Route path="/channels" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Channels} />
       <Route path="/settings" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Settings} />
       <Route path="/profile" component={IndependentProfileSettings} />
+      <Route path="/leads" component={hasIndependentSupabaseBrowserConfig() ? IndependentLeads : NotFound} />
       <Route path="*">
         <DashboardLayout>
           <Switch>

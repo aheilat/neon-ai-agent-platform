@@ -206,3 +206,50 @@ export function getIndependentAgentConversation<T>(
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}`, "GET", accessToken, undefined, fetchImplementation);
 }
+
+export type IndependentLeadStatus = "new" | "contacted" | "qualified" | "closed";
+
+export type IndependentLeadRecord = {
+  id: number;
+  conversationId: number | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  status: IndependentLeadStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IndependentLeadsPage = {
+  leads: IndependentLeadRecord[];
+  total: number;
+  statusCounts: Record<string, number>;
+  limit: number;
+  offset: number;
+};
+
+export function listIndependentLeads(
+  accessToken: string,
+  agentId: number,
+  filters: { status?: IndependentLeadStatus | ""; search?: string; limit?: number; offset?: number } = {},
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  const query = new URLSearchParams();
+  if (filters.status) query.set("status", filters.status);
+  if (filters.search?.trim()) query.set("search", filters.search.trim());
+  if (filters.limit) query.set("limit", String(filters.limit));
+  if (filters.offset) query.set("offset", String(filters.offset));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestJson<IndependentLeadsPage>(`/api/external/agents/${agentId}/leads${suffix}`, "GET", accessToken, undefined, fetchImplementation);
+}
+
+export function updateIndependentLead(
+  accessToken: string,
+  agentId: number,
+  leadId: number,
+  patch: { status?: IndependentLeadStatus; notes?: string | null },
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<{ lead: IndependentLeadRecord }>(`/api/external/agents/${agentId}/leads/${leadId}`, "PATCH", accessToken, patch, fetchImplementation);
+}
