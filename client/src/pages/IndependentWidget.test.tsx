@@ -87,3 +87,33 @@ describe("Independent public Widget feedback", () => {
     await screen.findByText(/يبدو أن الخادم يعيد صفحة HTML/);
   });
 });
+
+describe("Independent public Widget human request", () => {
+  it("opens the consent-based handoff form when the server suggests a handoff", async () => {
+    const defaultImplementation = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/chat")) return Promise.resolve(new Response(JSON.stringify({ reply: "بالتأكيد. اترك بياناتك في النموذج وسيتواصل معك فريقنا قريباً.", handoffSuggested: true, conversation: { id: 42, sessionToken: "x".repeat(43) } }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      return defaultImplementation(input, init);
+    });
+    render(<IndependentWidget />);
+    await screen.findByText("مرحباً، أنا وكيل الاختبار. كيف أستطيع مساعدتك؟");
+    expect(screen.queryByText("اطلب التواصل مع فريق الشركة")).toBeNull();
+
+    const input = screen.getByPlaceholderText("اكتب استفسارك…");
+    fireEvent.change(input, { target: { value: "أريد التحدث مع موظف" } });
+    fireEvent.submit(input.closest("form")!);
+
+    await screen.findByText("بالتأكيد. اترك بياناتك في النموذج وسيتواصل معك فريقنا قريباً.");
+    await screen.findByText("اطلب التواصل مع فريق الشركة");
+  });
+
+  it("does not open the handoff form for an ordinary answer", async () => {
+    render(<IndependentWidget />);
+    await screen.findByText("مرحباً، أنا وكيل الاختبار. كيف أستطيع مساعدتك؟");
+    const input = screen.getByPlaceholderText("اكتب استفسارك…");
+    fireEvent.change(input, { target: { value: "مرحبا" } });
+    fireEvent.submit(input.closest("form")!);
+    await screen.findByText("أهلاً بك");
+    expect(screen.queryByText("اطلب التواصل مع فريق الشركة")).toBeNull();
+  });
+});

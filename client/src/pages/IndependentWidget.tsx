@@ -188,10 +188,11 @@ export default function IndependentWidget() {
     setSending(true);
     setError(null);
     try {
-      const result = await publicWidgetRequest<{ reply: string; conversation: { id: number; sessionToken: string } }>(`/api/public/agents/${agent.id}/chat`, { method: "POST", body: JSON.stringify({ message: requestMessage, conversationId, conversationSessionToken, history: nextHistory }) });
+      const result = await publicWidgetRequest<{ reply: string; handoffSuggested?: boolean; conversation: { id: number; sessionToken: string } }>(`/api/public/agents/${agent.id}/chat`, { method: "POST", body: JSON.stringify({ message: requestMessage, conversationId, conversationSessionToken, history: nextHistory }) });
       setConversationId(result.conversation.id);
       setConversationSessionToken(result.conversation.sessionToken);
       setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
+      if (result.handoffSuggested) setHandoffOpen(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر إرسال الرسالة الآن.");
     } finally {

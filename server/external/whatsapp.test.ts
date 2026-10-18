@@ -10,9 +10,10 @@ const mocks = vi.hoisted(() => ({
   transcribe: vi.fn(),
   fetchMedia: vi.fn(async () => ({ url: "https://graph.facebook.com/m", mimeType: "audio/ogg" })),
   getPool: vi.fn(),
+  updateStatus: vi.fn(async () => undefined),
 }));
 
-vi.mock("./agentRepository", () => ({ getIndependentAgentInTenant: mocks.getAgent, addIndependentConversationMessage: mocks.addMessage }));
+vi.mock("./agentRepository", () => ({ getIndependentAgentInTenant: mocks.getAgent, addIndependentConversationMessage: mocks.addMessage, updateIndependentConversationStatus: mocks.updateStatus }));
 vi.mock("./chat", () => ({ generateIndependentAgentReplyForTenant: mocks.reply }));
 vi.mock("./runtime", () => ({ resolveIndependentWorkspaceSession: mocks.resolveSession }));
 vi.mock("./postgres", () => ({ getIndependentPostgresPool: mocks.getPool }));
@@ -67,6 +68,70 @@ describe("processIndependentWhatsAppMessage", () => {
     expect(mocks.addMessage).toHaveBeenCalledWith(expect.anything(), 9, "customer", "مرحبا");
     expect(mocks.reply).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  describe("customer asks for a human", () => {
+    const agentRow = { id: 2, status: "active", name: "Neon", language: "ar", capabilitiesJson: { handoffContact: { email: "owner@example.com" } } };
+
+    it("escalates, tells the customer, e-mails the owner and does not call the AI", async () => {
+      mocks.getAgent.mockResolvedValue(agentRow);
+      const send = vi.fn(async () => ({}));
+      const notifyEscalation = vi.fn(async () => true);
+      const result = await processIndependentWhatsAppMessage(message({ content: "أريد التحدث مع موظف", customerName: "Ahmed" }) as any, { getPool: () => fakePool({ integration }), send, notifyEscalation } as any);
+      expect(result).toMatchObject({ accepted: true, reason: "escalated_by_customer_request" });
+      expect(mocks.updateStatus).toHaveBeenCalledWith(expect.anything(), 7, 2, 50, "escalated");
+      expect(notifyEscalation).toHaveBeenCalledWith(agentRow, { conversationId: 50, channel: "whatsapp", reason: "human_request", customerName: "Ahmed", customerPhone: "96279000000", customerMessage: "أريد التحدث مع موظف" });
+      expect(send).toHaveBeenCalledWith({ phoneNumberId: "111222333", to: "96279000000", body: expect.stringContaining("تم تحويل طلبك") });
+      expect(mocks.reply).not.toHaveBeenCalled();
+      expect(mocks.addMessage).toHaveBeenCalledWith(expect.anything(), 50, "customer", "أريد التحدث مع موظف");
+      expect(mocks.addMessage).toHaveBeenCalledWith(expect.anything(), 50, "system", expect.stringContaining("الفريق البشري"));
+    });
+
+    it("reports a complaint and a sales request with their own reason", async () => {
+      mocks.getAgent.mockResolvedValue(agentRow);
+      const notifyEscalation = vi.fn(async () => true);
+      const deps = { getPool: () => fakePool({ integration }), send: vi.fn(async () => ({})), notifyEscalation } as any;
+      await processIndependentWhatsAppMessage(message({ content: "عندي شكوى على الخدمة" }) as any, deps);
+      await processIndependentWhatsAppMessage(message({ content: "حولني لقسم المبيعات" }) as any, deps);
+      expect(notifyEscalation.mock.calls.map(call => (call as any[])[1].reason)).toEqual(["complaint", "sales_request"]);
+    });
+
+    it("still replies to the customer when the owner e-mail or the acknowledgement fails", async () => {
+      mocks.getAgent.mockResolvedValue({ ...agentRow, language: "bilingual" });
+      const notifyEscalation = vi.fn(async () => { throw new Error("mail down"); });
+      const send = vi.fn(async () => { throw new Error("graph down"); });
+      const result = await processIndependentWhatsAppMessage(message({ content: "I want to talk to a human" }) as any, { getPool: () => fakePool({ integration }), send, notifyEscalation } as any);
+      expect(result).toMatchObject({ accepted: true, reason: "escalated_by_customer_request" });
+      expect(mocks.updateStatus).toHaveBeenCalled();
+      expect(send).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining("passed your request") }));
+    });
+
+    it("does not escalate an ordinary question or e-mail twice for an already escalated conversation", async () => {
+      mocks.getAgent.mockResolvedValue(agentRow);
+      const notifyEscalation = vi.fn(async () => true);
+      const send = vi.fn(async () => ({}));
+      await processIndependentWhatsAppMessage(message({ content: "ما هي خدمات Neon AI Agents؟" }) as any, { getPool: () => fakePool({ integration }), send, notifyEscalation } as any);
+      expect(mocks.updateStatus).not.toHaveBeenCalled();
+      expect(notifyEscalation).not.toHaveBeenCalled();
+      expect(mocks.reply).toHaveBeenCalledTimes(1);
+
+      const result = await processIndependentWhatsAppMessage(message({ content: "أريد التحدث مع موظف" }) as any, { getPool: () => fakePool({ integration, conversation: { id: 9, status: "escalated" } }), send, notifyEscalation } as any);
+      expect(result).toMatchObject({ reason: "escalated_to_human" });
+      expect(notifyEscalation).not.toHaveBeenCalled();
+    });
+
+    it("escalates from a transcribed voice message but not when the transcript failed", async () => {
+      mocks.getAgent.mockResolvedValue(agentRow);
+      const notifyEscalation = vi.fn(async () => true);
+      const send = vi.fn(async () => ({}));
+      mocks.transcribe.mockResolvedValueOnce({ text: "أريد التحدث مع موظف" });
+      const voice = await processIndependentWhatsAppMessage(message({ content: "", audioMediaId: "m1" }) as any, { getPool: () => fakePool({ integration }), send, notifyEscalation } as any);
+      expect(voice).toMatchObject({ reason: "escalated_by_customer_request" });
+      mocks.transcribe.mockResolvedValueOnce({ error: "x" });
+      notifyEscalation.mockClear();
+      await processIndependentWhatsAppMessage(message({ content: "", audioMediaId: "m2" }) as any, { getPool: () => fakePool({ integration }), send, notifyEscalation } as any);
+      expect(notifyEscalation).not.toHaveBeenCalled();
+    });
   });
 
   it("ignores duplicate deliveries of the same message id", async () => {

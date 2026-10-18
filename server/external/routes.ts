@@ -17,6 +17,8 @@ import { getIndependentSupabaseServerClient } from "./supabase";
 import { addIndependentConversationMessage, createIndependentConversation, createIndependentHandoffLead, createIndependentPublicConversationSessionToken, getIndependentAgentInTenant, getIndependentConversationInTenant, getIndependentPublicActiveAgent, getIndependentPublicConversationForAgent, hashIndependentPublicConversationSessionToken, listIndependentConversationMessages, listIndependentConversationsForAgent, listIndependentHandoffLeadsForAgent, updateIndependentAgentHandoffContact, updateIndependentConversationStatus, updateIndependentPublicConversationSatisfactionRating } from "./agentRepository";
 import { getIndependentPostgresPool } from "./postgres";
 import { captureLeadFromWidgetMessage } from "./leadCapture";
+import { detectEscalationIntent } from "./escalationDetection";
+import { widgetHandoffPrompt } from "./escalation";
 import { ensureConversationLead, isLeadStatus, listIndependentLeads, updateIndependentLead } from "./leadRepository";
 import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
 import { sendEmail } from "../_core/email";
@@ -211,6 +213,13 @@ export function registerIndependentRuntimeRoutes(app: Express) {
     try {
       await addIndependentConversationMessage(pool, conversation.id, "customer", message);
       await captureLeadFromWidgetMessage(pool, { tenantId: agent.tenantId, agentId: agent.id, conversationId: conversation.id, message });
+      // The visitor asked for a person: open the consent-based handoff form instead of answering with the AI.
+      if (detectEscalationIntent(message).escalate) {
+        const prompt = widgetHandoffPrompt(agent.language, message);
+        await addIndependentConversationMessage(pool, conversation.id, "agent", prompt);
+        if (res.headersSent) return;
+        return res.json({ reply: prompt, handoffSuggested: true, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
+      }
       const result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history: Array.isArray(req.body?.history) ? req.body.history : undefined });
       if (result.kind === "not-found") return res.headersSent ? undefined : res.status(404).json({ error: "Agent not found" });
       if (result.kind !== "success") return res.headersSent ? undefined : res.status(503).json({ error: "Independent AI service is unavailable" });

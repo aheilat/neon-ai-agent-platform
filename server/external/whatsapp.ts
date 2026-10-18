@@ -9,8 +9,10 @@ import {
   type WhatsAppInboundMessage,
 } from "../whatsappService";
 import { transcribeAudio } from "../_core/voiceTranscription";
-import { addIndependentConversationMessage, getIndependentAgentInTenant } from "./agentRepository";
+import { addIndependentConversationMessage, getIndependentAgentInTenant, updateIndependentConversationStatus } from "./agentRepository";
 import { generateIndependentAgentReplyForTenant } from "./chat";
+import { escalationAcknowledgement, notifyOwnerOfEscalation } from "./escalation";
+import { detectEscalationIntent } from "./escalationDetection";
 import { captureLeadFromWhatsAppConversation } from "./leadCapture";
 import { getIndependentPostgresPool } from "./postgres";
 import { resolveIndependentWorkspaceSession } from "./runtime";
@@ -97,6 +99,7 @@ async function resolveContent(input: WhatsAppInboundMessage): Promise<{ content:
 export type IndependentWhatsAppDependencies = {
   getPool: () => Pool | undefined;
   send: typeof sendWhatsAppText;
+  notifyEscalation?: typeof notifyOwnerOfEscalation;
 };
 
 const defaultDependencies: IndependentWhatsAppDependencies = { getPool: getIndependentPostgresPool, send: sendWhatsAppText };
@@ -119,6 +122,26 @@ export async function processIndependentWhatsAppMessage(message: WhatsAppInbound
 
   // A human has taken over: keep the customer's message visible in the inbox, but do not auto-reply.
   if (conversation.status === "escalated") return { accepted: true as const, reply: undefined, reason: "escalated_to_human" };
+
+  // The customer asked for a person (or complained): hand the conversation to the team, tell the customer, e-mail the owner.
+  const escalation = transcriptionFailed ? ({ escalate: false } as const) : detectEscalationIntent(content);
+  if (escalation.escalate) {
+    await updateIndependentConversationStatus(pool, integration.tenantId, integration.agentId, conversation.id, "escalated");
+    await addIndependentConversationMessage(pool, conversation.id, "system", "تم تحويل المحادثة إلى الفريق البشري بناءً على طلب العميل.");
+    try {
+      await (deps.notifyEscalation ?? notifyOwnerOfEscalation)(agent, { conversationId: conversation.id, channel: "whatsapp", reason: escalation.reason, customerName: message.customerName, customerPhone: message.senderPhone, customerMessage: content });
+    } catch (error) {
+      console.error("[Independent WhatsApp] Escalation notification failed", error instanceof Error ? error.name : "unknown");
+    }
+    const acknowledgement = escalationAcknowledgement(agent.language, content);
+    await addIndependentConversationMessage(pool, conversation.id, "agent", acknowledgement);
+    try {
+      await deps.send({ phoneNumberId: message.phoneNumberId, to: message.senderPhone, body: acknowledgement });
+    } catch (error) {
+      console.error("[Independent WhatsApp] Escalation acknowledgement failed", error instanceof Error ? error.name : "unknown");
+    }
+    return { accepted: true as const, reply: acknowledgement, reason: "escalated_by_customer_request" as const };
+  }
 
   let reply: string;
   if (transcriptionFailed) {
