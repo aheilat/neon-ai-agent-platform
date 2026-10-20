@@ -207,6 +207,25 @@ export function getIndependentAgentConversation<T>(
   return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}`, "GET", accessToken, undefined, fetchImplementation);
 }
 
+export function sendIndependentConversationReply<T = { conversation: { id: number; status: "escalated" }; sentAt: string }>(
+  accessToken: string,
+  agentId: number,
+  conversationId: number,
+  message: string,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}/reply`, "POST", accessToken, { message }, fetchImplementation);
+}
+
+export function reactivateIndependentAgentConversation<T = { conversation: { id: number; status: "active" } }>(
+  accessToken: string,
+  agentId: number,
+  conversationId: number,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}/reactivate`, "POST", accessToken, {}, fetchImplementation);
+}
+
 export type IndependentLeadStatus = "new" | "contacted" | "qualified" | "closed";
 
 export type IndependentLeadRecord = {

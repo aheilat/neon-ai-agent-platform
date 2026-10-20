@@ -13,6 +13,8 @@ import {
   type IndependentTemplate,
   getIndependentAgentConversation,
   listIndependentAgentConversations,
+  reactivateIndependentAgentConversation,
+  sendIndependentConversationReply,
   listIndependentHandoffRequests,
   saveIndependentHandoffContact,
   updateIndependentAgentProfile,
@@ -203,6 +205,8 @@ export default function IndependentStaging() {
   const [inboxMessages, setInboxMessages] = useState<IndependentConversationMessage[]>([]);
   const [inboxMessagesLoading, setInboxMessagesLoading] = useState(false);
   const [closingInboxConversationId, setClosingInboxConversationId] = useState<number | null>(null);
+  const [humanReplyText, setHumanReplyText] = useState("");
+  const [humanReplyBusy, setHumanReplyBusy] = useState(false);
   const [widgetCopyStatus, setWidgetCopyStatus] = useState<string | null>(null);
   const [mockMetaConnection, setMockMetaConnection] = useState<MockMetaConnection | null>(null);
   const [mockMetaBusy, setMockMetaBusy] = useState(false);
@@ -735,8 +739,49 @@ export default function IndependentStaging() {
     }
   };
 
+  const refreshOpenInboxConversation = async (agentId: number, conversationId: number, token: string) => {
+    const payload = await getIndependentAgentConversation<{ conversation: IndependentConversationSummary; messages: IndependentConversationMessage[] }>(token, agentId, conversationId);
+    setSelectedInboxConversation((current) => current?.id === conversationId ? { ...current, ...payload.conversation } : current);
+    setInboxMessages(payload.messages ?? []);
+    await loadInboxConversations(agentId);
+  };
+
+  const sendHumanReply = async () => {
+    const message = humanReplyText.trim();
+    if (!selectedAgent || !selectedInboxConversation || !message) return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setHumanReplyBusy(true);
+    setInboxError(null);
+    try {
+      await sendIndependentConversationReply(token, selectedAgent.id, selectedInboxConversation.id, message);
+      setHumanReplyText("");
+      await refreshOpenInboxConversation(selectedAgent.id, selectedInboxConversation.id, token);
+    } catch (reason) {
+      setInboxError(reason instanceof Error ? reason.message : "تعذر إرسال الرد.");
+    } finally {
+      setHumanReplyBusy(false);
+    }
+  };
+
+  const handBackToAgent = async () => {
+    if (!selectedAgent || !selectedInboxConversation || selectedInboxConversation.status !== "escalated") return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    setHumanReplyBusy(true);
+    setInboxError(null);
+    try {
+      await reactivateIndependentAgentConversation(token, selectedAgent.id, selectedInboxConversation.id);
+      await refreshOpenInboxConversation(selectedAgent.id, selectedInboxConversation.id, token);
+    } catch (reason) {
+      setInboxError(reason instanceof Error ? reason.message : "تعذر إعادة المحادثة إلى الوكيل.");
+    } finally {
+      setHumanReplyBusy(false);
+    }
+  };
+
   const closeInboxConversation = async () => {
-    if (!selectedAgent || !selectedInboxConversation || selectedInboxConversation.status !== "active") return;
+    if (!selectedAgent || !selectedInboxConversation || selectedInboxConversation.status === "resolved") return;
     const token = await accessToken();
     if (!token) return setLocation("/login");
     setClosingInboxConversationId(selectedInboxConversation.id);
@@ -767,7 +812,7 @@ export default function IndependentStaging() {
     <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" />صندوق محادثات الوكيل</h2><p className="mt-1 text-sm leading-6 text-slate-300">سجل المحادثات المحفوظة للوكيل <strong>{selectedAgent.name}</strong> فقط. اختر محادثة لقراءة رسائلها.</p></div><Button type="button" variant="outline" size="sm" onClick={() => void loadInboxConversations(selectedAgent.id)} disabled={inboxLoading} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{inboxLoading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}تحديث المحادثات</Button></div>
       {inboxError ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">{inboxError}</p> : inboxLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل محادثات الوكيل…</p> : inboxConversations.length ? <div className="mt-4 grid gap-2 lg:grid-cols-2">{inboxConversations.map((conversation) => <button key={conversation.id} type="button" onClick={() => void openInboxConversation(conversation)} className={`rounded-2xl border p-3 text-right transition ${selectedInboxConversation?.id === conversation.id ? "border-cyan-200/60 bg-cyan-300/10" : "border-white/10 bg-slate-950/45 hover:border-white/25"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-white">{conversation.customerName || conversation.customerEmail || conversation.customerPhone || "زائر الـWidget"}</p><p className="mt-1 line-clamp-2 text-xs leading-6 text-slate-400">{conversation.lastMessageContent || "لا توجد رسالة محفوظة بعد."}</p></div><div className="shrink-0 text-left"><span className={`rounded-full px-2 py-1 text-xs font-bold ${conversation.status === "active" ? "bg-cyan-300/10 text-cyan-100" : conversation.status === "escalated" ? "bg-amber-300/10 text-amber-100" : "bg-slate-300/10 text-slate-300"}`}>{conversation.status === "active" ? "مفتوحة" : conversation.status === "escalated" ? "محوّلة" : "مغلقة"}</span><p className="mt-2 text-xs text-slate-500">{new Date(conversation.updatedAt).toLocaleString("ar")}</p></div></div>{conversation.leadStatus && <p className="mt-2 text-xs text-lime-100">طلب تواصل: {conversation.leadStatus === "new" ? "جديد" : conversation.leadStatus}</p>}</button>)}</div> : <p className="mt-4 rounded-2xl border border-dashed border-white/15 p-4 text-sm leading-7 text-slate-400">لا توجد محادثات محفوظة لهذا الوكيل بعد. ستظهر هنا محادثات الاختبار والـWidget التي تستخدم هذا الوكيل فقط.</p>}
-      {selectedInboxConversation && <div className="mt-4 rounded-2xl border border-cyan-200/20 bg-slate-950/55 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">رسائل المحادثة #{selectedInboxConversation.id}</p><p className="mt-1 text-xs text-slate-400">الحالة: {selectedInboxConversation.status === "active" ? "مفتوحة" : selectedInboxConversation.status === "escalated" ? "محوّلة إلى الفريق" : "مغلقة"}</p></div><div className="flex gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedInboxConversation(null); setInboxMessages([]); }} className="text-slate-300 hover:bg-white/10 hover:text-white">إخفاء</Button>{selectedInboxConversation.status === "active" && <Button type="button" variant="outline" size="sm" onClick={() => void closeInboxConversation()} disabled={closingInboxConversationId === selectedInboxConversation.id} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{closingInboxConversationId === selectedInboxConversation.id ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-1 h-4 w-4" />}إغلاق</Button>}</div></div>{inboxMessagesLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل الرسائل…</p> : inboxMessages.length ? <div className="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1">{inboxMessages.map((message) => <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.sender === "customer" ? "bg-cyan-300 text-slate-950" : message.sender === "human" ? "bg-lime-300/15 text-lime-50" : "border border-white/10 bg-white/[0.045] text-slate-100"}`}><div className="mb-1 flex items-center justify-between gap-2 text-xs opacity-75"><span>{message.sender === "customer" ? "الزائر" : message.sender === "agent" ? selectedAgent.name : message.sender === "human" ? "الفريق" : "النظام"}</span><time>{new Date(message.createdAt).toLocaleString("ar")}</time></div><p dir="auto" className="whitespace-pre-wrap">{message.content}</p></div>)}</div> : <p className="mt-4 text-sm text-slate-400">لا توجد رسائل قابلة للعرض في هذه المحادثة.</p>}</div>}
+      {selectedInboxConversation && <div className="mt-4 rounded-2xl border border-cyan-200/20 bg-slate-950/55 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">رسائل المحادثة #{selectedInboxConversation.id}</p><p className="mt-1 text-xs text-slate-400">الحالة: {selectedInboxConversation.status === "active" ? "مفتوحة" : selectedInboxConversation.status === "escalated" ? "محوّلة إلى الفريق" : "مغلقة"}</p></div><div className="flex gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedInboxConversation(null); setInboxMessages([]); }} className="text-slate-300 hover:bg-white/10 hover:text-white">إخفاء</Button>{selectedInboxConversation.status === "escalated" && <Button type="button" variant="outline" size="sm" onClick={() => void handBackToAgent()} disabled={humanReplyBusy} className="border-lime-200/30 text-lime-100 hover:bg-lime-300/10">إعادة للوكيل</Button>}{selectedInboxConversation.status !== "resolved" && <Button type="button" variant="outline" size="sm" onClick={() => void closeInboxConversation()} disabled={closingInboxConversationId === selectedInboxConversation.id} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{closingInboxConversationId === selectedInboxConversation.id ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-1 h-4 w-4" />}إغلاق</Button>}</div></div>{inboxMessagesLoading ? <p className="mt-4 text-sm text-slate-400">جارٍ تحميل الرسائل…</p> : inboxMessages.length ? <div className="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1">{inboxMessages.map((message) => <div key={message.id} className={`rounded-2xl px-3 py-2 text-sm leading-6 ${message.sender === "customer" ? "bg-cyan-300 text-slate-950" : message.sender === "human" ? "bg-lime-300/15 text-lime-50" : "border border-white/10 bg-white/[0.045] text-slate-100"}`}><div className="mb-1 flex items-center justify-between gap-2 text-xs opacity-75"><span>{message.sender === "customer" ? "الزائر" : message.sender === "agent" ? selectedAgent.name : message.sender === "human" ? "الفريق" : "النظام"}</span><time>{new Date(message.createdAt).toLocaleString("ar")}</time></div><p dir="auto" className="whitespace-pre-wrap">{message.content}</p></div>)}</div> : <p className="mt-4 text-sm text-slate-400">لا توجد رسائل قابلة للعرض في هذه المحادثة.</p>}{selectedInboxConversation.channel === "whatsapp" && selectedInboxConversation.status !== "resolved" && <form onSubmit={(event) => { event.preventDefault(); void sendHumanReply(); }} className="mt-4 border-t border-white/10 pt-4"><label htmlFor="human-reply" className="text-sm font-bold">رد الفريق على واتساب</label><textarea id="human-reply" value={humanReplyText} onChange={(event) => setHumanReplyText(event.target.value)} maxLength={1000} rows={3} dir="auto" placeholder="اكتب ردك للعميل…" className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900 p-3 text-sm leading-6 text-white" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs leading-5 text-slate-400">يصل الرد للعميل على واتساب فور الإرسال، ويتوقف الوكيل الآلي عن الرد حتى تعيد المحادثة إليه. يسمح واتساب بالرد خلال 24 ساعة من آخر رسالة من العميل.</p><Button type="submit" size="sm" disabled={humanReplyBusy || !humanReplyText.trim()} className="bg-lime-300 text-slate-950 hover:bg-lime-200">{humanReplyBusy ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : null}إرسال الرد</Button></div></form>}</div>}
     </div>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 font-bold"><MessageSquareText className="h-5 w-5 text-cyan-200" />طلبات التحويل البشري</h2><p className="mt-1 text-sm leading-6 text-slate-300">طلبات الزوار المحفوظة للوكيل <strong>{selectedAgent.name}</strong> فقط. لا تُعرض بيانات وكلاء أو شركات أخرى.</p></div>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, getIndependentAgentConversation, listIndependentAgentConversations, listIndependentHandoffRequests, saveIndependentHandoffContact, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, getIndependentAgentConversation, listIndependentAgentConversations, listIndependentHandoffRequests, reactivateIndependentAgentConversation, saveIndependentHandoffContact, sendIndependentConversationReply, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -128,5 +128,20 @@ describe("independent setup requests", () => {
       headers: { get: () => "text/html; charset=utf-8" },
     });
     await expect(listIndependentAgentConversations("supabase-token", 7, request)).rejects.toThrow("صفحة HTML بدلاً من استجابة API");
+  });
+});
+
+describe("human reply requests", () => {
+  it("posts the reply and the hand-back to the protected conversation routes", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ conversation: { id: 31, status: "escalated" } }) });
+    await sendIndependentConversationReply("supabase-token", 7, 31, "أهلاً بك", request);
+    await reactivateIndependentAgentConversation("supabase-token", 7, 31, request);
+    expect(request.mock.calls[0]).toEqual(["/api/external/agents/7/conversations/31/reply", { method: "POST", headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" }, body: JSON.stringify({ message: "أهلاً بك" }) }]);
+    expect(request.mock.calls[1]).toEqual(["/api/external/agents/7/conversations/31/reactivate", { method: "POST", headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" }, body: "{}" }]);
+  });
+
+  it("surfaces the server's reason, such as the closed 24-hour window", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: "مرّت أكثر من 24 ساعة", code: "window_closed" }) });
+    await expect(sendIndependentConversationReply("supabase-token", 7, 31, "hi", request)).rejects.toThrow("مرّت أكثر من 24 ساعة");
   });
 });

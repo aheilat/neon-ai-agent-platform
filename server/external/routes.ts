@@ -22,6 +22,7 @@ import { widgetHandoffPrompt } from "./escalation";
 import { ensureConversationLead, isLeadStatus, listIndependentLeads, updateIndependentLead } from "./leadRepository";
 import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
 import { sendEmail } from "../_core/email";
+import { HUMAN_REPLY_MAX_LENGTH, reactivateIndependentConversation, sendIndependentHumanReply } from "./humanReply";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
   const value = headers.authorization;
@@ -732,6 +733,32 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       console.error("[Independent Claude] Chat completion failed", error);
       return res.status(503).json({ error: "Independent AI service is unavailable" });
     }
+  });
+
+  app.post("/api/external/agents/:agentId/conversations/:conversationId/reply", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const conversationId = Number(req.params.conversationId);
+    const message = text(req.body?.message, 1, HUMAN_REPLY_MAX_LENGTH);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !Number.isSafeInteger(conversationId) || conversationId <= 0) return res.status(400).json({ error: "Invalid agent or conversation ID" });
+    if (!message) return res.status(400).json({ error: `اكتب رداً من 1 إلى ${HUMAN_REPLY_MAX_LENGTH} حرف.` });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const result = await sendIndependentHumanReply(pool, { tenantId: session.workspace.id, agentId, conversationId, message });
+    if (!result.ok) return res.status(result.status).json({ error: result.error, code: result.code });
+    return res.json({ conversation: { id: conversationId, status: result.status }, sentAt: result.sentAt });
+  });
+
+  app.post("/api/external/agents/:agentId/conversations/:conversationId/reactivate", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    const conversationId = Number(req.params.conversationId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0 || !Number.isSafeInteger(conversationId) || conversationId <= 0) return res.status(400).json({ error: "Invalid agent or conversation ID" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const conversation = await reactivateIndependentConversation(pool, session.workspace.id, agentId, conversationId);
+    if (!conversation) return res.status(409).json({ error: "المحادثة ليست محوّلة إلى الفريق." });
+    return res.json({ conversation });
   });
 
   app.post("/api/external/agents/:agentId/conversations/:conversationId/close", async (req, res) => {
