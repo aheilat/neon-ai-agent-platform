@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, getIndependentAgentConversation, listIndependentAgentConversations, listIndependentHandoffRequests, reactivateIndependentAgentConversation, saveIndependentHandoffContact, sendIndependentConversationReply, updateIndependentAgentProfile } from "./independentSetup";
+import { addIndependentImageKnowledge, addIndependentKnowledgeItem, addIndependentTextFileKnowledge, addIndependentWebsiteKnowledge, analyzeIndependentCompanyWebsite, applyIndependentWebsiteProposal, createIndependentHandoffRequest, createIndependentWorkspaceAgent, getIndependentAgentConversation, listIndependentAgentConversations, listIndependentHandoffRequests, reactivateIndependentAgentConversation, saveIndependentAgentRouting, saveIndependentHandoffContact, sendIndependentConversationReply, updateIndependentAgentProfile } from "./independentSetup";
 
 describe("independent setup requests", () => {
   const profile = {
@@ -143,5 +143,13 @@ describe("human reply requests", () => {
   it("surfaces the server's reason, such as the closed 24-hour window", async () => {
     const request = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: "مرّت أكثر من 24 ساعة", code: "window_closed" }) });
     await expect(sendIndependentConversationReply("supabase-token", 7, 31, "hi", request)).rejects.toThrow("مرّت أكثر من 24 ساعة");
+  });
+});
+
+describe("routing request", () => {
+  it("puts the specialist list to the protected routing route", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ routing: { specialists: [] } }) });
+    await saveIndependentAgentRouting("supabase-token", 2, [{ role: "sales", agentId: 11 }], request);
+    expect(request).toHaveBeenCalledWith("/api/external/agents/2/routing", { method: "PUT", headers: { Authorization: "Bearer supabase-token", "Content-Type": "application/json" }, body: JSON.stringify({ specialists: [{ role: "sales", agentId: 11 }] }) });
   });
 });

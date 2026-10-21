@@ -215,3 +215,49 @@ describe("WhatsApp webhook routes", () => {
     expect(pool.query).toHaveBeenCalledWith(expect.stringContaining("insert into public.channel_integrations"), [7, 2, JSON.stringify({ phoneNumberId: "111222333" })]);
   });
 });
+
+describe("multi-agent routing", () => {
+  const routedAgent = { id: 2, tenantId: 7, status: "active", capabilitiesJson: { routing: { specialists: [{ role: "sales", agentId: 11 }, { role: "support", agentId: 12 }] } } };
+  const routedPool = (active: number | null = null) => {
+    const base = fakePool({ integration });
+    const query = vi.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.includes("from public.agents")) return { rows: [{ id: 11, name: "المبيعات" }, { id: 12, name: "الدعم" }] };
+      if (sql.includes('select "activeAgentId"')) return { rows: [{ activeAgentId: active }] };
+      return base.query(sql, params);
+    });
+    return { query } as any;
+  };
+
+  it("answers a pricing question with the sales agent and tells the inbox about the hand-over", async () => {
+    mocks.getAgent.mockResolvedValue(routedAgent);
+    mocks.reply.mockResolvedValue({ kind: "success", reply: "الباقات كذا", agentId: 11 });
+    const send = vi.fn(async () => ({}));
+    const pool = routedPool();
+    const result = await processIndependentWhatsAppMessage(message({ content: "كم سعر الباقة؟" }) as any, { getPool: () => pool, send } as any);
+    expect(result).toMatchObject({ accepted: true, reply: "الباقات كذا" });
+    expect(mocks.reply).toHaveBeenCalledWith(7, expect.objectContaining({ agentId: 11 }));
+    expect(mocks.addMessage).toHaveBeenCalledWith(expect.anything(), 50, "system", expect.stringContaining("المبيعات"));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ body: "الباقات كذا" }));
+  });
+
+  it("keeps a short follow-up with the active specialist", async () => {
+    mocks.getAgent.mockResolvedValue(routedAgent);
+    await processIndependentWhatsAppMessage(message({ content: "طيب كم؟" }) as any, { getPool: () => routedPool(11), send: vi.fn(async () => ({})) } as any);
+    expect(mocks.reply).toHaveBeenCalledWith(7, expect.objectContaining({ agentId: 11 }));
+  });
+
+  it("falls back to the reception agent when the specialist cannot answer", async () => {
+    mocks.getAgent.mockResolvedValue(routedAgent);
+    mocks.reply.mockResolvedValueOnce({ kind: "not-found" }).mockResolvedValueOnce({ kind: "success", reply: "أهلاً", agentId: 2 });
+    const result = await processIndependentWhatsAppMessage(message({ content: "كم سعر الباقة؟" }) as any, { getPool: () => routedPool(), send: vi.fn(async () => ({})) } as any);
+    expect(result).toMatchObject({ reply: "أهلاً" });
+    expect(mocks.reply).toHaveBeenNthCalledWith(2, 7, expect.objectContaining({ agentId: 2 }));
+  });
+
+  it("still escalates to a human before any routing", async () => {
+    mocks.getAgent.mockResolvedValue(routedAgent);
+    const result = await processIndependentWhatsAppMessage(message({ content: "اريد التحدث مع موظف بخصوص السعر" }) as any, { getPool: () => routedPool(), send: vi.fn(async () => ({})), notifyEscalation: vi.fn(async () => true) } as any);
+    expect(result).toMatchObject({ reason: "escalated_by_customer_request" });
+    expect(mocks.reply).not.toHaveBeenCalled();
+  });
+});

@@ -15,6 +15,7 @@ import { escalationAcknowledgement, notifyOwnerOfEscalation } from "./escalation
 import { detectEscalationIntent } from "./escalationDetection";
 import { captureLeadFromWhatsAppConversation } from "./leadCapture";
 import { getIndependentPostgresPool } from "./postgres";
+import { routeIndependentConversation } from "./router";
 import { resolveIndependentWorkspaceSession } from "./runtime";
 
 /**
@@ -147,7 +148,10 @@ export async function processIndependentWhatsAppMessage(message: WhatsAppInbound
   if (transcriptionFailed) {
     reply = VOICE_FALLBACK;
   } else {
-    const result = await generateIndependentAgentReplyForTenant(integration.tenantId, { agentId: agent.id, message: content, history });
+    // A reception agent may hand this message to a specialist agent (sales / support / orders); without a routing table the agent answers itself.
+    const route = await routeIndependentConversation(pool, { agent, conversationId: conversation.id, message: content });
+    let result = await generateIndependentAgentReplyForTenant(integration.tenantId, { agentId: route.agentId, message: content, history });
+    if (result.kind !== "success" && route.agentId !== agent.id) result = await generateIndependentAgentReplyForTenant(integration.tenantId, { agentId: agent.id, message: content, history });
     if (result.kind !== "success" || !result.reply.trim()) return { accepted: true as const, reply: undefined, reason: "no_reply_generated" };
     reply = result.reply;
   }

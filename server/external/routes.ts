@@ -22,6 +22,7 @@ import { widgetHandoffPrompt } from "./escalation";
 import { ensureConversationLead, isLeadStatus, listIndependentLeads, updateIndependentLead } from "./leadRepository";
 import { getIndependentTemplate, INDEPENDENT_TEMPLATES } from "./independentTemplates";
 import { sendEmail } from "../_core/email";
+import { routeIndependentConversation, saveRoutingConfig } from "./router";
 import { HUMAN_REPLY_MAX_LENGTH, reactivateIndependentConversation, sendIndependentHumanReply } from "./humanReply";
 
 function authorizationFromRequest(headers: { authorization?: string | string[] }) {
@@ -221,7 +222,10 @@ export function registerIndependentRuntimeRoutes(app: Express) {
         if (res.headersSent) return;
         return res.json({ reply: prompt, handoffSuggested: true, conversation: { id: conversation.id, status: conversation.status, sessionToken: newConversationSessionToken ?? requestedConversationSessionToken } });
       }
-      const result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history: Array.isArray(req.body?.history) ? req.body.history : undefined });
+      const history = Array.isArray(req.body?.history) ? req.body.history : undefined;
+      const route = await routeIndependentConversation(pool, { agent, conversationId: conversation.id, message });
+      let result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: route.agentId, message, history });
+      if (result.kind !== "success" && route.agentId !== agent.id) result = await generateIndependentAgentReplyForTenant(agent.tenantId, { agentId: agent.id, message, history });
       if (result.kind === "not-found") return res.headersSent ? undefined : res.status(404).json({ error: "Agent not found" });
       if (result.kind !== "success") return res.headersSent ? undefined : res.status(503).json({ error: "Independent AI service is unavailable" });
       const reply = result.reply;
@@ -733,6 +737,17 @@ export function registerIndependentRuntimeRoutes(app: Express) {
       console.error("[Independent Claude] Chat completion failed", error);
       return res.status(503).json({ error: "Independent AI service is unavailable" });
     }
+  });
+
+  app.put("/api/external/agents/:agentId/routing", async (req, res) => {
+    const agentId = Number(req.params.agentId);
+    if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: "Invalid agent ID" });
+    const session = await resolveIndependentWorkspaceSession(authorizationFromRequest(req.headers));
+    const pool = getIndependentPostgresPool();
+    if (!session || !pool) return res.status(401).json({ error: "Supabase authentication or independent database configuration is required" });
+    const result = await saveRoutingConfig(pool, session.workspace.id, agentId, req.body?.specialists);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    return res.json({ routing: { specialists: result.specialists } });
   });
 
   app.post("/api/external/agents/:agentId/conversations/:conversationId/reply", async (req, res) => {

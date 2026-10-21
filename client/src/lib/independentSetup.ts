@@ -53,7 +53,7 @@ function serverError(payload: unknown) {
 
 async function requestJson<T>(
   path: string,
-  method: "POST" | "PATCH" | "GET",
+  method: "POST" | "PATCH" | "GET" | "PUT",
   accessToken: string,
   payload: unknown = undefined,
   fetchImplementation: FetchImplementation,
@@ -224,6 +224,17 @@ export function reactivateIndependentAgentConversation<T = { conversation: { id:
   fetchImplementation: FetchImplementation = fetch,
 ) {
   return requestJson<T>(`/api/external/agents/${agentId}/conversations/${conversationId}/reactivate`, "POST", accessToken, {}, fetchImplementation);
+}
+
+export type IndependentSpecialistRole = "sales" | "support" | "orders";
+
+export function saveIndependentAgentRouting<T = { routing: { specialists: Array<{ role: IndependentSpecialistRole; agentId: number }> } }>(
+  accessToken: string,
+  agentId: number,
+  specialists: Array<{ role: IndependentSpecialistRole; agentId: number }>,
+  fetchImplementation: FetchImplementation = fetch,
+) {
+  return requestJson<T>(`/api/external/agents/${agentId}/routing`, "PUT", accessToken, { specialists }, fetchImplementation);
 }
 
 export type IndependentLeadStatus = "new" | "contacted" | "qualified" | "closed";

@@ -14,6 +14,8 @@ import {
   getIndependentAgentConversation,
   listIndependentAgentConversations,
   reactivateIndependentAgentConversation,
+  saveIndependentAgentRouting,
+  type IndependentSpecialistRole,
   sendIndependentConversationReply,
   listIndependentHandoffRequests,
   saveIndependentHandoffContact,
@@ -192,6 +194,9 @@ export default function IndependentStaging() {
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [handoffContact, setHandoffContact] = useState({ name: "", phone: "", email: "" });
   const [savingHandoffContact, setSavingHandoffContact] = useState(false);
+  const [routingDraft, setRoutingDraft] = useState<Record<IndependentSpecialistRole, string>>({ sales: "", support: "", orders: "" });
+  const [savingRouting, setSavingRouting] = useState(false);
+  const [routingNotice, setRoutingNotice] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffRequest, setHandoffRequest] = useState({ name: "", phone: "", email: "", notes: "", consent: false });
   const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
@@ -422,6 +427,11 @@ export default function IndependentStaging() {
     setVoiceTranscript("");
     const contact = (selectedAgent.capabilitiesJson?.handoffContact ?? {}) as Record<string, unknown>;
     setHandoffContact({ name: typeof contact.name === "string" ? contact.name : "", phone: typeof contact.phone === "string" ? contact.phone : "", email: typeof contact.email === "string" ? contact.email : "" });
+    const routing = (selectedAgent.capabilitiesJson?.routing ?? {}) as { specialists?: Array<{ role?: string; agentId?: number }> };
+    const draft: Record<IndependentSpecialistRole, string> = { sales: "", support: "", orders: "" };
+    for (const item of routing.specialists ?? []) if (item.role === "sales" || item.role === "support" || item.role === "orders") draft[item.role] = String(item.agentId ?? "");
+    setRoutingDraft(draft);
+    setRoutingNotice(null);
     setHandoffOpen(false);
     setHandoffStatus(null);
   }, [loadHandoffRequests, loadInboxConversations, loadKnowledge, selectedAgent]);
@@ -689,6 +699,24 @@ export default function IndependentStaging() {
     }
   };
 
+  const saveRoutingSettings = async () => {
+    if (!selectedAgent) return;
+    const token = await accessToken();
+    if (!token) return setLocation("/login");
+    const specialists = (Object.keys(routingDraft) as IndependentSpecialistRole[]).filter((role) => routingDraft[role]).map((role) => ({ role, agentId: Number(routingDraft[role]) }));
+    setSavingRouting(true);
+    setRoutingNotice(null);
+    try {
+      await saveIndependentAgentRouting(token, selectedAgent.id, specialists);
+      await loadWorkspace();
+      setRoutingNotice(specialists.length ? "تم حفظ التوجيه. يبدأ العمل في الرسالة التالية." : "تم إيقاف التوجيه. سيرد هذا الوكيل بنفسه.");
+    } catch (reason) {
+      setRoutingNotice(reason instanceof Error ? reason.message : "تعذر حفظ التوجيه.");
+    } finally {
+      setSavingRouting(false);
+    }
+  };
+
   const submitHandoffRequest = async () => {
     if (!selectedAgent || !handoffRequest.name.trim() || (!handoffRequest.phone.trim() && !handoffRequest.email.trim()) || !handoffRequest.consent) return setHandoffStatus("اكتب الاسم ورقم الهاتف أو البريد، ثم وافق على مشاركة البيانات مع هذه الشركة.");
     const token = await accessToken();
@@ -900,6 +928,7 @@ export default function IndependentStaging() {
           {conversationId && <section className="mt-6 flex flex-col gap-3 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">حالة محادثة الاختبار</p><p className="mt-1 text-sm text-slate-300">{conversationStatus === "active" ? "المحادثة مفتوحة ويمكن للوكيل الرد." : conversationStatus === "escalated" ? "تم تحويل المحادثة إلى الفريق البشري، وتوقف الرد الآلي." : "تم إغلاق المحادثة بصورة صحيحة."}</p></div>{conversationStatus === "active" && <Button type="button" variant="outline" onClick={() => void closeConversation()} disabled={closingConversation} className="border-cyan-200/30 text-cyan-100 hover:bg-cyan-300/10">{closingConversation ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-2 h-4 w-4" />}إنهاء المحادثة</Button>}</section>}
 
           <section className="mt-6 rounded-3xl border border-lime-300/20 bg-lime-300/[0.06] p-5 sm:p-6"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-lime-200" /><div><h2 className="font-bold">إعداد التحويل البشري لهذا الوكيل</h2><p className="mt-1 text-sm leading-6 text-slate-300">أدخل جهة التواصل الخاصة بشركتك فقط. لا يظهر رقم Neon أو أي شركة أخرى لعملائك.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><input value={handoffContact.name} onChange={(event) => setHandoffContact((current) => ({ ...current, name: event.target.value }))} placeholder="اسم القسم أو الموظف" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffContact.phone} onChange={(event) => setHandoffContact((current) => ({ ...current, phone: event.target.value }))} placeholder="هاتف العمل" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffContact.email} onChange={(event) => setHandoffContact((current) => ({ ...current, email: event.target.value }))} placeholder="بريد العمل" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /></div><Button onClick={() => void saveHandoffSettings()} disabled={savingHandoffContact} className="mt-3 bg-lime-300 text-slate-950 hover:bg-lime-200">{savingHandoffContact ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}حفظ جهة التواصل</Button></section>
+          <section id="independent-routing" className="mt-6 rounded-3xl border border-cyan-200/20 bg-cyan-300/[0.06] p-5 sm:p-6"><h2 className="font-bold">التوجيه إلى وكلاء متخصصين</h2><p className="mt-1 text-sm leading-6 text-slate-300">اجعل <strong>{selectedAgent.name}</strong> وكيل استقبال: يوجّه كل رسالة إلى وكيل المبيعات أو الدعم أو الطلبات حسب موضوعها، ويبقى العميل مع المتخصص في الرسائل التالية. اترك الدور فارغاً لإيقافه. طلب التحدث مع موظف يسبق التوجيه دائماً.</p><div className="mt-4 grid gap-3 sm:grid-cols-3">{([["sales", "وكيل المبيعات"], ["support", "وكيل الدعم"], ["orders", "وكيل الطلبات"]] as Array<[IndependentSpecialistRole, string]>).map(([role, label]) => <label key={role} className="text-sm font-bold">{label}<select value={routingDraft[role]} onChange={(event) => setRoutingDraft((current) => ({ ...current, [role]: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm font-normal text-white"><option value="">بدون</option>{data?.agents.filter((agent) => agent.id !== selectedAgent.id && agent.status === "active").map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>)}</div>{data && data.agents.length < 2 && <p className="mt-3 text-sm leading-6 text-amber-100">أنشئ أولاً وكلاء آخرين (مثل المبيعات والدعم) بمعرفة كل منهم، ثم اختبرهم هنا.</p>}<Button onClick={() => void saveRoutingSettings()} disabled={savingRouting} className="mt-3 bg-cyan-300 text-slate-950 hover:bg-cyan-200">{savingRouting ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}حفظ التوجيه</Button>{routingNotice && <p className="mt-3 text-sm leading-6 text-slate-200" role="status">{routingNotice}</p>}</section>
 
           {handoffOpen && <section className="mt-6 rounded-3xl border border-cyan-200/25 bg-cyan-300/[0.08] p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="font-bold">طلب التواصل مع الفريق</h2><p className="mt-1 text-sm leading-6 text-slate-300">سيسجل الوكيل هذا الطلب ضمن مساحة عمل الشركة المختارة فقط.</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setHandoffOpen(false)} className="text-slate-200 hover:bg-white/10 hover:text-white" aria-label="إغلاق"><X className="h-5 w-5" /></Button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><input value={handoffRequest.name} onChange={(event) => setHandoffRequest((current) => ({ ...current, name: event.target.value }))} placeholder="الاسم" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffRequest.phone} onChange={(event) => setHandoffRequest((current) => ({ ...current, phone: event.target.value }))} placeholder="رقم الهاتف" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input dir="ltr" value={handoffRequest.email} onChange={(event) => setHandoffRequest((current) => ({ ...current, email: event.target.value }))} placeholder="البريد الإلكتروني" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-left text-sm text-white outline-none placeholder:text-slate-500" /><input value={handoffRequest.notes} onChange={(event) => setHandoffRequest((current) => ({ ...current, notes: event.target.value }))} placeholder="ملاحظة مختصرة (اختياري)" className="rounded-xl border border-white/15 bg-slate-950/60 p-3 text-sm text-white outline-none placeholder:text-slate-500" /></div><label className="mt-4 flex items-start gap-3 text-sm leading-6 text-slate-200"><input type="checkbox" checked={handoffRequest.consent} onChange={(event) => setHandoffRequest((current) => ({ ...current, consent: event.target.checked }))} className="mt-1 h-4 w-4 accent-lime-300" />أوافق على مشاركة بيانات التواصل أعلاه مع هذه الشركة فقط لغرض الرد على طلبي.</label><div className="mt-4 flex flex-wrap items-center gap-3"><Button onClick={() => void submitHandoffRequest()} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">إرسال طلب التواصل</Button>{handoffStatus && <p className="text-sm text-cyan-100">{handoffStatus}</p>}</div></section>}
         </>}
