@@ -44,14 +44,17 @@ export function parseRoutingConfig(capabilitiesJson: Record<string, unknown> | n
 const norm = (list: string[]) => new Set(list.map(normalizeEscalationText));
 
 const WORDS: Record<SpecialistRole, Set<string>> = {
-  sales: norm(["سعر", "اسعار", "تسعير", "باقه", "باقات", "اشتراك", "اشتراكات", "خصم", "خصومات", "عرض", "عروض", "تكلفه", "تكاليف", "تجربه", "شراء", "اشتري", "price", "prices", "pricing", "plan", "plans", "subscription", "subscribe", "discount", "quote", "cost", "trial", "buy", "purchase", "demo"]),
-  support: norm(["مشكله", "مشاكل", "خطا", "اخطاء", "عطل", "تعطل", "معطل", "problem", "problems", "issue", "issues", "error", "errors", "bug", "broken", "crash", "crashed"]),
-  orders: norm(["طلب", "طلبي", "طلبات", "طلبك", "تتبع", "شحن", "شحنه", "توصيل", "فاتوره", "فواتير", "استرجاع", "ارجاع", "الغاء", "استرداد", "order", "orders", "tracking", "track", "shipping", "shipment", "delivery", "refund", "invoice", "cancel", "return"]),
+  sales: norm(["سعر", "اسعار", "تسعير", "باقه", "باقات", "اشتراك", "اشتراكات", "اشتراكي", "خصم", "خصومات", "عرض", "عروض", "تكلفه", "تكاليف", "تجربه", "شراء", "اشتري", "price", "prices", "pricing", "plan", "plans", "subscription", "subscribe", "discount", "quote", "cost", "trial", "buy", "purchase", "demo"]),
+  support: norm(["مشكله", "مشاكل", "خطا", "اخطاء", "عطل", "تعطل", "معطل", "ادخل", "دخول", "باسورد", "login", "password", "problem", "problems", "issue", "issues", "error", "errors", "bug", "broken", "crash", "crashed"]),
+  orders: norm(["طلب", "طلبي", "طلبات", "طلبك", "تتبع", "شحن", "شحنه", "توصيل", "فاتوره", "فواتير", "استرجاع", "ارجاع", "الغاء", "استرداد", "الغي", "الغيه", "الغيت", "يلغي", "الغو", "كنسل", "كنسلو", "فلوسي", "cancellation", "unsubscribe", "order", "orders", "tracking", "track", "shipping", "shipment", "delivery", "refund", "invoice", "cancel", "return"]),
 };
+
+/** Cancel words: when one appears together with a plan word ("الغي اشتراكي"), the message is about cancelling, not buying. */
+const CANCEL_WORDS = norm(["الغاء", "الغي", "الغيه", "الغيت", "يلغي", "الغو", "كنسل", "كنسلو", "cancel", "cancellation", "unsubscribe"]);
 
 const PHRASES: Record<SpecialistRole, string[]> = {
   sales: [],
-  support: ["لا يعمل", "لا يشتغل", "ما يشتغل", "ما يعمل", "مش شغال", "دعم فني", "not working", "doesn't work", "does not work", "technical support"].map(normalizeEscalationText),
+  support: ["لا يعمل", "لا يشتغل", "ما يشتغل", "ما يعمل", "مش شغال", "دعم فني", "نسيت كلمه السر", "نسيت كلمه المرور", "not working", "doesn't work", "does not work", "technical support"].map(normalizeEscalationText),
   orders: [],
 };
 
@@ -70,7 +73,9 @@ export function detectRoles(message: string, available: SpecialistRole[]): Speci
   const normalized = normalizeEscalationText(message);
   const padded = ` ${normalized} `;
   const tokens = normalized.split(" ").filter(Boolean);
-  return available.filter(role => PHRASES[role].some(phrase => padded.includes(` ${phrase} `)) || tokens.some(token => stems(token).some(stem => WORDS[role].has(stem))));
+  const roles = available.filter(role => PHRASES[role].some(phrase => padded.includes(` ${phrase} `)) || tokens.some(token => stems(token).some(stem => WORDS[role].has(stem))));
+  if (roles.includes("sales") && roles.includes("orders") && tokens.some(token => stems(token).some(stem => CANCEL_WORDS.has(stem)))) return roles.filter(role => role !== "sales");
+  return roles;
 }
 
 type Complete = (request: { system: string; messages: Array<{ role: "user"; content: string }>; maxTokens: number; timeoutMs: number }) => Promise<string>;

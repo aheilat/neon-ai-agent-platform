@@ -31,12 +31,22 @@ describe("detectRoles", () => {
     ["وين طلبي؟ اريد تتبع الشحنة", ["orders"]],
     ["Where is my order?", ["orders"]],
     ["اريد استرجاع المبلغ", ["orders"]],
+    ["بدي الغي اشتراكي", ["orders"]],
+    ["ممكن الغي اشتزاكي", ["orders"]],
+    ["كنسل الاشتراك", ["orders"]],
+    ["اريد الغاء الاشتراك", ["orders"]],
+    ["ما قدرت ادخل على حسابي", ["support"]],
+    ["بسجل الدخول بيعطيني الذكاء مشغول", ["support"]],
+    ["نسيت الباسورد", ["support"]],
+    ["نسيت كلمة السر", ["support"]],
+    ["I can't login", ["support"]],
   ])("%s", (message, roles) => {
     expect(detectRoles(message, [...ALL])).toEqual(roles);
   });
 
   it("finds several roles when a message is ambiguous", () => {
-    expect(detectRoles("اريد الغاء الاشتراك", [...ALL])).toEqual(["sales", "orders"]);
+    expect(detectRoles("اريد ارجاع الاشتراك", [...ALL])).toEqual(["sales", "orders"]);
+    expect(detectRoles("كم سعر الباقة وعندي مشكلة في الدخول", [...ALL])).toEqual(["sales", "support"]);
   });
 
   it("returns nothing for greetings, short follow-ups and very long text", () => {
@@ -102,10 +112,10 @@ describe("routeIndependentConversation", () => {
   it("asks the AI only for an ambiguous message, and falls back to the current agent when it cannot decide", async () => {
     const classify = vi.fn(async () => "orders" as const);
     const { pool } = fakePool();
-    expect(await routeIndependentConversation(pool, { agent: reception, conversationId: 85, message: "اريد الغاء الاشتراك", classify })).toEqual({ agentId: 13, switched: true });
+    expect(await routeIndependentConversation(pool, { agent: reception, conversationId: 85, message: "اريد ارجاع الاشتراك", classify })).toEqual({ agentId: 13, switched: true });
     expect(classify).toHaveBeenCalledTimes(1);
     const unsure = fakePool({ active: 12 });
-    expect(await routeIndependentConversation(unsure.pool, { agent: reception, conversationId: 85, message: "اريد الغاء الاشتراك", classify: vi.fn(async () => undefined) })).toEqual({ agentId: 12, switched: false });
+    expect(await routeIndependentConversation(unsure.pool, { agent: reception, conversationId: 85, message: "اريد ارجاع الاشتراك", classify: vi.fn(async () => undefined) })).toEqual({ agentId: 12, switched: false });
     const plain = vi.fn();
     await routeIndependentConversation(fakePool().pool, { agent: reception, conversationId: 85, message: "كم السعر", classify: plain });
     expect(plain).not.toHaveBeenCalled();
