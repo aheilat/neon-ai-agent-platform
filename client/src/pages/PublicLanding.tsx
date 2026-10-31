@@ -473,6 +473,9 @@ export default function PublicLanding() {
             <Link href="/login" className="block hover:text-foreground">تسجيل الدخول</Link>
             <a href="#faq" className="block hover:text-foreground">الأسئلة الشائعة</a>
             <a href={`mailto:${NEON_CONTACT_EMAIL}`} className="block hover:text-foreground">تواصل معنا</a>
+            <Link href="/terms" className="block hover:text-foreground">شروط الاستخدام</Link>
+            <Link href="/privacy" className="block hover:text-foreground">سياسة الخصوصية</Link>
+            <Link href="/refund" className="block hover:text-foreground">سياسة الاسترجاع</Link>
           </div>
         </div>
       </footer>

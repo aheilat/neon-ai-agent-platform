@@ -53,6 +53,7 @@ export default function Pricing() {
         </div>
         <div className="mx-auto mt-10 flex max-w-3xl flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><CircleHelp className="h-5 w-5 text-cyan-300" />هل تحتاج خطة خاصة، حجماً أكبر، أو متطلبات تكامل محددة؟</span><a href={`mailto:${NEON_CONTACT_EMAIL}`} className="inline-flex items-center gap-1 font-bold text-cyan-200 hover:text-cyan-100">تحدث إلى Neon <ChevronLeft className="h-4 w-4" /></a></div>
       </section>
+        <nav className="mx-auto mt-8 flex max-w-3xl flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-slate-400" aria-label="Legal"><Link href="/terms" className="hover:text-white">شروط الاستخدام</Link><Link href="/privacy" className="hover:text-white">سياسة الخصوصية</Link><Link href="/refund" className="hover:text-white">سياسة الاسترجاع</Link></nav>
     </main>
   );
 }

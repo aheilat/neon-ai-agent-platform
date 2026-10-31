@@ -26,6 +26,7 @@ import IndependentStaging from "./pages/IndependentStaging";
 import IndependentOnboarding from "./pages/IndependentOnboarding";
 import IndependentProfileSettings from "./pages/IndependentProfileSettings";
 import IndependentLeads from "./pages/IndependentLeads";
+import Legal from "./pages/Legal";
 import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 
 function AppRoutes() {
@@ -38,6 +39,9 @@ function AppRoutes() {
       <Route path="/reset-password" component={Access} />
       <Route path="/access" component={Access} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/terms">{() => <Legal doc="terms" />}</Route>
+      <Route path="/privacy">{() => <Legal doc="privacy" />}</Route>
+      <Route path="/refund">{() => <Legal doc="refund" />}</Route>
       <Route path="/external" component={hasIndependentSupabaseBrowserConfig() ? IndependentOnboarding : IndependentStaging} />
       <Route path="/start" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Home} />
       <Route path="/agents" component={hasIndependentSupabaseBrowserConfig() ? IndependentStaging : Agents} />
