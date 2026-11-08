@@ -32,4 +32,12 @@ describe("access page copy", () => {
 
     expect(appSource).toContain('<Route path="/access" component={Access} />');
   });
+
+  it("shows the new-password form when the reset link is opened, not the email form again", () => {
+    const accessSource = fs.readFileSync(path.join(process.cwd(), "client", "src", "pages", "Access.tsx"), "utf8");
+
+    expect(accessSource).toContain("readPasswordRecoveryLink(window.location.hash, window.location.search)");
+    expect(accessSource).toContain('const newPasswordMode = isReset && recoveryLink.kind === "ready";');
+    expect(accessSource).toContain("{!newPasswordMode && <Input required type=\"email\"");
+  });
 });

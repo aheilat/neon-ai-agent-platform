@@ -6,6 +6,8 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
+import { getRecoveryRedirectTarget } from "./lib/independentAuth";
+import { hasIndependentSupabaseBrowserConfig } from "./lib/supabase";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -71,6 +73,13 @@ const trpcClient = trpc.createClient({
     }),
   ],
 });
+
+// A password-reset email link can land on any page when the redirect URL is not allowed in Supabase;
+// forward it (hash included) to the page that shows the new-password form.
+if (hasIndependentSupabaseBrowserConfig()) {
+  const recoveryTarget = getRecoveryRedirectTarget(window.location.pathname, window.location.search, window.location.hash);
+  if (recoveryTarget) window.location.replace(recoveryTarget);
+}
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

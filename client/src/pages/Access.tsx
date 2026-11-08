@@ -2,16 +2,17 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { startLogin } from "@/const";
-import { resendIndependentConfirmationEmail, sendIndependentPasswordReset, signInWithIndependentGoogle, signInToIndependentNeon, signUpForIndependentNeon, updateIndependentPassword } from "@/lib/independentAuth";
-import { hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
+import { readPasswordRecoveryLink, resendIndependentConfirmationEmail, sendIndependentPasswordReset, signInWithIndependentGoogle, signInToIndependentNeon, signUpForIndependentNeon, updateIndependentPassword } from "@/lib/independentAuth";
+import { getIndependentSupabaseBrowserClient, hasIndependentSupabaseBrowserConfig } from "@/lib/supabase";
 import { ArrowLeft, Bot, Check, Chrome, LockKeyhole, Sparkles } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 function readableAuthError(reason: unknown, fallback: string) {
   const message = reason instanceof Error ? reason.message : "";
   if (/provider.*not enabled|unsupported provider/i.test(message)) return "تسجيل الدخول عبر Google غير مفعّل في Supabase حالياً. فعّل Google من Authentication ثم أعد المحاولة.";
   if (/email.*not confirmed/i.test(message)) return "أكد بريدك الإلكتروني أولاً من الرابط المرسل، ثم سجّل الدخول مرة أخرى.";
+  if (/session missing|session.*expired|invalid.*jwt/i.test(message)) return "انتهت جلسة الاستعادة. اطلب رابطاً جديداً ثم افتحه مباشرة من البريد.";
   if (/rate limit|too many requests/i.test(message)) return "تم تجاوز عدد المحاولات المسموح. انتظر قليلاً ثم حاول مرة أخرى.";
   return message || fallback;
 }
@@ -49,6 +50,8 @@ export default function Access() {
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
   const [resetRequested, setResetRequested] = useState(false);
+  const recoveryLink = useMemo(() => (isReset && typeof window !== "undefined" ? readPasswordRecoveryLink(window.location.hash, window.location.search) : { kind: "none" as const }), [isReset, location]);
+  const newPasswordMode = isReset && recoveryLink.kind === "ready";
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -71,12 +74,17 @@ export default function Access() {
     setLocation("/start");
   }, [isAuthenticated, isIndependentRuntime, isReset, setLocation]);
 
+  // Creating the client reads the recovery token from the URL, so the session exists before the form is submitted.
+  useEffect(() => {
+    if (newPasswordMode) getIndependentSupabaseBrowserClient();
+  }, [newPasswordMode]);
+
   if (isAuthenticated && !isReset) return null;
 
   const copy = isReset ? {
-    heading: resetRequested ? "أنشئ كلمة مرور جديدة" : "استعادة كلمة المرور",
-    description: resetRequested ? "اكتب كلمة مرور جديدة لحماية مساحة عملك، ثم سجّل الدخول للمتابعة." : "أدخل بريدك الإلكتروني وسنرسل لك رابطاً آمناً لاستعادة كلمة المرور.",
-    action: resetRequested ? "حفظ كلمة المرور" : "إرسال رابط الاستعادة",
+    heading: newPasswordMode ? "أنشئ كلمة مرور جديدة" : resetRequested ? "تحقق من بريدك" : "استعادة كلمة المرور",
+    description: newPasswordMode ? "اكتب كلمة مرور جديدة لحماية مساحة عملك، وسندخلك إليها مباشرة." : resetRequested ? "أرسلنا الرابط. افتحه من بريدك على هذا الجهاز لتكتب كلمة المرور الجديدة." : "أدخل بريدك الإلكتروني وسنرسل لك رابطاً آمناً لاستعادة كلمة المرور.",
+    action: newPasswordMode ? "حفظ كلمة المرور" : resetRequested ? "إعادة إرسال الرابط" : "إرسال رابط الاستعادة",
     switchLead: "تذكرت كلمة المرور؟",
     switchAction: "العودة لتسجيل الدخول",
     switchPath: "/login",
@@ -90,8 +98,9 @@ export default function Access() {
     try {
       if (isReset) {
         await updateIndependentPassword(password);
-        setConfirmationMessage("تم تحديث كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.");
+        setConfirmationMessage("تم تحديث كلمة المرور بنجاح. جارٍ تحويلك إلى مساحة عملك...");
         setPassword("");
+        window.setTimeout(() => setLocation("/start"), 1200);
       } else if (isRegister) {
         const result = await signUpForIndependentNeon(email, password, window.location.origin);
         if (result.confirmationRequired) {
@@ -121,7 +130,7 @@ export default function Access() {
     try {
       await sendIndependentPasswordReset(email.trim(), window.location.origin);
       setResetRequested(true);
-      setConfirmationMessage("إذا كان البريد مسجلاً، سيصلك رابط استعادة كلمة المرور. تحقق من الوارد والرسائل غير المرغوب فيها، ثم افتح الرابط للمتابعة.");
+      setConfirmationMessage("إذا كان البريد مسجلاً، سيصلك رابط استعادة كلمة المرور. تحقق من الوارد والرسائل غير المرغوب فيها، ثم افتح الرابط من هذا الجهاز.");
     } catch (reason) {
       setFormError(readableAuthError(reason, "تعذر إرسال رابط الاستعادة الآن."));
     } finally {
@@ -167,10 +176,10 @@ export default function Access() {
           <div className="mt-8 rounded-2xl border border-white/[0.09] bg-white/[0.045] p-4">
             <div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-lime-300" /><div><p className="text-sm font-bold text-white">دخول آمن إلى مساحة عملك داخل Neon</p><p className="mt-1 text-xs leading-6 text-slate-400">نستخدم Supabase لحماية تسجيل الدخول وإنشاء أو استعادة مساحة عملك وحفظ وكلائك وبياناتك بصورة محمية.</p></div></div>
           </div>
-          {isIndependentRuntime ? <form className="mt-6 space-y-3" onSubmit={isReset && !resetRequested ? (event) => { event.preventDefault(); void requestPasswordReset(); } : submitIndependentAccess}>
-            {(!isReset || !resetRequested) && <Input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
-            {(!isReset || resetRequested) && <Input required type="password" minLength={8} autoComplete={isRegister || isReset ? "new-password" : "current-password"} value={password} onChange={event => setPassword(event.target.value)} placeholder={isReset ? "كلمة المرور الجديدة (8 أحرف على الأقل)" : "كلمة المرور (8 أحرف على الأقل)"} className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
-            {formError && <p className="text-sm leading-6 text-rose-200">{formError}</p>}{confirmationMessage && <p className="text-sm leading-6 text-lime-200">{confirmationMessage}</p>}
+          {isIndependentRuntime ? <form className="mt-6 space-y-3" onSubmit={isReset && !newPasswordMode ? (event) => { event.preventDefault(); void requestPasswordReset(); } : submitIndependentAccess}>
+            {!newPasswordMode && <Input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
+            {(!isReset || newPasswordMode) && <Input required type="password" minLength={8} autoComplete={isRegister || isReset ? "new-password" : "current-password"} value={password} onChange={event => setPassword(event.target.value)} placeholder={isReset ? "كلمة المرور الجديدة (8 أحرف على الأقل)" : "كلمة المرور (8 أحرف على الأقل)"} className="h-12 border-white/15 bg-slate-950/50 text-white placeholder:text-slate-500" />}
+            {(formError ?? (recoveryLink.kind === "error" ? recoveryLink.message : null)) && <p className="text-sm leading-6 text-rose-200">{formError ?? (recoveryLink.kind === "error" ? recoveryLink.message : null)}</p>}{confirmationMessage && <p className="text-sm leading-6 text-lime-200">{confirmationMessage}</p>}
             {isRegister && confirmationMessage && <button type="button" onClick={() => void resendConfirmation()} disabled={submitting} className="w-full text-sm font-bold text-cyan-200 hover:text-cyan-100 disabled:opacity-50">إعادة إرسال رسالة التأكيد</button>}
             <Button disabled={submitting} type="submit" size="lg" className="h-14 w-full rounded-2xl bg-gradient-to-l from-cyan-300 to-lime-300 text-base font-bold text-slate-950 hover:from-cyan-200 hover:to-lime-200">{submitting ? "جارٍ المتابعة..." : copy.action}<ArrowLeft className="mr-2 h-5 w-5" /></Button>
             {!isRegister && !isReset && <div className="flex items-center justify-between gap-3 text-sm"><button type="button" onClick={() => setLocation("/reset-password")} className="font-bold text-cyan-200 hover:text-cyan-100">نسيت كلمة المرور؟</button><span className="text-slate-500">أو</span></div>}
